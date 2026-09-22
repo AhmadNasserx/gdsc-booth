@@ -1,4 +1,4 @@
-import { createHmac, randomUUID } from 'crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
 import type { SessionPayload } from './types';
 
 const TTL_MS = 30 * 60 * 1000;
@@ -24,7 +24,9 @@ export function verifySession(token: string): SessionPayload | null {
     const encoded = token.slice(0, dot);
     const sig = token.slice(dot + 1);
     const expected = createHmac('sha256', secret()).update(encoded).digest('base64url');
-    if (sig !== expected) return null;
+    const sigBuf = Buffer.from(sig, 'base64url');
+    const expBuf = Buffer.from(expected, 'base64url');
+    if (sigBuf.length !== expBuf.length || !timingSafeEqual(sigBuf, expBuf)) return null;
     const payload: SessionPayload = JSON.parse(
       Buffer.from(encoded, 'base64url').toString('utf8')
     );

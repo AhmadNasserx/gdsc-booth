@@ -23,7 +23,7 @@ export default function LeaderboardTable({ entries }: Props) {
       </thead>
       <tbody>
         {sorted.map((entry, i) => (
-          <tr key={`${entry.name}-${entry.timestamp}`} className="border-b border-[#F8F9FA]">
+          <tr key={`${entry.name}-${entry.timestamp}-${i}`} className="border-b border-[#F8F9FA]">
             <td className={`py-3 font-black text-lg ${RANK_STYLES[i] ?? 'text-[#202124]'}`}>
               {RANK_MEDALS[i] ?? `#${i + 1}`}
             </td>

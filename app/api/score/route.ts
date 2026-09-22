@@ -26,22 +26,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid or expired session' }, { status: 401 });
   }
 
-  // Rate limit by sessionId
-  const { success } = await ratelimit.limit(hashKey(session.sessionId));
-  if (!success) {
-    return NextResponse.json({ error: 'Already submitted' }, { status: 429 });
-  }
-
-  // Idempotency: check if submissionId already processed
+  // Validate and extract submissionId before hitting rate limit
   const submissionId = body.submissionId as string;
-  if (!submissionId) {
-    return NextResponse.json({ error: 'submissionId required' }, { status: 400 });
+  if (!submissionId || !/^[0-9a-f-]{36}$/.test(submissionId)) {
+    return NextResponse.json({ error: 'Invalid submissionId' }, { status: 400 });
   }
 
+  // Idempotency: return cached result without consuming rate limit window
   const existingRef = adminDb.ref(`submissions/${submissionId}`);
   const existing = await existingRef.get();
   if (existing.val()) {
     return NextResponse.json(existing.val());
+  }
+
+  // Rate limit by hashed sessionId
+  const { success } = await ratelimit.limit(hashKey(session.sessionId));
+  if (!success) {
+    return NextResponse.json({ error: 'Already submitted' }, { status: 429 });
   }
 
   // Validate scores
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
   const expiresAt = now + 86400000;
   const name = session.name;
 
-  // Calculate rank
+  // Rank is approximate under concurrent submissions — acceptable for a single-day booth
   const leaderboardSnap = await adminDb.ref('leaderboard').get();
   const entries: Record<string, { score: number }> = leaderboardSnap.val() ?? {};
   const rank = Object.values(entries).filter((e) => e.score > total).length + 1;
