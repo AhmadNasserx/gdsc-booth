@@ -18,18 +18,19 @@ export default function TechTrivia({ onComplete }: Props) {
   const [score, setScore] = useState(0);
   const [timer, setTimer] = useState(10);
   const completedRef = useRef(false);
+  const scoreRef = useRef(0);
 
   function advance(correct: boolean, remaining: number) {
     const bonus = correct ? 25 + Math.floor(remaining / 10 * 8) : 0;
-    const newScore = score + bonus;
-    setScore(newScore);
+    scoreRef.current += bonus;
+    setScore(scoreRef.current);
     if (idx < QUESTIONS.length - 1) {
       setIdx((p) => p + 1);
       setTimer(10);
     } else if (!completedRef.current) {
       completedRef.current = true;
       setActive(false);
-      onComplete(newScore);
+      onComplete(scoreRef.current);
     }
   }
 
@@ -46,7 +47,7 @@ export default function TechTrivia({ onComplete }: Props) {
         <h2 className="text-xl font-bold mb-2">10-Second Speed Trivia</h2>
         <p className="text-sm text-[#5F6368] mb-6">Answer before the clock hits zero!</p>
         <button
-          onClick={() => { setIdx(0); setScore(0); setTimer(10); completedRef.current = false; setActive(true); }}
+          onClick={() => { setIdx(0); setScore(0); scoreRef.current = 0; setTimer(10); completedRef.current = false; setActive(true); }}
           className="bg-[#1A73E8] hover:bg-[#1557B0] text-white px-8 py-3 rounded-full font-semibold shadow-md"
         >
           Start Speed Trivia

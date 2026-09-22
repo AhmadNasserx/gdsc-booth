@@ -36,7 +36,7 @@ function validBody(tokenOverride?: string) {
   const { token } = signSession('Ahmad');
   return {
     token: tokenOverride ?? token,
-    submissionId: 'sub-123',
+    submissionId: '123e4567-e89b-12d3-a456-426614174000',
     scores: { riddles: 75, trivia: 50, binary: 100, password: 80 },
   };
 }
