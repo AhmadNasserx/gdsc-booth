@@ -25,11 +25,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid submissionId' }, { status: 400 });
   }
 
-  // Idempotency: return cached result without consuming rate limit window
+  // Idempotency: if this exact submissionId already resolved, return it directly
   const existingRef = adminDb.ref(`submissions/${submissionId}`);
   const existing = await existingRef.get();
   if (existing.val()) {
     return NextResponse.json(existing.val());
+  }
+
+  // One submission per session — atomic claim via Firebase transaction
+  const sessionSlotRef = adminDb.ref(`submissions/by-session/${session.sessionId}`);
+  const { committed } = await sessionSlotRef.transaction((current) => {
+    if (current !== null) return; // abort: already submitted
+    return submissionId;          // claim this session
+  });
+  if (!committed) {
+    return NextResponse.json({ error: 'Score already submitted for this session' }, { status: 409 });
   }
 
   // Validate scores
