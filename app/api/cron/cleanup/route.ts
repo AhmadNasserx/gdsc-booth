@@ -10,11 +10,14 @@ export async function GET(request: Request) {
   const now = Date.now();
   let deleted = 0;
 
-  for (const path of ['leaderboard', 'submissions'] as const) {
+  // Each path stores objects with an `expiresAt` field.
+  // submissions/by-session is iterated separately from submissions to avoid treating
+  // the nested by-session object as a single entry.
+  for (const path of ['leaderboard', 'submissions', 'submissions/by-session', 'names']) {
     const snap = await adminDb.ref(path).get();
-    const data: Record<string, { expiresAt: number }> = snap.val() ?? {};
+    const data: Record<string, { expiresAt?: number }> = snap.val() ?? {};
     for (const [key, entry] of Object.entries(data)) {
-      if (entry.expiresAt < now) {
+      if (typeof entry?.expiresAt === 'number' && entry.expiresAt < now) {
         await adminDb.ref(path).child(key).remove();
         deleted++;
       }

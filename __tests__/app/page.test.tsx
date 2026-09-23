@@ -16,32 +16,53 @@ describe('Name Entry Page', () => {
   it('renders name input and consent notice', () => {
     render(<Page />);
     expect(screen.getByPlaceholderText(/display name/i)).toBeInTheDocument();
-    expect(screen.getByText(/deleted automatically after 24 hours/i)).toBeInTheDocument();
+    expect(screen.getByText(/deleted after 24 hours/i)).toBeInTheDocument();
   });
 
-  it('Start button is disabled for empty name', () => {
+  it('Start button is disabled when name is empty', () => {
     render(<Page />);
     expect(screen.getByRole('button', { name: /start/i })).toBeDisabled();
   });
 
   it('navigates to /play on successful session creation', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ token: 'test-token' }),
-    });
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ available: true }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ token: 'test-token', questions: {} }),
+      });
+
     render(<Page />);
     await userEvent.type(screen.getByPlaceholderText(/display name/i), 'Ahmad');
-    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+
+    // Wait for the debounced availability check to complete and enable the button
+    const startBtn = await waitFor(() => {
+      const btn = screen.getByRole('button', { name: /start/i });
+      expect(btn).not.toBeDisabled();
+      return btn;
+    });
+
+    fireEvent.click(startBtn);
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/play'));
     expect(sessionStorage.getItem('playerToken')).toBe('test-token');
     expect(sessionStorage.getItem('playerName')).toBe('Ahmad');
   });
 
   it('shows error message when session creation fails', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false });
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ available: true }) })
+      .mockResolvedValueOnce({ ok: false, json: async () => ({ error: 'Server error' }) });
+
     render(<Page />);
     await userEvent.type(screen.getByPlaceholderText(/display name/i), 'Ahmad');
-    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+
+    const startBtn = await waitFor(() => {
+      const btn = screen.getByRole('button', { name: /start/i });
+      expect(btn).not.toBeDisabled();
+      return btn;
+    });
+
+    fireEvent.click(startBtn);
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
   });
 });

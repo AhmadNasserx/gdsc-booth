@@ -24,6 +24,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid or expired session' }, { status: 401 });
   }
 
+  const MIN_PLAY_MS = 45_000;
+  if (Date.now() - session.issuedAt < MIN_PLAY_MS) {
+    return NextResponse.json({ error: 'Score submitted too quickly' }, { status: 429 });
+  }
+
   const submissionId = body.submissionId as string;
   if (!submissionId || !/^[0-9a-f-]{36}$/.test(submissionId)) {
     return NextResponse.json({ error: 'Invalid submissionId' }, { status: 400 });
@@ -69,7 +74,7 @@ export async function POST(request: Request) {
   const sessionSlotRef = adminDb.ref(`submissions/by-session/${session.sessionId}`);
   const { committed } = await sessionSlotRef.transaction((current) => {
     if (current !== null) return;
-    return submissionId;
+    return { submissionId, expiresAt: Date.now() + 86400000 };
   });
   if (!committed) {
     return NextResponse.json({ error: 'Score already submitted for this session' }, { status: 409 });

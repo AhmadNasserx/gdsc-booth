@@ -5,6 +5,17 @@ import { POST } from '@/app/api/session/route';
 
 process.env.SESSION_SECRET = 'a'.repeat(64);
 
+jest.mock('@/lib/firebaseAdmin', () => ({
+  adminDb: {
+    ref: jest.fn(() => ({
+      transaction: jest.fn((cb: (v: unknown) => unknown) => {
+        const result = cb(null); // name always available in tests
+        return Promise.resolve({ committed: result !== undefined });
+      }),
+    })),
+  },
+}));
+
 function makeRequest(body: unknown) {
   return new Request('http://localhost/api/session', {
     method: 'POST',
@@ -41,14 +52,8 @@ describe('POST /api/session', () => {
     expect(res.status).toBe(400);
   });
 
-  it('strips HTML from name before signing', async () => {
+  it('returns 400 for name with HTML special characters', async () => {
     const res = await POST(makeRequest({ name: '<script>xss</script>' }));
-    // Either 400 (empty after strip) or 200 with no HTML in token
-    if (res.status === 200) {
-      const { token } = await res.json();
-      expect(token).not.toContain('<script>');
-    } else {
-      expect(res.status).toBe(400);
-    }
+    expect(res.status).toBe(400);
   });
 });
