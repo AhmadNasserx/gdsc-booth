@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { verifySession } from '@/lib/session';
-import { calcPasswordScore } from '@/lib/scoring';
+import { calcPasswordScore, calcWordleScore } from '@/lib/scoring';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { RIDDLE_POOL, TRIVIA_POOL } from '@/lib/questions';
 
@@ -37,8 +37,8 @@ export async function POST(request: Request) {
   if (!answers || typeof answers !== 'object') {
     return NextResponse.json({ error: 'Invalid answers' }, { status: 400 });
   }
-  const { riddles: riddleAnswers, trivia: triviaAnswers, binary: binaryAnswer, password } = answers as {
-    riddles: unknown; trivia: unknown; binary: unknown; password: unknown;
+  const { riddles: riddleAnswers, trivia: triviaAnswers, binary: binaryAnswer, password, wordle: wordleGuesses } = answers as {
+    riddles: unknown; trivia: unknown; binary: unknown; password: unknown; wordle: unknown;
   };
 
   if (
@@ -61,6 +61,13 @@ export async function POST(request: Request) {
   if (typeof password !== 'string') {
     return NextResponse.json({ error: 'Invalid password' }, { status: 400 });
   }
+
+  if (
+    !Array.isArray(wordleGuesses) ||
+    wordleGuesses.length === 0 ||
+    wordleGuesses.length > 6 ||
+    !wordleGuesses.every((g) => typeof g === 'string' && /^[A-Z]{5}$/.test(g))
+  ) return NextResponse.json({ error: 'Invalid wordle guesses' }, { status: 400 });
 
   // Idempotency check
   const existingRef = adminDb.ref(`submissions/${submissionId}`);
@@ -99,7 +106,11 @@ export async function POST(request: Request) {
   const binaryScore = binaryAnswer === binaryChar ? 150 : 0;
   const passwordScore = Math.max(0, Math.min(200, calcPasswordScore(password as string)));
 
-  const total = riddleScore + triviaScore + binaryScore + passwordScore;
+  const wGuesses = wordleGuesses as string[];
+  const wordleSolved = wGuesses[wGuesses.length - 1] === session.questions.wordleWord;
+  const wordleScore = calcWordleScore(wGuesses.length, wordleSolved);
+
+  const total = riddleScore + triviaScore + binaryScore + passwordScore + wordleScore;
   const now = Date.now();
   const expiresAt = now + 86400000;
   const name = session.name;

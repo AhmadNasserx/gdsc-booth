@@ -7,7 +7,7 @@ import {
 } from '@/lib/scoring';
 import type { Tab } from '@/lib/types';
 
-const valid = { riddles: 120, trivia: 60, binary: 150, password: 150 };
+const valid = { riddles: 120, trivia: 60, binary: 150, password: 150, wordle: 200 };
 
 describe('validateScores', () => {
   it('accepts valid score set', () => {
@@ -38,9 +38,9 @@ describe('validateScores', () => {
 });
 
 describe('calcTotal', () => {
-  it('sums all four scores', () => {
-    expect(calcTotal({ riddles: 200, trivia: 300, binary: 150, password: 200 })).toBe(850);
-    expect(calcTotal({ riddles: 0, trivia: 0, binary: 0, password: 0 })).toBe(0);
+  it('sums all five scores', () => {
+    expect(calcTotal({ riddles: 200, trivia: 300, binary: 150, password: 200, wordle: 300 })).toBe(1150);
+    expect(calcTotal({ riddles: 0, trivia: 0, binary: 0, password: 0, wordle: 0 })).toBe(0);
   });
 });
 
