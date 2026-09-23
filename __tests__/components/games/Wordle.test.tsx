@@ -6,7 +6,7 @@ jest.useFakeTimers();
 const WORD = 'REACT';
 
 function setup(onComplete = jest.fn()) {
-  render(<Wordle word={WORD} onComplete={onComplete} />);
+  render(<Wordle word={WORD} hint="Component-based UI library by Meta" onComplete={onComplete} />);
   return onComplete;
 }
 

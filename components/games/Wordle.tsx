@@ -9,6 +9,7 @@ type LetterState = 'correct' | 'present' | 'absent' | 'empty' | 'active';
 
 interface Props {
   word: string;
+  hint: string;
   onComplete: (guesses: string[]) => void;
 }
 
@@ -71,7 +72,7 @@ function evaluateGuess(guess: string, word: string): LetterState[] {
   return result;
 }
 
-export default function Wordle({ word, onComplete }: Props) {
+export default function Wordle({ word, hint, onComplete }: Props) {
   const [guesses, setGuesses] = useState<string[]>([]);
   const [results, setResults] = useState<LetterState[][]>([]);
   const [current, setCurrent] = useState('');
@@ -136,7 +137,8 @@ export default function Wordle({ word, onComplete }: Props) {
         <h2 className="text-base font-bold text-[#202124]">Tech Wordle</h2>
         <span className="text-xs text-[#5F6368]">{guesses.length}/{MAX_GUESSES} guesses</span>
       </div>
-      <p className="text-xs text-[#5F6368] mb-4 self-start">Guess the 5-letter tech word</p>
+      <p className="text-xs text-[#5F6368] mb-1 self-start">Guess the 5-letter word</p>
+      <p className="text-xs italic text-[#9AA0A6] mb-4 self-start">💡 {hint}</p>
 
       {/* Score hint row */}
       <div className="w-full flex gap-1 mb-4">
