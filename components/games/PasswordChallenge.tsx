@@ -7,14 +7,14 @@ interface Props { onComplete: (password: string) => void; }
 
 const TIPS = [
   { label: '8+ chars', check: (p: string) => p.length >= 8 },
-  { label: '18+ chars', check: (p: string) => p.length >= 18 },
+  { label: '24+ chars', check: (p: string) => p.length >= 24 },
   { label: 'Uppercase', check: (p: string) => /[A-Z]/.test(p) },
   { label: 'Digit', check: (p: string) => /[0-9]/.test(p) },
   { label: 'Symbol', check: (p: string) => /[^A-Za-z0-9]/.test(p) },
 ];
 
 const BAR_COLOR = (score: number) =>
-  score >= 86 ? '#34A853' : score >= 71 ? '#1A73E8' : score >= 51 ? '#FBBC04' : '#EA4335';
+  score >= 172 ? '#34A853' : score >= 142 ? '#1A73E8' : score >= 102 ? '#FBBC04' : '#EA4335';
 
 export default function PasswordChallenge({ onComplete }: Props) {
   const [password, setPassword] = useState('');
@@ -61,7 +61,7 @@ export default function PasswordChallenge({ onComplete }: Props) {
       <div className="w-full bg-[#DADCE0] h-3 rounded-full overflow-hidden mb-1">
         <div
           className="h-full rounded-full transition-all duration-300"
-          style={{ width: `${score}%`, backgroundColor: BAR_COLOR(score) }}
+          style={{ width: `${(score / 200) * 100}%`, backgroundColor: BAR_COLOR(score) }}
         />
       </div>
       <div className="w-full flex justify-between items-center mb-5">
@@ -69,7 +69,7 @@ export default function PasswordChallenge({ onComplete }: Props) {
           {password ? passwordStrengthLabel(score) : 'Start typing…'}
         </span>
         <span className="text-xs font-bold" style={{ color: BAR_COLOR(score) || '#5F6368' }}>
-          {score}/100
+          {score}/200
         </span>
       </div>
 
@@ -98,7 +98,7 @@ export default function PasswordChallenge({ onComplete }: Props) {
         disabled={!password || locked}
         className="w-full bg-[#34A853] hover:bg-[#2C8E45] active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 rounded-full transition-all"
       >
-        {locked ? `Locked In — ${score} pts ✓` : 'Lock In'}
+        {locked ? `Locked In — ${score}/200 pts ✓` : 'Lock In'}
       </button>
     </div>
   );
