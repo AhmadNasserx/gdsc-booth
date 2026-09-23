@@ -8,13 +8,19 @@ import type { LeaderboardEntry } from '@/lib/types';
 
 export default function LeaderboardPage() {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [fbError, setFbError] = useState('');
 
   useEffect(() => {
     const leaderboardRef = ref(db, 'leaderboard');
-    const unsub = onValue(leaderboardRef, (snap) => {
-      const data = snap.val() as Record<string, LeaderboardEntry> | null;
-      setEntries(data ? Object.values(data) : []);
-    });
+    const unsub = onValue(
+      leaderboardRef,
+      (snap) => {
+        const data = snap.val() as Record<string, LeaderboardEntry> | null;
+        setEntries(data ? Object.values(data) : []);
+        setFbError('');
+      },
+      (err) => setFbError(err.message),
+    );
     return unsub;
   }, []);
 
@@ -31,6 +37,7 @@ export default function LeaderboardPage() {
       </header>
 
       <div className="w-full max-w-2xl bg-white border border-[#DADCE0] rounded-3xl p-6 md:p-8 shadow-sm">
+        {fbError && <p className="text-xs text-[#EA4335] mb-4 font-mono break-all">{fbError}</p>}
         <LeaderboardTable entries={entries} />
       </div>
 
