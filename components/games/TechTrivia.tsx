@@ -1,20 +1,22 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { pickRandom, type TriviaQuestion, TRIVIA_POOL } from '@/lib/questions';
+import type { TriviaQuestion } from '@/lib/questions';
 
-const QUESTION_COUNT = 3;
 const TIMER_SECS = 10;
 
-// Per-question max: 25 base + floor(10/10 * 8) speed = 33. 3 × 33 = 99 = MAX_TRIVIA_SCORE.
 function calcBonus(correct: boolean, remaining: number): number {
   return correct ? 25 + Math.floor((remaining / TIMER_SECS) * 8) : 0;
 }
 
-interface Props { onComplete: (score: number) => void; }
+interface TriviaAnswer { answer: string; remaining: number; }
 
-export default function TechTrivia({ onComplete }: Props) {
-  const [questions] = useState<TriviaQuestion[]>(() => pickRandom(TRIVIA_POOL, QUESTION_COUNT));
+interface Props {
+  questions: TriviaQuestion[];
+  onComplete: (answers: TriviaAnswer[]) => void;
+}
+
+export default function TechTrivia({ questions, onComplete }: Props) {
   const [active, setActive] = useState(false);
   const [idx, setIdx] = useState(0);
   const [score, setScore] = useState(0);
@@ -22,12 +24,15 @@ export default function TechTrivia({ onComplete }: Props) {
   const [chosen, setChosen] = useState<string | null>(null);
   const completedRef = useRef(false);
   const scoreRef = useRef(0);
+  const answersRef = useRef<TriviaAnswer[]>([]);
 
-  function advance(correct: boolean, remaining: number) {
+  function advance(answer: string, remaining: number) {
+    const correct = answer === questions[idx].answer;
     const bonus = calcBonus(correct, remaining);
     scoreRef.current = Math.min(scoreRef.current + bonus, 99);
     setScore(scoreRef.current);
-    setChosen(questions[idx].answer); // reveal correct answer briefly
+    answersRef.current.push({ answer, remaining });
+    setChosen(questions[idx].answer);
 
     setTimeout(() => {
       if (idx < questions.length - 1) {
@@ -37,7 +42,7 @@ export default function TechTrivia({ onComplete }: Props) {
       } else if (!completedRef.current) {
         completedRef.current = true;
         setActive(false);
-        onComplete(scoreRef.current);
+        onComplete(answersRef.current);
       }
     }, 900);
   }
@@ -45,12 +50,12 @@ export default function TechTrivia({ onComplete }: Props) {
   function handleAnswer(opt: string) {
     if (chosen) return;
     setChosen(opt);
-    advance(opt === questions[idx].answer, timer);
+    advance(opt, timer);
   }
 
   useEffect(() => {
     if (!active || chosen) return;
-    if (timer === 0) { advance(false, 0); return; }
+    if (timer === 0) { advance('', 0); return; }
     const id = setTimeout(() => setTimer((t) => t - 1), 1000);
     return () => clearTimeout(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -61,12 +66,13 @@ export default function TechTrivia({ onComplete }: Props) {
       <div className="flex flex-col items-center text-center py-8 anim-slide-in">
         <div className="text-5xl mb-4">⚡</div>
         <h2 className="text-xl font-bold mb-2">Speed Trivia</h2>
-        <p className="text-sm text-[#5F6368] mb-2">{QUESTION_COUNT} questions · 10 seconds each</p>
+        <p className="text-sm text-[#5F6368] mb-2">{questions.length} questions · 10 seconds each</p>
         <p className="text-xs text-[#5F6368] mb-6 bg-[#E8F0FE] rounded-xl px-4 py-2">Answer fast for bonus points!</p>
         <button
           onClick={() => {
             setIdx(0); setScore(0); scoreRef.current = 0;
             setTimer(TIMER_SECS); setChosen(null);
+            answersRef.current = [];
             completedRef.current = false; setActive(true);
           }}
           className="bg-[#1A73E8] hover:bg-[#1557B0] active:scale-95 text-white px-10 py-3 rounded-full font-bold shadow-md transition-all"
@@ -84,7 +90,7 @@ export default function TechTrivia({ onComplete }: Props) {
     <div className="flex flex-col items-center w-full anim-slide-in">
       <div className="w-full flex justify-between items-center mb-4">
         <span className="text-xs font-bold text-[#5F6368]">
-          Question {idx + 1}/{QUESTION_COUNT} · <span className="text-[#1A73E8]">{score} pts</span>
+          Question {idx + 1}/{questions.length} · <span className="text-[#1A73E8]">{score} pts</span>
         </span>
         <span className={`text-sm font-black px-3 py-1 rounded-full transition-colors ${timerColor}`}>
           ⏱ {timer}s

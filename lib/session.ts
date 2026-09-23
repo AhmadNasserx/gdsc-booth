@@ -1,5 +1,5 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
-import type { SessionPayload } from './types';
+import type { SessionPayload, QuestionsPackage } from './types';
 
 const TTL_MS = 30 * 60 * 1000;
 
@@ -9,9 +9,9 @@ function secret(): string {
   return s;
 }
 
-export function signSession(name: string): { token: string; sessionId: string } {
+export function signSession(name: string, questions: QuestionsPackage): { token: string; sessionId: string } {
   const sessionId = randomUUID();
-  const payload: SessionPayload = { sessionId, name, issuedAt: Date.now() };
+  const payload: SessionPayload = { sessionId, name, issuedAt: Date.now(), questions };
   const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
   const sig = createHmac('sha256', secret()).update(encoded).digest('base64url');
   return { token: `${encoded}.${sig}`, sessionId };
