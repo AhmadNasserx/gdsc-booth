@@ -62,8 +62,14 @@ export async function POST(request: Request) {
   return NextResponse.json({
     token,
     questions: {
-      riddles: questions.riddleIndices.map((i) => RIDDLE_POOL[i]),
-      trivia: questions.triviaIndices.map((i) => TRIVIA_POOL[i]),
+      riddles: questions.riddleIndices.map((i) => {
+        const r = RIDDLE_POOL[i];
+        return { ...r, options: [...r.options].sort(() => Math.random() - 0.5) };
+      }),
+      trivia: questions.triviaIndices.map((i) => {
+        const q = TRIVIA_POOL[i];
+        return { ...q, options: [...q.options].sort(() => Math.random() - 0.5) };
+      }),
       binaryChar: questions.binaryChar,
     },
   });
