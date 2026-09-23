@@ -52,7 +52,10 @@ export default function PlayPage() {
   }, [router]);
 
   function handleComplete(tab: Tab, answer: GameAnswers[Tab]) {
-    setAnswers((prev) => ({ ...prev, [tab]: answer }));
+    setAnswers((prev) => {
+      if (prev[tab] !== null) return prev; // lock — first completion wins
+      return { ...prev, [tab]: answer };
+    });
   }
 
   const completedTabs = new Set(
@@ -60,7 +63,8 @@ export default function PlayPage() {
       .filter(([, v]) => v !== null)
       .map(([k]) => k),
   );
-  const allDone = completedTabs.size === 4;
+  const TAB_ORDER: Tab[] = ['riddles', 'trivia', 'binary', 'password', 'wordle'];
+  const allDone = completedTabs.size === 5;
 
   async function handleSubmit() {
     if (!allDone || submitting) return;
@@ -98,52 +102,76 @@ export default function PlayPage() {
     <div className="min-h-screen bg-[#F8F9FA] flex flex-col items-center p-4 md:p-8">
       <header className="w-full max-w-2xl text-center mb-6">
         <h1 className="text-xl font-extrabold">Hey {name} 👋</h1>
-        <p className="text-sm text-[#5F6368]">Complete all 4 games to submit your score</p>
+        <p className="text-sm text-[#5F6368]">Complete all 5 games to submit your score</p>
       </header>
 
       <div className="w-full max-w-2xl">
         <TabBar activeTab={activeTab} completedTabs={completedTabs} onTabChange={setActiveTab} />
 
         <main className="bg-white border border-[#DADCE0] rounded-3xl p-6 md:p-8 shadow-sm mb-4">
-          {activeTab === 'riddles' && (
-            <EmojiRiddles
-              questions={questions.riddles}
-              onComplete={(a) => handleComplete('riddles', a)}
-            />
-          )}
-          {activeTab === 'trivia' && (
-            <TechTrivia
-              questions={questions.trivia}
-              onComplete={(a) => handleComplete('trivia', a)}
-            />
-          )}
-          {activeTab === 'binary' && (
-            <BinaryDecoder
-              playerName={name}
-              binaryChar={questions.binaryChar}
-              onComplete={(a) => handleComplete('binary', a)}
-            />
-          )}
-          {activeTab === 'password' && (
-            <PasswordChallenge onComplete={(a) => handleComplete('password', a)} />
-          )}
-          {activeTab === 'wordle' && (
-            <Wordle
-              word={questions.wordleWord}
-              hint={questions.wordleHint}
-              onComplete={(a) => handleComplete('wordle', a)}
-            />
+          {answers[activeTab] !== null ? (
+            <div className="flex flex-col items-center text-center py-10 anim-slide-in">
+              <div className="w-14 h-14 rounded-full bg-[#E6F4EA] flex items-center justify-center text-2xl mb-3">✓</div>
+              <p className="font-bold text-[#137333]">Game complete!</p>
+              <p className="text-xs text-[#5F6368] mt-1">
+                {allDone ? 'All done — submit your score below.' : 'Head to the next game to continue.'}
+              </p>
+            </div>
+          ) : (
+            <>
+              {activeTab === 'riddles' && (
+                <EmojiRiddles
+                  questions={questions.riddles}
+                  onComplete={(a) => handleComplete('riddles', a)}
+                />
+              )}
+              {activeTab === 'trivia' && (
+                <TechTrivia
+                  questions={questions.trivia}
+                  onComplete={(a) => handleComplete('trivia', a)}
+                />
+              )}
+              {activeTab === 'binary' && (
+                <BinaryDecoder
+                  playerName={name}
+                  binaryChar={questions.binaryChar}
+                  onComplete={(a) => handleComplete('binary', a)}
+                />
+              )}
+              {activeTab === 'password' && (
+                <PasswordChallenge onComplete={(a) => handleComplete('password', a)} />
+              )}
+              {activeTab === 'wordle' && (
+                <Wordle
+                  word={questions.wordleWord}
+                  hint={questions.wordleHint}
+                  onComplete={(a) => handleComplete('wordle', a)}
+                />
+              )}
+            </>
           )}
         </main>
 
         {error && <p className="text-xs text-[#EA4335] text-center mb-2">{error}</p>}
 
         <button
-          onClick={handleSubmit}
-          disabled={!allDone || submitting}
-          className="w-full bg-[#1A73E8] hover:bg-[#1557B0] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-full transition-all shadow"
+          onClick={() => {
+            if (allDone) { handleSubmit(); return; }
+            const next = TAB_ORDER.find((t) => !completedTabs.has(t));
+            if (next) setActiveTab(next);
+          }}
+          disabled={submitting}
+          className={`w-full font-bold py-3 rounded-full transition-all shadow ${
+            allDone
+              ? 'bg-[#1A73E8] hover:bg-[#1557B0] text-white'
+              : 'border-2 border-[#1A73E8] text-[#1A73E8] bg-white hover:bg-[#E8F0FE]'
+          }`}
         >
-          {submitting ? 'Submitting…' : 'Submit Score'}
+          {submitting
+            ? 'Submitting…'
+            : allDone
+            ? 'Submit Score →'
+            : `Continue  ${completedTabs.size}/5 done ›`}
         </button>
       </div>
     </div>
