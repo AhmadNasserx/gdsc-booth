@@ -5,12 +5,6 @@ import { adminDb } from '@/lib/firebaseAdmin';
 import type { Tab } from '@/lib/types';
 
 export async function POST(request: Request) {
-  // CSRF: check Origin
-  const origin = request.headers.get('origin') ?? '';
-  if (origin !== process.env.NEXT_PUBLIC_APP_URL) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
   let body: Record<string, unknown>;
   try {
     body = await request.json();
