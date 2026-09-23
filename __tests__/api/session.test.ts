@@ -14,11 +14,16 @@ function makeRequest(body: unknown) {
 }
 
 describe('POST /api/session', () => {
-  it('returns a token for a valid name', async () => {
+  it('returns a token and questions package for a valid name', async () => {
     const res = await POST(makeRequest({ name: 'Ahmad' }));
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(typeof data.token).toBe('string');
+    expect(Array.isArray(data.questions.riddles)).toBe(true);
+    expect(data.questions.riddles).toHaveLength(4);
+    expect(Array.isArray(data.questions.trivia)).toBe(true);
+    expect(data.questions.trivia).toHaveLength(3);
+    expect(data.questions.binaryChar).toMatch(/^[A-Z]$/);
   });
 
   it('returns 400 for empty name', async () => {
