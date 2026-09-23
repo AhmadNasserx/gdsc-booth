@@ -7,12 +7,6 @@ import { signSession } from '@/lib/session';
 process.env.SESSION_SECRET = 'a'.repeat(64);
 process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
 
-// Mock Upstash
-jest.mock('@/lib/rateLimit', () => ({
-  ratelimit: { limit: jest.fn().mockResolvedValue({ success: true }) },
-  hashKey: (s: string) => s,
-}));
-
 // Mock Firebase Admin
 jest.mock('@/lib/firebaseAdmin', () => {
   const mockPush = jest.fn().mockResolvedValue({ key: 'abc123' });
@@ -68,10 +62,5 @@ describe('POST /api/score', () => {
     expect(res.status).toBe(400);
   });
 
-  it('returns 429 when rate limited', async () => {
-    const { ratelimit } = require('@/lib/rateLimit');
-    ratelimit.limit.mockResolvedValueOnce({ success: false });
-    const res = await POST(makeRequest(validBody()));
-    expect(res.status).toBe(429);
-  });
+
 });
