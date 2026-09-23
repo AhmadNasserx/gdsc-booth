@@ -9,22 +9,23 @@ const entries: LeaderboardEntry[] = [
 ];
 
 describe('LeaderboardTable', () => {
-  it('renders sorted by score descending', () => {
+  it('renders entries sorted by score, highest first', () => {
     render(<LeaderboardTable entries={entries} />);
-    const rows = screen.getAllByRole('row');
-    // rows[0] = header, rows[1] = Sara (400), rows[2] = Ahmad (350)
-    expect(rows[1]).toHaveTextContent('Sara');
-    expect(rows[1]).toHaveTextContent('400');
-    expect(rows[2]).toHaveTextContent('Ahmad');
+    // Sara (400) should be in the 1st-place podium card
+    const firstCard = screen.getByText('1st Place').closest('div')!;
+    expect(firstCard).toHaveTextContent('Sara');
+    // Ahmad (350) should be in the 2nd-place card
+    const secondCard = screen.getByText('2nd Place').closest('div')!;
+    expect(secondCard).toHaveTextContent('Ahmad');
   });
 
-  it('shows top 20 only', () => {
+  it('shows at most 20 entries', () => {
     const many: LeaderboardEntry[] = Array.from({ length: 25 }, (_, i) => ({
       name: `Player${i}`, score: i * 10, timestamp: i, expiresAt: 9999999999999,
     }));
     render(<LeaderboardTable entries={many} />);
-    const rows = screen.getAllByRole('row');
-    expect(rows.length).toBe(21); // 1 header + 20 data rows
+    expect(screen.getByText('Player24')).toBeInTheDocument(); // rank 1 — shown
+    expect(screen.queryByText('Player4')).not.toBeInTheDocument(); // rank 21 — hidden
   });
 
   it('shows empty state when no entries', () => {

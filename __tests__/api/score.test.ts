@@ -22,7 +22,6 @@ jest.mock('@/lib/firebaseAdmin', () => {
   return { adminDb: { ref: mockRef } };
 });
 
-// RIDDLE_POOL[0..3] and TRIVIA_POOL[0..2] are used in validBody below
 const testQuestions: QuestionsPackage = {
   riddleIndices: [0, 1, 2, 3],
   triviaIndices: [0, 1, 2],
@@ -38,7 +37,11 @@ function makeRequest(body: unknown) {
 }
 
 function validBody(tokenOverride?: string) {
+  // Backdate token by 50 s so the 45 s time gate doesn't fire
+  const origNow = Date.now;
+  Date.now = () => origNow() - 50_000;
   const { token } = signSession('Ahmad', testQuestions);
+  Date.now = origNow;
   return {
     token: tokenOverride ?? token,
     submissionId: '123e4567-e89b-12d3-a456-426614174000',
@@ -70,6 +73,13 @@ describe('POST /api/score', () => {
   it('returns 401 for invalid token', async () => {
     const res = await POST(makeRequest({ ...validBody(), token: 'bad.token' }));
     expect(res.status).toBe(401);
+  });
+
+  it('returns 429 when score is submitted too quickly', async () => {
+    const { token } = signSession('Ahmad', testQuestions); // issuedAt = now, no backdate
+    const body = { ...validBody(), token };
+    const res = await POST(makeRequest(body));
+    expect(res.status).toBe(429);
   });
 
   it('returns 400 for wrong number of riddle answers', async () => {

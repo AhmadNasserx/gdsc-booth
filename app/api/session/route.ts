@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
 import { signSession } from '@/lib/session';
 import { RIDDLE_POOL, TRIVIA_POOL } from '@/lib/questions';
+import { adminDb } from '@/lib/firebaseAdmin';
 import type { QuestionsPackage } from '@/lib/types';
 
-function stripHtml(str: string): string {
-  return str.replace(/[<>"'&]/g, '').trim();
+const NAME_PATTERN = /^[A-Za-z0-9À-ɏ ]{2,30}$/;
+
+function normalizeName(name: string): string {
+  return name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
 }
 
 function pickIndices(poolSize: number, n: number): number[] {
@@ -26,10 +29,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 });
   }
 
-  const name = stripHtml(raw);
-  if (!name) return NextResponse.json({ error: 'name is required' }, { status: 400 });
-  if (name.length > 30) {
-    return NextResponse.json({ error: 'name must be 30 characters or fewer' }, { status: 400 });
+  const name = raw.trim();
+  if (!name || !NAME_PATTERN.test(name)) {
+    return NextResponse.json(
+      { error: 'Name must be 2–30 characters: letters, numbers, and spaces only.' },
+      { status: 400 },
+    );
+  }
+
+  // Atomically claim the name — prevents duplicate display names
+  const normKey = normalizeName(name);
+  const { committed } = await adminDb.ref(`names/${normKey}`).transaction((current) => {
+    const entry = current as { expiresAt: number } | null;
+    if (entry !== null && entry.expiresAt > Date.now()) return; // still taken
+    return { claimedAt: Date.now(), expiresAt: Date.now() + 86400000 };
+  });
+  if (!committed) {
+    return NextResponse.json(
+      { error: 'Display name already taken. Choose another.' },
+      { status: 409 },
+    );
   }
 
   const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
