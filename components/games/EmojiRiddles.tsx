@@ -65,7 +65,7 @@ export default function EmojiRiddles({ questions, onComplete }: Props) {
               key={opt}
               onClick={() => handleAnswer(opt)}
               disabled={!!chosen}
-              className={`p-4 text-sm font-semibold rounded-2xl border-2 transition-all duration-150 ${
+              className={`p-4 text-sm font-semibold text-center rounded-2xl border-2 transition-all duration-150 ${
                 chosen
                   ? isCorrect
                     ? 'bg-[#E6F4EA] border-[#34A853] text-[#137333]'
