@@ -17,6 +17,7 @@ interface ClientQuestions {
   trivia: TriviaQuestion[];
   binaryChar: string;
   wordleWord: string;
+  wordleHint: string;
 }
 
 interface GameAnswers {
@@ -129,6 +130,7 @@ export default function PlayPage() {
           {activeTab === 'wordle' && (
             <Wordle
               word={questions.wordleWord}
+              hint={questions.wordleHint}
               onComplete={(a) => handleComplete('wordle', a)}
             />
           )}
