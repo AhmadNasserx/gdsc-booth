@@ -14,10 +14,11 @@ describe('PasswordChallenge', () => {
     expect(screen.getByRole('button', { name: /lock in/i })).toBeDisabled();
   });
 
-  it('calls onComplete with strength score on Lock In', async () => {
+  it('calls onComplete with 100 for an excellent password', async () => {
     const onComplete = jest.fn();
     render(<PasswordChallenge onComplete={onComplete} />);
-    await userEvent.type(screen.getByPlaceholderText(/type your password/i), 'MyP@ssw0rd123!');
+    // 18 chars, all types, all unique, no patterns → score 100
+    await userEvent.type(screen.getByPlaceholderText(/type your password/i), 'XkP9#mRv2!LqT7@wNb');
     fireEvent.click(screen.getByRole('button', { name: /lock in/i }));
     expect(onComplete).toHaveBeenCalledWith(100);
   });
@@ -27,7 +28,8 @@ describe('PasswordChallenge', () => {
     render(<PasswordChallenge onComplete={onComplete} />);
     await userEvent.type(screen.getByPlaceholderText(/type your password/i), 'test1234');
     fireEvent.click(screen.getByRole('button', { name: /lock in/i }));
-    fireEvent.click(screen.getByRole('button', { name: /lock in/i }));
+    // Button is now "Locked In — X pts ✓" and disabled — second click is a no-op
+    fireEvent.click(screen.getByRole('button', { name: /locked in/i }));
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 });

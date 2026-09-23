@@ -1,81 +1,128 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { pickRandom, type TriviaQuestion, TRIVIA_POOL } from '@/lib/questions';
 
-interface Question { question: string; options: string[]; answer: string; }
+const QUESTION_COUNT = 3;
+const TIMER_SECS = 10;
 
-const QUESTIONS: Question[] = [
-  { question: "What does 'GDSC' stand for?", options: ['Google Developer Student Clubs','Global Data Science Center','General Developer Software Council','Google Design & Code'], answer: 'Google Developer Student Clubs' },
-  { question: 'Which Google framework is used for cross-platform mobile apps?', options: ['Flutter','React Native','Angular','Kotlin Multiplatform'], answer: 'Flutter' },
-  { question: "What is Google's flagship AI model family?", options: ['Gemini','Llama','Claude','GPT'], answer: 'Gemini' },
-];
+// Per-question max: 25 base + floor(10/10 * 8) speed = 33. 3 × 33 = 99 = MAX_TRIVIA_SCORE.
+function calcBonus(correct: boolean, remaining: number): number {
+  return correct ? 25 + Math.floor((remaining / TIMER_SECS) * 8) : 0;
+}
 
 interface Props { onComplete: (score: number) => void; }
 
 export default function TechTrivia({ onComplete }: Props) {
+  const [questions] = useState<TriviaQuestion[]>(() => pickRandom(TRIVIA_POOL, QUESTION_COUNT));
   const [active, setActive] = useState(false);
   const [idx, setIdx] = useState(0);
   const [score, setScore] = useState(0);
-  const [timer, setTimer] = useState(10);
+  const [timer, setTimer] = useState(TIMER_SECS);
+  const [chosen, setChosen] = useState<string | null>(null);
   const completedRef = useRef(false);
   const scoreRef = useRef(0);
 
   function advance(correct: boolean, remaining: number) {
-    const bonus = correct ? 25 + Math.floor(remaining / 10 * 8) : 0;
-    scoreRef.current += bonus;
+    const bonus = calcBonus(correct, remaining);
+    scoreRef.current = Math.min(scoreRef.current + bonus, 99);
     setScore(scoreRef.current);
-    if (idx < QUESTIONS.length - 1) {
-      setIdx((p) => p + 1);
-      setTimer(10);
-    } else if (!completedRef.current) {
-      completedRef.current = true;
-      setActive(false);
-      onComplete(scoreRef.current);
-    }
+    setChosen(questions[idx].answer); // reveal correct answer briefly
+
+    setTimeout(() => {
+      if (idx < questions.length - 1) {
+        setIdx((p) => p + 1);
+        setTimer(TIMER_SECS);
+        setChosen(null);
+      } else if (!completedRef.current) {
+        completedRef.current = true;
+        setActive(false);
+        onComplete(scoreRef.current);
+      }
+    }, 900);
+  }
+
+  function handleAnswer(opt: string) {
+    if (chosen) return;
+    setChosen(opt);
+    advance(opt === questions[idx].answer, timer);
   }
 
   useEffect(() => {
-    if (!active) return;
+    if (!active || chosen) return;
     if (timer === 0) { advance(false, 0); return; }
     const id = setTimeout(() => setTimer((t) => t - 1), 1000);
     return () => clearTimeout(id);
-  }, [active, timer, idx]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, timer, idx, chosen]);
 
   if (!active) {
     return (
-      <div className="flex flex-col items-center text-center py-8">
-        <h2 className="text-xl font-bold mb-2">10-Second Speed Trivia</h2>
-        <p className="text-sm text-[#5F6368] mb-6">Answer before the clock hits zero!</p>
+      <div className="flex flex-col items-center text-center py-8 anim-slide-in">
+        <div className="text-5xl mb-4">⚡</div>
+        <h2 className="text-xl font-bold mb-2">Speed Trivia</h2>
+        <p className="text-sm text-[#5F6368] mb-2">{QUESTION_COUNT} questions · 10 seconds each</p>
+        <p className="text-xs text-[#5F6368] mb-6 bg-[#E8F0FE] rounded-xl px-4 py-2">Answer fast for bonus points!</p>
         <button
-          onClick={() => { setIdx(0); setScore(0); scoreRef.current = 0; setTimer(10); completedRef.current = false; setActive(true); }}
-          className="bg-[#1A73E8] hover:bg-[#1557B0] text-white px-8 py-3 rounded-full font-semibold shadow-md"
+          onClick={() => {
+            setIdx(0); setScore(0); scoreRef.current = 0;
+            setTimer(TIMER_SECS); setChosen(null);
+            completedRef.current = false; setActive(true);
+          }}
+          className="bg-[#1A73E8] hover:bg-[#1557B0] active:scale-95 text-white px-10 py-3 rounded-full font-bold shadow-md transition-all"
         >
-          Start Speed Trivia
+          Start!
         </button>
       </div>
     );
   }
 
-  const q = QUESTIONS[idx];
+  const q = questions[idx];
+  const timerColor = timer <= 3 ? 'text-[#EA4335] bg-[#FCE8E6]' : timer <= 6 ? 'text-[#FBBC04] bg-[#FEF9E5]' : 'text-[#34A853] bg-[#E6F4EA]';
+
   return (
-    <div className="flex flex-col items-center w-full">
+    <div className="flex flex-col items-center w-full anim-slide-in">
       <div className="w-full flex justify-between items-center mb-4">
-        <span className="text-xs font-bold text-[#5F6368]">Question {idx + 1}/3</span>
-        <span className="text-sm font-black text-[#EA4335] bg-[#FCE8E6] px-3 py-1 rounded-full">
+        <span className="text-xs font-bold text-[#5F6368]">
+          Question {idx + 1}/{QUESTION_COUNT} · <span className="text-[#1A73E8]">{score} pts</span>
+        </span>
+        <span className={`text-sm font-black px-3 py-1 rounded-full transition-colors ${timerColor}`}>
           ⏱ {timer}s
         </span>
       </div>
-      <h3 className="text-lg font-bold mb-6 text-[#202124] text-center">{q.question}</h3>
-      <div className="w-full flex flex-col space-y-3">
-        {q.options.map((opt) => (
-          <button
-            key={opt}
-            onClick={() => advance(opt === q.answer, timer)}
-            className="w-full p-4 text-left text-sm font-medium border border-[#DADCE0] rounded-2xl hover:border-[#1A73E8] hover:bg-[#E8F0FE] transition-all"
-          >
-            {opt}
-          </button>
-        ))}
+
+      <div className="w-full bg-[#DADCE0] h-1 rounded-full mb-5 overflow-hidden">
+        <div
+          className="h-full bg-[#1A73E8] transition-all duration-1000"
+          style={{ width: `${(timer / TIMER_SECS) * 100}%` }}
+        />
+      </div>
+
+      <h3 className="text-base font-bold mb-5 text-[#202124] text-center">{q.question}</h3>
+
+      <div className="w-full flex flex-col gap-2.5">
+        {q.options.map((opt) => {
+          const isCorrect = opt === q.answer;
+          const isChosen = opt === chosen;
+          return (
+            <button
+              key={opt}
+              onClick={() => handleAnswer(opt)}
+              disabled={!!chosen}
+              className={`w-full p-3.5 text-left text-sm font-semibold border-2 rounded-2xl transition-all active:scale-[0.98] ${
+                chosen
+                  ? isCorrect
+                    ? 'bg-[#E6F4EA] border-[#34A853] text-[#137333]'
+                    : isChosen
+                    ? 'bg-[#FCE8E6] border-[#EA4335] text-[#C5221F]'
+                    : 'border-[#DADCE0] text-[#9AA0A6] bg-[#F8F9FA]'
+                  : 'border-[#DADCE0] bg-white hover:border-[#1A73E8] hover:bg-[#E8F0FE]'
+              }`}
+            >
+              {chosen && isCorrect ? '✓ ' : chosen && isChosen && !isCorrect ? '✗ ' : ''}{opt}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
