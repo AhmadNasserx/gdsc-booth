@@ -42,7 +42,7 @@ export async function POST(request: Request) {
   const { committed } = await adminDb.ref(`names/${normKey}`).transaction((current) => {
     const entry = current as { expiresAt: number } | null;
     if (entry !== null && entry.expiresAt > Date.now()) return; // still taken
-    return { claimedAt: Date.now(), expiresAt: Date.now() + 86400000 };
+    return { claimedAt: Date.now(), expiresAt: Date.now() + 172800000 };
   });
   if (!committed) {
     return NextResponse.json(

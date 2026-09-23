@@ -75,7 +75,7 @@ export default function LeaderboardPage() {
       </div>
 
       <p className="text-center text-xs text-[#9AA0A6] mt-10">
-        Scores reset automatically after 24 hours
+        Scores reset automatically after 48 hours
       </p>
     </div>
   );

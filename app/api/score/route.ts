@@ -80,7 +80,7 @@ export async function POST(request: Request) {
   const sessionSlotRef = adminDb.ref(`submissions/by-session/${session.sessionId}`);
   const { committed } = await sessionSlotRef.transaction((current) => {
     if (current !== null) return;
-    return { submissionId, expiresAt: Date.now() + 86400000 };
+    return { submissionId, expiresAt: Date.now() + 172800000 };
   });
   if (!committed) {
     return NextResponse.json({ error: 'Score already submitted for this session' }, { status: 409 });
@@ -112,7 +112,7 @@ export async function POST(request: Request) {
 
   const total = riddleScore + triviaScore + binaryScore + passwordScore + wordleScore;
   const now = Date.now();
-  const expiresAt = now + 86400000;
+  const expiresAt = now + 172800000;
   const name = session.name;
 
   const leaderboardSnap = await adminDb.ref('leaderboard').get();
