@@ -1,18 +1,21 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { pickRandom, type Riddle, RIDDLE_POOL } from '@/lib/questions';
+import type { Riddle } from '@/lib/questions';
 
-interface Props { onComplete: (score: number) => void; }
+interface Props {
+  questions: Riddle[];
+  onComplete: (answers: string[]) => void;
+}
 
-export default function EmojiRiddles({ onComplete }: Props) {
-  const [questions] = useState<Riddle[]>(() => pickRandom(RIDDLE_POOL, 4));
+export default function EmojiRiddles({ questions, onComplete }: Props) {
   const [idx, setIdx] = useState(0);
   const [score, setScore] = useState(0);
   const [chosen, setChosen] = useState<string | null>(null);
   const [animKey, setAnimKey] = useState(0);
   const [animType, setAnimType] = useState<'pop' | 'shake' | null>(null);
   const completedRef = useRef(false);
+  const answersRef = useRef<string[]>([]);
 
   function handleAnswer(opt: string) {
     if (chosen) return;
@@ -21,9 +24,8 @@ export default function EmojiRiddles({ onComplete }: Props) {
     setChosen(opt);
     setAnimType(correct ? 'pop' : 'shake');
     setAnimKey((k) => k + 1);
-
-    const newScore = correct ? score + 25 : score;
-    if (correct) setScore(newScore);
+    answersRef.current.push(opt);
+    if (correct) setScore((s) => s + 25);
 
     setTimeout(() => {
       setAnimType(null);
@@ -32,7 +34,7 @@ export default function EmojiRiddles({ onComplete }: Props) {
         setChosen(null);
       } else if (!completedRef.current) {
         completedRef.current = true;
-        onComplete(newScore);
+        onComplete(answersRef.current);
       }
     }, 1100);
   }

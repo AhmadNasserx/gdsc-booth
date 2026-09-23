@@ -14,13 +14,12 @@ describe('PasswordChallenge', () => {
     expect(screen.getByRole('button', { name: /lock in/i })).toBeDisabled();
   });
 
-  it('calls onComplete with 100 for an excellent password', async () => {
+  it('calls onComplete with the password string on lock', async () => {
     const onComplete = jest.fn();
     render(<PasswordChallenge onComplete={onComplete} />);
-    // 18 chars, all types, all unique, no patterns → score 100
     await userEvent.type(screen.getByPlaceholderText(/type your password/i), 'XkP9#mRv2!LqT7@wNb');
     fireEvent.click(screen.getByRole('button', { name: /lock in/i }));
-    expect(onComplete).toHaveBeenCalledWith(100);
+    expect(onComplete).toHaveBeenCalledWith('XkP9#mRv2!LqT7@wNb');
   });
 
   it('does not call onComplete again after locked', async () => {

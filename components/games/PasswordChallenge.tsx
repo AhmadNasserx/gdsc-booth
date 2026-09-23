@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react';
 import { calcPasswordScore, passwordStrengthLabel } from '@/lib/scoring';
 
-interface Props { onComplete: (score: number) => void; }
+interface Props { onComplete: (password: string) => void; }
 
 const TIPS = [
   { label: '8+ chars', check: (p: string) => p.length >= 8 },
@@ -27,7 +27,7 @@ export default function PasswordChallenge({ onComplete }: Props) {
     if (doneRef.current || !password) return;
     doneRef.current = true;
     setLocked(true);
-    onComplete(score);
+    onComplete(password);
   }
 
   return (

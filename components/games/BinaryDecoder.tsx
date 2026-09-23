@@ -2,19 +2,19 @@
 
 import { useState, useRef } from 'react';
 
-interface Props { playerName: string; onComplete: (score: number) => void; }
+interface Props {
+  playerName: string;
+  binaryChar: string;
+  onComplete: (answer: string) => void;
+}
 
 function toBinary(str: string): string {
   return str.split('').map((c) => c.charCodeAt(0).toString(2).padStart(8, '0')).join(' ');
 }
 
-// Pick a random uppercase letter and generate 3 ASCII-adjacent wrong choices
-function makeChallenge() {
+function makeChoices(letter: string): string[] {
   const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  const idx = Math.floor(Math.random() * letters.length);
-  const letter = letters[idx];
-  const binary = letter.charCodeAt(0).toString(2).padStart(8, '0');
-
+  const idx = letters.indexOf(letter);
   const wrong = new Set<string>();
   let tries = 0;
   while (wrong.size < 3 && tries < 60) {
@@ -23,12 +23,12 @@ function makeChallenge() {
     const adj = letters[(idx + off + 26) % 26];
     if (adj !== letter) wrong.add(adj);
   }
-  const choices = [letter, ...wrong].sort(() => Math.random() - 0.5);
-  return { letter, binary, choices };
+  return [letter, ...wrong].sort(() => Math.random() - 0.5);
 }
 
-export default function BinaryDecoder({ playerName, onComplete }: Props) {
-  const [challenge] = useState(makeChallenge);
+export default function BinaryDecoder({ playerName, binaryChar, onComplete }: Props) {
+  const binary = binaryChar.charCodeAt(0).toString(2).padStart(8, '0');
+  const [choices] = useState(() => makeChoices(binaryChar));
   const [chosen, setChosen] = useState<string | null>(null);
   const [animType, setAnimType] = useState<'pop' | 'shake' | null>(null);
   const [animKey, setAnimKey] = useState(0);
@@ -36,14 +36,14 @@ export default function BinaryDecoder({ playerName, onComplete }: Props) {
 
   function handleChoice(opt: string) {
     if (doneRef.current || chosen) return;
-    const correct = opt === challenge.letter;
+    const correct = opt === binaryChar;
     setChosen(opt);
     setAnimType(correct ? 'pop' : 'shake');
     setAnimKey((k) => k + 1);
     doneRef.current = true;
     setTimeout(() => {
       setAnimType(null);
-      onComplete(correct ? 100 : 0);
+      onComplete(opt);
     }, 1000);
   }
 
@@ -74,12 +74,12 @@ export default function BinaryDecoder({ playerName, onComplete }: Props) {
             animType === 'pop' ? 'anim-pop' : animType === 'shake' ? 'anim-shake' : ''
           }`}
         >
-          {challenge.binary}
+          {binary}
         </div>
 
         <div className="grid grid-cols-4 gap-2">
-          {challenge.choices.map((opt) => {
-            const isCorrect = opt === challenge.letter;
+          {choices.map((opt) => {
+            const isCorrect = opt === binaryChar;
             const isChosen = opt === chosen;
             return (
               <button
@@ -103,10 +103,10 @@ export default function BinaryDecoder({ playerName, onComplete }: Props) {
         </div>
 
         {chosen && (
-          <p className={`text-sm font-bold text-center mt-4 anim-slide-in ${chosen === challenge.letter ? 'text-[#34A853]' : 'text-[#EA4335]'}`}>
-            {chosen === challenge.letter
-              ? `Correct! ${challenge.binary} = '${challenge.letter}' (ASCII ${challenge.letter.charCodeAt(0)}) 🎉`
-              : `Not quite — ${challenge.binary} = '${challenge.letter}' (ASCII ${challenge.letter.charCodeAt(0)})`}
+          <p className={`text-sm font-bold text-center mt-4 anim-slide-in ${chosen === binaryChar ? 'text-[#34A853]' : 'text-[#EA4335]'}`}>
+            {chosen === binaryChar
+              ? `Correct! ${binary} = '${binaryChar}' (ASCII ${binaryChar.charCodeAt(0)}) 🎉`
+              : `Not quite — ${binary} = '${binaryChar}' (ASCII ${binaryChar.charCodeAt(0)})`}
           </p>
         )}
       </div>

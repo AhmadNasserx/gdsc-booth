@@ -1,9 +1,16 @@
 export type Tab = 'riddles' | 'trivia' | 'binary' | 'password';
 
+export interface QuestionsPackage {
+  riddleIndices: number[];
+  triviaIndices: number[];
+  binaryChar: string;
+}
+
 export interface SessionPayload {
   sessionId: string;
   name: string;
   issuedAt: number;
+  questions: QuestionsPackage;
 }
 
 export interface LeaderboardEntry {

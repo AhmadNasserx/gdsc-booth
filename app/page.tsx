@@ -20,9 +20,10 @@ export default function NameEntry() {
         body: JSON.stringify({ name: name.trim() }),
       });
       if (!res.ok) throw new Error('Failed to start session');
-      const { token } = await res.json();
+      const { token, questions } = await res.json();
       sessionStorage.setItem('playerToken', token);
       sessionStorage.setItem('playerName', name.trim());
+      sessionStorage.setItem('playerQuestions', JSON.stringify(questions));
       router.push('/play');
     } catch {
       setError('Something went wrong. Please try again.');
