@@ -31,9 +31,9 @@ describe('POST /api/session', () => {
     const data = await res.json();
     expect(typeof data.token).toBe('string');
     expect(Array.isArray(data.questions.riddles)).toBe(true);
-    expect(data.questions.riddles).toHaveLength(4);
+    expect(data.questions.riddles).toHaveLength(5);
     expect(Array.isArray(data.questions.trivia)).toBe(true);
-    expect(data.questions.trivia).toHaveLength(3);
+    expect(data.questions.trivia).toHaveLength(15);
     expect(data.questions.binaryChar).toMatch(/^[A-Z]$/);
   });
 

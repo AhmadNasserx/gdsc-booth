@@ -4,11 +4,9 @@ import { calcPasswordScore } from '@/lib/scoring';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { RIDDLE_POOL, TRIVIA_POOL } from '@/lib/questions';
 
-const TIMER_SECS = 10;
-
-function calcTriviaBonus(correct: boolean, remaining: number): number {
-  return correct ? 25 + Math.floor((remaining / TIMER_SECS) * 8) : 0;
-}
+const TRIVIA_CORRECT_PTS = 20;
+const TRIVIA_WRONG_PENALTY = 10;
+const MAX_TRIVIA_SCORE = 300;
 
 export async function POST(request: Request) {
   let body: Record<string, unknown>;
@@ -42,17 +40,18 @@ export async function POST(request: Request) {
   const { riddles: riddleAnswers, trivia: triviaAnswers, binary: binaryAnswer, password } = answers as {
     riddles: unknown; trivia: unknown; binary: unknown; password: unknown;
   };
+
   if (
-    !Array.isArray(riddleAnswers) || riddleAnswers.length !== 4 ||
+    !Array.isArray(riddleAnswers) || riddleAnswers.length !== 5 ||
     !riddleAnswers.every((a) => typeof a === 'string')
   ) return NextResponse.json({ error: 'Invalid riddle answers' }, { status: 400 });
 
   if (
-    !Array.isArray(triviaAnswers) || triviaAnswers.length !== 3 ||
+    !Array.isArray(triviaAnswers) ||
+    triviaAnswers.length > session.questions.triviaIndices.length ||
     !triviaAnswers.every((a) => {
       if (typeof a !== 'object' || a === null) return false;
-      const ta = a as Record<string, unknown>;
-      return typeof ta.answer === 'string' && typeof ta.remaining === 'number';
+      return typeof (a as Record<string, unknown>).answer === 'string';
     })
   ) return NextResponse.json({ error: 'Invalid trivia answers' }, { status: 400 });
 
@@ -84,20 +83,21 @@ export async function POST(request: Request) {
   const { riddleIndices, triviaIndices, binaryChar } = session.questions;
 
   const riddleScore = (riddleAnswers as string[]).reduce(
-    (sum, ans, i) => sum + (ans === RIDDLE_POOL[riddleIndices[i]]?.answer ? 25 : 0),
+    (sum, ans, i) => sum + (ans === RIDDLE_POOL[riddleIndices[i]]?.answer ? 40 : 0),
     0,
   );
 
+  // Mirror client-side logic: correct=+20, wrong=-10 (floor at 0 per answer), cap at MAX
   const triviaScore = Math.min(
-    (triviaAnswers as { answer: string; remaining: number }[]).reduce((sum, a, i) => {
-      const remaining = Math.max(0, Math.min(TIMER_SECS, Math.round(a.remaining)));
-      return sum + calcTriviaBonus(a.answer === TRIVIA_POOL[triviaIndices[i]]?.answer, remaining);
+    (triviaAnswers as { answer: string }[]).reduce((sum, a, i) => {
+      const correct = a.answer === TRIVIA_POOL[triviaIndices[i]]?.answer;
+      return Math.max(0, sum + (correct ? TRIVIA_CORRECT_PTS : -TRIVIA_WRONG_PENALTY));
     }, 0),
-    99,
+    MAX_TRIVIA_SCORE,
   );
 
-  const binaryScore = binaryAnswer === binaryChar ? 100 : 0;
-  const passwordScore = Math.max(0, Math.min(100, calcPasswordScore(password as string)));
+  const binaryScore = binaryAnswer === binaryChar ? 150 : 0;
+  const passwordScore = Math.max(0, Math.min(200, calcPasswordScore(password as string)));
 
   const total = riddleScore + triviaScore + binaryScore + passwordScore;
   const now = Date.now();

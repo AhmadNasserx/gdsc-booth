@@ -25,7 +25,7 @@ export default function EmojiRiddles({ questions, onComplete }: Props) {
     setAnimType(correct ? 'pop' : 'shake');
     setAnimKey((k) => k + 1);
     answersRef.current.push(opt);
-    if (correct) setScore((s) => s + 25);
+    if (correct) setScore((s) => s + 40);
 
     setTimeout(() => {
       setAnimType(null);

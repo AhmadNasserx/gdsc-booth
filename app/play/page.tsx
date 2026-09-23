@@ -19,7 +19,7 @@ interface ClientQuestions {
 
 interface GameAnswers {
   riddles: string[] | null;
-  trivia: { answer: string; remaining: number }[] | null;
+  trivia: { answer: string }[] | null;
   binary: string | null;
   password: string | null;
 }

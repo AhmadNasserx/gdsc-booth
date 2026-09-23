@@ -27,6 +27,17 @@ export const RIDDLE_POOL: Riddle[] = [
   { emojis: '☁️ ⚡ 🚫🖥️', hint: 'Run code without managing servers', options: ['Serverless', 'Edge Computing', 'Docker', 'Kubernetes'], answer: 'Serverless' },
   { emojis: '📡 🔢 🌐', hint: 'Unique address that identifies a device on a network', options: ['IP Address', 'MAC Address', 'DNS Record', 'Port Number'], answer: 'IP Address' },
   { emojis: '🤖 💬 🧠', hint: 'Simulates human conversation using AI', options: ['Chatbot', 'Voice Assistant', 'Search Engine', 'Compiler'], answer: 'Chatbot' },
+  // ── General knowledge ──────────────────────────────────────────────────────
+  { emojis: '☕ 🫘 🌍', hint: 'Hot beverage brewed from roasted beans', options: ['Coffee', 'Tea', 'Cocoa', 'Juice'], answer: 'Coffee' },
+  { emojis: '🌊 🏖️ ☀️', hint: 'Sandy shore where the sea meets the land', options: ['Beach', 'Desert', 'Island', 'Valley'], answer: 'Beach' },
+  { emojis: '📱 📸 ❤️', hint: 'Photo-sharing social media platform', options: ['Instagram', 'TikTok', 'Snapchat', 'Pinterest'], answer: 'Instagram' },
+  { emojis: '🎬 🍿 🎭', hint: 'A story told through moving images with sound', options: ['Movie', 'Book', 'Podcast', 'Play'], answer: 'Movie' },
+  { emojis: '🧬 🔬 🧫', hint: 'The science of living organisms', options: ['Biology', 'Chemistry', 'Physics', 'Astronomy'], answer: 'Biology' },
+  { emojis: '⚽ 🥅 🏟️', hint: "World's most popular sport", options: ['Football', 'Basketball', 'Tennis', 'Cricket'], answer: 'Football' },
+  { emojis: '✈️ 🗺️ 🌍', hint: 'Exploring new countries and places', options: ['Travel', 'Migration', 'Commute', 'Adventure'], answer: 'Travel' },
+  { emojis: '🎵 🎸 🥁', hint: 'Genre featuring electric guitars and a strong beat', options: ['Rock Music', 'Jazz', 'Classical', 'Pop'], answer: 'Rock Music' },
+  { emojis: '🧑‍🍳 🍽️ ⭐', hint: 'Preparing delicious food from raw ingredients', options: ['Cooking', 'Baking', 'Grilling', 'Catering'], answer: 'Cooking' },
+  { emojis: '📚 ✏️ 🏛️', hint: 'A place of higher education and research', options: ['University', 'School', 'Library', 'Office'], answer: 'University' },
 ];
 
 export interface TriviaQuestion {
@@ -53,7 +64,16 @@ export const TRIVIA_POOL: TriviaQuestion[] = [
   { question: 'What does "SQL" stand for?', options: ['Structured Query Language', 'System Query Logic', 'Standard Queue Link', 'Stored Query Layer'], answer: 'Structured Query Language' },
   { question: 'In what year was the World Wide Web invented by Tim Berners-Lee?', options: ['1983', '1989', '1995', '2001'], answer: '1989' },
   { question: 'Which company created the Android operating system?', options: ['Google', 'Apple', 'Microsoft', 'Samsung'], answer: 'Google' },
-  // ── Random fun trivia ──────────────────────────────────────────────────────
+  // ── General knowledge ──────────────────────────────────────────────────────
+  { question: 'What is the capital city of France?', options: ['Paris', 'London', 'Berlin', 'Rome'], answer: 'Paris' },
+  { question: 'How many players are on a football (soccer) team?', options: ['11', '10', '9', '12'], answer: '11' },
+  { question: 'What is the fastest land animal?', options: ['Cheetah', 'Lion', 'Leopard', 'Horse'], answer: 'Cheetah' },
+  { question: 'In which year did World War II end?', options: ['1945', '1939', '1944', '1950'], answer: '1945' },
+  { question: 'How many continents are there on Earth?', options: ['7', '5', '6', '8'], answer: '7' },
+  { question: 'What is the common name for H₂O?', options: ['Water', 'Hydrogen', 'Oxygen', 'Salt'], answer: 'Water' },
+  { question: 'Who wrote Romeo and Juliet?', options: ['Shakespeare', 'Dickens', 'Hemingway', 'Twain'], answer: 'Shakespeare' },
+  { question: 'Which planet is closest to the Sun?', options: ['Mercury', 'Venus', 'Earth', 'Mars'], answer: 'Mercury' },
+  { question: 'What color do you get when you mix red and blue?', options: ['Purple', 'Green', 'Orange', 'Brown'], answer: 'Purple' },
   { question: 'What is the chemical symbol for Gold?', options: ['Au', 'Go', 'Gd', 'Gl'], answer: 'Au' },
   { question: 'How many sides does a hexagon have?', options: ['5', '6', '7', '8'], answer: '6' },
   { question: 'Which planet is known as the Red Planet?', options: ['Mars', 'Venus', 'Jupiter', 'Saturn'], answer: 'Mars' },
