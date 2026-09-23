@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { signSession } from '@/lib/session';
-import { RIDDLE_POOL, TRIVIA_POOL } from '@/lib/questions';
+import { RIDDLE_POOL, TRIVIA_POOL, WORDLE_POOL } from '@/lib/questions';
 import { adminDb } from '@/lib/firebaseAdmin';
 import type { QuestionsPackage } from '@/lib/types';
 
@@ -56,6 +56,7 @@ export async function POST(request: Request) {
     riddleIndices: pickIndices(RIDDLE_POOL.length, 5),
     triviaIndices: pickIndices(TRIVIA_POOL.length, 15),
     binaryChar: LETTERS[Math.floor(Math.random() * LETTERS.length)],
+    wordleWord: WORDLE_POOL[Math.floor(Math.random() * WORDLE_POOL.length)],
   };
 
   const { token } = signSession(name, questions);
@@ -71,6 +72,7 @@ export async function POST(request: Request) {
         return { ...q, options: [...q.options].sort(() => Math.random() - 0.5) };
       }),
       binaryChar: questions.binaryChar,
+      wordleWord: questions.wordleWord,
     },
   });
 }

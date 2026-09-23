@@ -6,7 +6,8 @@ const TAB_LABELS: Record<Tab, string> = {
   riddles:  '🧩 Emoji',
   trivia:   '⚡ Trivia',
   binary:   '🔢 Binary',
-  password: '🔐 Password',
+  password: '🔐 Pass',
+  wordle:   '🟩 Wordle',
 };
 
 interface Props {

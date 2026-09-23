@@ -1,9 +1,10 @@
-export type Tab = 'riddles' | 'trivia' | 'binary' | 'password';
+export type Tab = 'riddles' | 'trivia' | 'binary' | 'password' | 'wordle';
 
 export interface QuestionsPackage {
   riddleIndices: number[];
   triviaIndices: number[];
   binaryChar: string;
+  wordleWord: string;
 }
 
 export interface SessionPayload {

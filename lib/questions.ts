@@ -81,6 +81,17 @@ export const TRIVIA_POOL: TriviaQuestion[] = [
   { question: 'What is the largest ocean on Earth?', options: ['Pacific Ocean', 'Atlantic Ocean', 'Indian Ocean', 'Arctic Ocean'], answer: 'Pacific Ocean' },
 ];
 
+export const WORDLE_POOL: string[] = [
+  'REACT', 'REDUX', 'BABEL', 'CACHE', 'QUERY', 'STACK', 'PROXY', 'REGEX',
+  'FETCH', 'ASYNC', 'HOOKS', 'YIELD', 'PARSE', 'TOKEN', 'ARRAY', 'CLASS',
+  'STATE', 'STORE', 'DEBUG', 'ERROR', 'EVENT', 'BUILD', 'CLONE', 'MERGE',
+  'ROUTE', 'SCOPE', 'BYTES', 'SHELL', 'LINUX', 'NGINX', 'REDIS', 'SWIFT',
+  'SCALA', 'PATCH', 'SPAWN', 'FLOAT', 'INPUT', 'INDEX', 'FRAME', 'GRAPH',
+  'TYPES', 'CONST', 'MUTEX', 'PROPS', 'SERVE', 'TRACE', 'WATCH', 'KAFKA',
+  'RAILS', 'REMIX', 'PROTO', 'HOOKS', 'CHUNK', 'FIBER', 'MOCHA', 'TUPLE',
+  'PIXEL', 'MODAL', 'LAYER', 'LOCAL',
+];
+
 export function pickRandom<T>(arr: T[], n: number): T[] {
   return [...arr].sort(() => Math.random() - 0.5).slice(0, n);
 }

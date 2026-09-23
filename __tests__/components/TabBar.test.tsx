@@ -3,14 +3,15 @@ import TabBar from '@/components/TabBar';
 import type { Tab } from '@/lib/types';
 
 describe('TabBar', () => {
-  const tabs: Tab[] = ['riddles', 'trivia', 'binary', 'password'];
+  const tabs: Tab[] = ['riddles', 'trivia', 'binary', 'password', 'wordle'];
 
-  it('renders all 4 tabs', () => {
+  it('renders all 5 tabs', () => {
     render(<TabBar activeTab="riddles" completedTabs={new Set()} onTabChange={jest.fn()} />);
     expect(screen.getByText(/emoji/i)).toBeInTheDocument();
     expect(screen.getByText(/trivia/i)).toBeInTheDocument();
     expect(screen.getByText(/binary/i)).toBeInTheDocument();
-    expect(screen.getByText(/password/i)).toBeInTheDocument();
+    expect(screen.getByText(/pass/i)).toBeInTheDocument();
+    expect(screen.getByText(/wordle/i)).toBeInTheDocument();
   });
 
   it('calls onTabChange with correct tab', () => {

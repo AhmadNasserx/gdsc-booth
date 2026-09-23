@@ -26,6 +26,7 @@ const testQuestions: QuestionsPackage = {
   riddleIndices: [0, 1, 2, 3, 4],
   triviaIndices: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
   binaryChar: 'A',
+  wordleWord: 'REACT',
 };
 
 function makeRequest(body: unknown) {
@@ -54,6 +55,7 @@ function validBody(tokenOverride?: string) {
       ],
       binary: 'A',
       password: 'XkP9#mRv2!LqT7@wNb',
+      wordle: ['REACT'],
     },
   };
 }
@@ -106,10 +108,11 @@ describe('POST /api/score', () => {
     const body = validBody();
     body.answers.riddles = ['Wrong', 'Wrong', 'Wrong', 'Wrong', 'Wrong'];
     body.answers.binary = 'Z'; // binaryChar is 'A', so this is wrong
+    (body.answers as Record<string, unknown>).wordle = ['BYTES', 'CACHE', 'STACK', 'LAYER', 'CLONE', 'REDUX']; // all wrong
     const res = await POST(makeRequest(body));
     expect(res.status).toBe(200);
     const data = await res.json();
-    expect(data.total).toBeLessThan(400); // riddles+binary=0, only trivia+password
+    expect(data.total).toBeLessThan(500); // riddles+binary+wordle=0, only trivia+password
   });
 
   it('accepts zero trivia answers (player skipped quickly)', async () => {
