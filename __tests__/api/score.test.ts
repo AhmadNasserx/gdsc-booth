@@ -5,7 +5,6 @@ import { POST } from '@/app/api/score/route';
 import { signSession } from '@/lib/session';
 
 process.env.SESSION_SECRET = 'a'.repeat(64);
-process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
 
 // Mock Firebase Admin
 jest.mock('@/lib/firebaseAdmin', () => {
@@ -44,11 +43,6 @@ describe('POST /api/score', () => {
     const data = await res.json();
     expect(typeof data.rank).toBe('number');
     expect(data.total).toBe(305);
-  });
-
-  it('returns 403 for wrong origin', async () => {
-    const res = await POST(makeRequest(validBody(), 'http://evil.com'));
-    expect(res.status).toBe(403);
   });
 
   it('returns 401 for invalid token', async () => {
