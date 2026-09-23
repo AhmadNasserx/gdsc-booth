@@ -23,8 +23,8 @@ jest.mock('@/lib/firebaseAdmin', () => {
 });
 
 const testQuestions: QuestionsPackage = {
-  riddleIndices: [0, 1, 2, 3],
-  triviaIndices: [0, 1, 2],
+  riddleIndices: [0, 1, 2, 3, 4],
+  triviaIndices: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
   binaryChar: 'A',
 };
 
@@ -46,11 +46,11 @@ function validBody(tokenOverride?: string) {
     token: tokenOverride ?? token,
     submissionId: '123e4567-e89b-12d3-a456-426614174000',
     answers: {
-      riddles: ['Web Crawler', 'Docker', 'SSL/TLS', 'Python'],
+      riddles: ['Web Crawler', 'Docker', 'SSL/TLS', 'Python', 'Cloud Storage'],
       trivia: [
-        { answer: 'Google Developer Student Clubs', remaining: 10 },
-        { answer: 'Flutter', remaining: 10 },
-        { answer: 'Gemini', remaining: 10 },
+        { answer: 'Google Developer Student Clubs' },
+        { answer: 'Flutter' },
+        { answer: 'Gemini' },
       ],
       binary: 'A',
       password: 'XkP9#mRv2!LqT7@wNb',
@@ -67,7 +67,7 @@ describe('POST /api/score', () => {
     const data = await res.json();
     expect(typeof data.rank).toBe('number');
     expect(typeof data.total).toBe('number');
-    expect(data.total).toBeGreaterThan(300);
+    expect(data.total).toBeGreaterThan(400);
   });
 
   it('returns 401 for invalid token', async () => {
@@ -104,11 +104,25 @@ describe('POST /api/score', () => {
 
   it('wrong answers score 0 points, not rejected', async () => {
     const body = validBody();
-    body.answers.riddles = ['Wrong', 'Wrong', 'Wrong', 'Wrong'];
+    body.answers.riddles = ['Wrong', 'Wrong', 'Wrong', 'Wrong', 'Wrong'];
     body.answers.binary = 'Z'; // binaryChar is 'A', so this is wrong
     const res = await POST(makeRequest(body));
     expect(res.status).toBe(200);
     const data = await res.json();
-    expect(data.total).toBeLessThan(200); // riddles+binary=0, only trivia+password
+    expect(data.total).toBeLessThan(400); // riddles+binary=0, only trivia+password
+  });
+
+  it('accepts zero trivia answers (player skipped quickly)', async () => {
+    const body = validBody();
+    body.answers.trivia = [];
+    const res = await POST(makeRequest(body));
+    expect(res.status).toBe(200);
+  });
+
+  it('returns 400 for too many trivia answers', async () => {
+    const body = validBody();
+    body.answers.trivia = Array.from({ length: 16 }, () => ({ answer: 'X' }));
+    const res = await POST(makeRequest(body));
+    expect(res.status).toBe(400);
   });
 });

@@ -53,8 +53,8 @@ export async function POST(request: Request) {
 
   const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   const questions: QuestionsPackage = {
-    riddleIndices: pickIndices(RIDDLE_POOL.length, 4),
-    triviaIndices: pickIndices(TRIVIA_POOL.length, 3),
+    riddleIndices: pickIndices(RIDDLE_POOL.length, 5),
+    triviaIndices: pickIndices(TRIVIA_POOL.length, 15),
     binaryChar: LETTERS[Math.floor(Math.random() * LETTERS.length)],
   };
 
