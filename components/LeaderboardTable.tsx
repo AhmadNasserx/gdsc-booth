@@ -1,6 +1,6 @@
 import type { LeaderboardEntry } from '@/lib/types';
 
-const MAX_SCORE = 400;
+const MAX_SCORE = 1150;
 
 const PODIUM = [
   {
@@ -33,16 +33,16 @@ const PODIUM = [
 ];
 
 function scoreColor(score: number): string {
-  if (score >= 320) return 'text-[#4285F4]';
-  if (score >= 240) return 'text-[#34A853]';
-  if (score >= 160) return 'text-[#FBBC04]';
+  if (score >= 920) return 'text-[#4285F4]';
+  if (score >= 690) return 'text-[#34A853]';
+  if (score >= 460) return 'text-[#FBBC04]';
   return 'text-[#EA4335]';
 }
 
 function scoreBarColor(score: number): string {
-  if (score >= 320) return 'bg-[#4285F4]';
-  if (score >= 240) return 'bg-[#34A853]';
-  if (score >= 160) return 'bg-[#FBBC04]';
+  if (score >= 920) return 'bg-[#4285F4]';
+  if (score >= 690) return 'bg-[#34A853]';
+  if (score >= 460) return 'bg-[#FBBC04]';
   return 'bg-[#EA4335]';
 }
 
@@ -91,7 +91,7 @@ export default function LeaderboardTable({ entries }: Props) {
                   style={{ width: `${pct}%` }}
                 />
               </div>
-              <span className="text-xs text-[#9AA0A6] mt-1.5">{entry.score} / {MAX_SCORE}</span>
+              <span className="text-xs text-[#9AA0A6] mt-1.5">{entry.score} pts</span>
             </div>
           );
         })}
