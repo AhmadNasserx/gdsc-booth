@@ -36,14 +36,7 @@ export default function NameEntry() {
       <div className="w-full max-w-md bg-white border border-[#DADCE0] rounded-3xl p-8 shadow-sm">
         {/* GDSC Header */}
         <div className="text-center mb-8">
-          <div className="flex items-center justify-center space-x-0.5 mb-2">
-            {[['G','#4285F4'],['o','#EA4335'],['o','#FBBC04'],['g','#4285F4'],['l','#34A853'],['e','#EA4335']].map(([c,col],i) => (
-              <span key={i} className="text-3xl font-bold" style={{ color: col as string }}>{c}</span>
-            ))}
-            <span className="ml-2 text-xs font-semibold bg-[#E8F0FE] text-[#1A73E8] px-3 py-1 rounded-full">
-              Developer Student Clubs
-            </span>
-          </div>
+          <img src="/gdsc-logo.svg" alt="Google Developer Student Clubs" className="w-72 mx-auto mb-3" />
           <h1 className="text-2xl font-extrabold mt-2">Interactive Tech Station</h1>
           <p className="text-sm text-[#5F6368] mt-1">Test your skills and join GDSC!</p>
         </div>
