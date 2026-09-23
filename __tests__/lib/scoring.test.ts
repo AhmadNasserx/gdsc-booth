@@ -49,19 +49,29 @@ describe('calcPasswordScore', () => {
     expect(calcPasswordScore('')).toBe(0);
   });
 
-  it('awards 25 for length >= 8', () => {
-    expect(calcPasswordScore('aaaaaaaa')).toBe(25);
+  it('penalises repeated characters (pattern penalty + low uniqueness)', () => {
+    // 'aaaaaaaa': triggers (.)\1{2,} pattern and has 1 unique char
+    expect(calcPasswordScore('aaaaaaaa')).toBeLessThan(10);
   });
 
-  it('awards 50 for length >= 12 (includes length>=8 bonus)', () => {
-    expect(calcPasswordScore('aaaaaaaaaaaa')).toBe(50);
+  it('scores a genuine 8-char strong password above 75', () => {
+    // all char types, all unique, no patterns
+    expect(calcPasswordScore('Xk7@mPv!')).toBeGreaterThan(75);
   });
 
-  it('awards max 100 for strong password', () => {
-    expect(calcPasswordScore('MyP@ssw0rd123!')).toBe(100);
+  it('returns 100 for an excellent 18-char password', () => {
+    // 18 chars, all types, all unique, no patterns
+    expect(calcPasswordScore('XkP9#mRv2!LqT7@wNb')).toBe(100);
+  });
+
+  it('applies pattern penalty for common sequences', () => {
+    // 'bcd' triggers the abc/bcd pattern; otherwise identical char types and length
+    const withPattern    = calcPasswordScore('Abcdefgh1!');
+    const withoutPattern = calcPasswordScore('Axkrmvph1!');
+    expect(withPattern).toBeLessThan(withoutPattern);
   });
 
   it('caps at 100', () => {
-    expect(calcPasswordScore('Aa0!aaaaaaaaaaaa')).toBe(100);
+    expect(calcPasswordScore('XkP9#mRv2!LqT7@wNbZcQdEf')).toBe(100);
   });
 });
