@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { verifySession } from '@/lib/session';
 import { validateScores, calcTotal } from '@/lib/scoring';
-import { ratelimit, hashKey } from '@/lib/rateLimit';
 import { adminDb } from '@/lib/firebaseAdmin';
 import type { Tab } from '@/lib/types';
 
@@ -37,12 +36,6 @@ export async function POST(request: Request) {
   const existing = await existingRef.get();
   if (existing.val()) {
     return NextResponse.json(existing.val());
-  }
-
-  // Rate limit by hashed sessionId
-  const { success } = await ratelimit.limit(hashKey(session.sessionId));
-  if (!success) {
-    return NextResponse.json({ error: 'Already submitted' }, { status: 429 });
   }
 
   // Validate scores
