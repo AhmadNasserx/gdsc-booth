@@ -137,8 +137,12 @@ export default function Wordle({ word, hint, onComplete }: Props) {
         <h2 className="text-base font-bold text-[#202124]">Tech Wordle</h2>
         <span className="text-xs text-[#5F6368]">{guesses.length}/{MAX_GUESSES} guesses</span>
       </div>
-      <p className="text-xs text-[#5F6368] mb-1 self-start">Guess the 5-letter word</p>
-      <p className="text-xs italic text-[#9AA0A6] mb-4 self-start">💡 {hint}</p>
+      <div className="w-full flex justify-between items-center mb-4">
+        <p className="text-xs text-[#5F6368]">Guess the 5-letter word</p>
+        {guesses.length >= 2 && (
+          <p className="text-xs italic text-[#9AA0A6] anim-slide-in">💡 {hint}</p>
+        )}
+      </div>
 
       {/* Score hint row */}
       <div className="w-full flex gap-1 mb-4">

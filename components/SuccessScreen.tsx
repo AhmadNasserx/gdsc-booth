@@ -5,7 +5,7 @@ export default function SuccessScreen({ name, total, rank }: Props) {
     <div className="flex flex-col items-center text-center py-8 space-y-4">
       <div className="text-5xl">🏆</div>
       <h2 className="text-2xl font-extrabold text-[#202124]">Well done, {name}!</h2>
-      <p className="text-4xl font-black text-[#1A73E8]">{total} <span className="text-xl font-semibold text-[#5F6368]">/ 1150 pts</span></p>
+      <p className="text-4xl font-black text-[#1A73E8]">{total} <span className="text-xl font-semibold text-[#5F6368]">pts</span></p>
       <p className="text-sm font-bold text-[#34A853]">You are #{rank} on the leaderboard!</p>
       <a
         href="https://forms.gle/PLACEHOLDER"
