@@ -7,6 +7,7 @@ import EmojiRiddles from '@/components/games/EmojiRiddles';
 import TechTrivia from '@/components/games/TechTrivia';
 import BinaryDecoder from '@/components/games/BinaryDecoder';
 import PasswordChallenge from '@/components/games/PasswordChallenge';
+import Wordle from '@/components/games/Wordle';
 import SuccessScreen from '@/components/SuccessScreen';
 import type { Tab } from '@/lib/types';
 import type { Riddle, TriviaQuestion } from '@/lib/questions';
@@ -15,6 +16,7 @@ interface ClientQuestions {
   riddles: Riddle[];
   trivia: TriviaQuestion[];
   binaryChar: string;
+  wordleWord: string;
 }
 
 interface GameAnswers {
@@ -22,6 +24,7 @@ interface GameAnswers {
   trivia: { answer: string }[] | null;
   binary: string | null;
   password: string | null;
+  wordle: string[] | null;
 }
 
 export default function PlayPage() {
@@ -31,7 +34,7 @@ export default function PlayPage() {
   const [questions, setQuestions] = useState<ClientQuestions | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('riddles');
   const [answers, setAnswers] = useState<GameAnswers>({
-    riddles: null, trivia: null, binary: null, password: null,
+    riddles: null, trivia: null, binary: null, password: null, wordle: null,
   });
   const [result, setResult] = useState<{ rank: number; total: number } | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -122,6 +125,12 @@ export default function PlayPage() {
           )}
           {activeTab === 'password' && (
             <PasswordChallenge onComplete={(a) => handleComplete('password', a)} />
+          )}
+          {activeTab === 'wordle' && (
+            <Wordle
+              word={questions.wordleWord}
+              onComplete={(a) => handleComplete('wordle', a)}
+            />
           )}
         </main>
 
