@@ -25,6 +25,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid submissionId' }, { status: 400 });
   }
 
+  // Validate scores before touching Firebase — bad payload must not consume the session slot
+  const scores = body.scores as Record<Tab, number>;
+  if (!scores || !validateScores(scores)) {
+    return NextResponse.json({ error: 'Invalid scores' }, { status: 400 });
+  }
+
   // Idempotency: if this exact submissionId already resolved, return it directly
   const existingRef = adminDb.ref(`submissions/${submissionId}`);
   const existing = await existingRef.get();
@@ -40,12 +46,6 @@ export async function POST(request: Request) {
   });
   if (!committed) {
     return NextResponse.json({ error: 'Score already submitted for this session' }, { status: 409 });
-  }
-
-  // Validate scores
-  const scores = body.scores as Record<Tab, number>;
-  if (!scores || !validateScores(scores)) {
-    return NextResponse.json({ error: 'Invalid scores' }, { status: 400 });
   }
 
   const total = calcTotal(scores);
