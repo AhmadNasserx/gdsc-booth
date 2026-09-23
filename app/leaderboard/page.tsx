@@ -1,27 +1,22 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ref, onValue } from 'firebase/database';
-import { db } from '@/lib/firebase';
 import LeaderboardTable from '@/components/LeaderboardTable';
 import type { LeaderboardEntry } from '@/lib/types';
 
 export default function LeaderboardPage() {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
-  const [fbError, setFbError] = useState('');
 
   useEffect(() => {
-    const leaderboardRef = ref(db, 'leaderboard');
-    const unsub = onValue(
-      leaderboardRef,
-      (snap) => {
-        const data = snap.val() as Record<string, LeaderboardEntry> | null;
-        setEntries(data ? Object.values(data) : []);
-        setFbError('');
-      },
-      (err) => setFbError(err.message),
-    );
-    return unsub;
+    const load = () =>
+      fetch('/api/leaderboard')
+        .then((r) => r.json())
+        .then((data: LeaderboardEntry[]) => setEntries(data))
+        .catch(() => {});
+
+    load();
+    const id = setInterval(load, 5000);
+    return () => clearInterval(id);
   }, []);
 
   return (
@@ -37,7 +32,6 @@ export default function LeaderboardPage() {
       </header>
 
       <div className="w-full max-w-2xl bg-white border border-[#DADCE0] rounded-3xl p-6 md:p-8 shadow-sm">
-        {fbError && <p className="text-xs text-[#EA4335] mb-4 font-mono break-all">{fbError}</p>}
         <LeaderboardTable entries={entries} />
       </div>
 
