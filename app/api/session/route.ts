@@ -10,10 +10,16 @@ function normalizeName(name: string): string {
   return name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
 }
 
+function shuffleArray<T>(arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 function pickIndices(poolSize: number, n: number): number[] {
-  const arr = Array.from({ length: poolSize }, (_, i) => i);
-  arr.sort(() => Math.random() - 0.5);
-  return arr.slice(0, n);
+  return shuffleArray(Array.from({ length: poolSize }, (_, i) => i)).slice(0, n);
 }
 
 export async function POST(request: Request) {
@@ -66,11 +72,11 @@ export async function POST(request: Request) {
     questions: {
       riddles: questions.riddleIndices.map((i) => {
         const r = RIDDLE_POOL[i];
-        return { ...r, options: [...r.options].sort(() => Math.random() - 0.5) };
+        return { ...r, options: shuffleArray([...r.options]) };
       }),
       trivia: questions.triviaIndices.map((i) => {
         const q = TRIVIA_POOL[i];
-        return { ...q, options: [...q.options].sort(() => Math.random() - 0.5) };
+        return { ...q, options: shuffleArray([...q.options]) };
       }),
       binaryChar: questions.binaryChar,
       wordleWord: questions.wordleWord,
