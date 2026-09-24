@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     })
   ) return NextResponse.json({ error: 'Invalid trivia answers' }, { status: 400 });
 
-  if (typeof binaryAnswer !== 'string' || !/^[A-Z]$/.test(binaryAnswer)) {
+  if (typeof binaryAnswer !== 'string' || !/^\d{1,3}$/.test(binaryAnswer)) {
     return NextResponse.json({ error: 'Invalid binary answer' }, { status: 400 });
   }
   if (typeof password !== 'string') {
