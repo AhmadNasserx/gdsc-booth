@@ -4,7 +4,7 @@ import { useState, useRef } from 'react';
 
 interface Props {
   playerName: string;
-  binaryChar: string;
+  binaryChar: string; // decimal number as string, e.g. "42"
   onComplete: (answer: string) => void;
 }
 
@@ -12,22 +12,32 @@ function toBinary(str: string): string {
   return str.split('').map((c) => c.charCodeAt(0).toString(2).padStart(8, '0')).join(' ');
 }
 
-function makeChoices(letter: string): string[] {
-  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  const idx = letters.indexOf(letter);
+function makeChoices(numStr: string): string[] {
+  const n = parseInt(numStr);
   const wrong = new Set<string>();
   let tries = 0;
-  while (wrong.size < 3 && tries < 60) {
+  while (wrong.size < 3 && tries < 100) {
     tries++;
-    const off = Math.floor(Math.random() * 6) - 3;
-    const adj = letters[(idx + off + 26) % 26];
-    if (adj !== letter) wrong.add(adj);
+    const off = Math.floor(Math.random() * 14) - 7;
+    if (off === 0) continue;
+    const candidate = n + off;
+    if (candidate >= 1 && candidate <= 99) wrong.add(String(candidate));
   }
-  return [letter, ...wrong].sort(() => Math.random() - 0.5);
+  // fallback if not enough candidates in range
+  for (let d = 1; wrong.size < 3; d++) {
+    if (n + d <= 99) wrong.add(String(n + d));
+    if (wrong.size < 3 && n - d >= 1) wrong.add(String(n - d));
+  }
+  const arr = [numStr, ...wrong];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
 }
 
 export default function BinaryDecoder({ playerName, binaryChar, onComplete }: Props) {
-  const binary = binaryChar.charCodeAt(0).toString(2).padStart(8, '0');
+  const binary = parseInt(binaryChar).toString(2).padStart(8, '0');
   const [choices] = useState(() => makeChoices(binaryChar));
   const [chosen, setChosen] = useState<string | null>(null);
   const [animType, setAnimType] = useState<'pop' | 'shake' | null>(null);
@@ -67,7 +77,7 @@ export default function BinaryDecoder({ playerName, binaryChar, onComplete }: Pr
         <p className="text-xs font-bold text-[#5F6368] text-center mb-2 uppercase tracking-wide">
           Mini Challenge
         </p>
-        <p className="text-sm font-semibold text-center mb-1">Which letter does this binary represent?</p>
+        <p className="text-sm font-semibold text-center mb-1">What decimal number does this binary represent?</p>
         <div
           key={animKey}
           className={`font-mono text-xl font-black text-center text-[#1A73E8] bg-[#E8F0FE] rounded-2xl py-4 mb-5 tracking-widest ${
@@ -105,8 +115,8 @@ export default function BinaryDecoder({ playerName, binaryChar, onComplete }: Pr
         {chosen && (
           <p className={`text-sm font-bold text-center mt-4 anim-slide-in ${chosen === binaryChar ? 'text-[#34A853]' : 'text-[#EA4335]'}`}>
             {chosen === binaryChar
-              ? `Correct! ${binary} = '${binaryChar}' (ASCII ${binaryChar.charCodeAt(0)}) 🎉`
-              : `Not quite — ${binary} = '${binaryChar}' (ASCII ${binaryChar.charCodeAt(0)})`}
+              ? `Correct! ${binary} = ${binaryChar} 🎉`
+              : `Not quite — ${binary} = ${binaryChar}`}
           </p>
         )}
       </div>
