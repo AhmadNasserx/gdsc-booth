@@ -9,8 +9,9 @@ const PODIUM = [
     bar: 'bg-[#FBBC04]',
     badge: '🥇',
     label: '1st Place',
-    nameSize: 'text-2xl md:text-3xl',
-    scoreSize: 'text-4xl md:text-5xl',
+    // full-width on mobile → can afford larger text
+    nameSize: 'text-xl sm:text-2xl md:text-3xl',
+    scoreSize: 'text-3xl sm:text-4xl md:text-5xl',
   },
   {
     border: 'border-[#9AA0A6]',
@@ -18,8 +19,8 @@ const PODIUM = [
     bar: 'bg-[#9AA0A6]',
     badge: '🥈',
     label: '2nd Place',
-    nameSize: 'text-xl md:text-2xl',
-    scoreSize: 'text-3xl md:text-4xl',
+    nameSize: 'text-sm sm:text-xl md:text-2xl',
+    scoreSize: 'text-xl sm:text-3xl md:text-4xl',
   },
   {
     border: 'border-[#CD7F32]',
@@ -27,8 +28,8 @@ const PODIUM = [
     bar: 'bg-[#CD7F32]',
     badge: '🥉',
     label: '3rd Place',
-    nameSize: 'text-xl md:text-2xl',
-    scoreSize: 'text-3xl md:text-4xl',
+    nameSize: 'text-sm sm:text-xl md:text-2xl',
+    scoreSize: 'text-xl sm:text-3xl md:text-4xl',
   },
 ];
 
@@ -65,39 +66,42 @@ export default function LeaderboardTable({ entries }: Props) {
 
   return (
     <div>
-      {/* Podium */}
-      <div className="grid grid-cols-3 gap-3 md:gap-5 mb-6 md:mb-8">
+      {/*
+        Mobile: 2-col grid — 1st place spans both columns (full width),
+                              2nd and 3rd fill one column each beneath it.
+        sm+:    3-col grid — equal columns as before.
+      */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-5 mb-6 md:mb-8">
         {top3.map((entry, i) => {
           const p = PODIUM[i];
           const pct = Math.min(100, Math.round((entry.score / MAX_SCORE) * 100));
           return (
             <div
               key={`${entry.name}-${entry.timestamp}`}
-              className={`rounded-3xl border-2 ${p.border} ${p.bg} p-4 md:p-6 text-center shadow-sm flex flex-col items-center`}
+              className={`${i === 0 ? 'col-span-2 sm:col-span-1' : ''} rounded-3xl border-2 ${p.border} ${p.bg} p-3 sm:p-4 md:p-6 text-center shadow-sm flex flex-col items-center`}
             >
-              <span className="text-4xl md:text-5xl mb-1">{p.badge}</span>
-              <span className="text-xs font-bold text-[#5F6368] uppercase tracking-widest mb-2">
+              <span className="text-3xl sm:text-4xl md:text-5xl mb-1">{p.badge}</span>
+              <span className="text-[10px] font-bold text-[#5F6368] uppercase tracking-widest mb-1.5">
                 {p.label}
               </span>
-              <span className={`${p.nameSize} font-extrabold text-[#202124] mb-3 w-full truncate`}>
+              <span className={`${p.nameSize} font-extrabold text-[#202124] mb-2 w-full truncate`}>
                 {entry.name}
               </span>
-              <span className={`${p.scoreSize} font-black ${scoreColor(entry.score)} mb-3 leading-none`}>
+              <span className={`${p.scoreSize} font-black ${scoreColor(entry.score)} mb-2 leading-none`}>
                 {entry.score}
               </span>
-              <div className="w-full bg-[#E8EAED] rounded-full h-2.5 md:h-3">
+              <div className="w-full bg-[#E8EAED] rounded-full h-2">
                 <div
-                  className={`h-2.5 md:h-3 rounded-full ${p.bar} transition-all duration-700`}
+                  className={`h-2 rounded-full ${p.bar} transition-all duration-700`}
                   style={{ width: `${pct}%` }}
                 />
               </div>
-              <span className="text-xs text-[#9AA0A6] mt-1.5">{entry.score} pts</span>
+              <span className="text-[10px] sm:text-xs text-[#9AA0A6] mt-1">{entry.score} pts</span>
             </div>
           );
         })}
       </div>
 
-      {/* Remaining entries */}
       {rest.length > 0 && (
         <div className="space-y-2">
           {rest.map((entry, i) => {
@@ -106,21 +110,21 @@ export default function LeaderboardTable({ entries }: Props) {
             return (
               <div
                 key={`${entry.name}-${entry.timestamp}`}
-                className="flex items-center gap-3 md:gap-5 bg-[#F8F9FA] rounded-2xl px-4 md:px-6 py-3"
+                className="flex items-center gap-2.5 md:gap-5 bg-white rounded-2xl px-3 md:px-6 py-3 shadow-sm"
               >
-                <span className="w-8 text-base md:text-lg font-black text-[#9AA0A6] text-center shrink-0">
+                <span className="w-7 md:w-8 text-sm md:text-lg font-black text-[#9AA0A6] text-center shrink-0">
                   #{rank}
                 </span>
-                <span className="flex-1 text-base md:text-lg font-semibold text-[#202124] truncate">
+                <span className="flex-1 text-sm md:text-lg font-semibold text-[#202124] truncate">
                   {entry.name}
                 </span>
-                <div className="hidden sm:block flex-1 max-w-[160px] bg-[#E8EAED] rounded-full h-2">
+                <div className="flex-1 max-w-[80px] sm:max-w-[140px] md:max-w-[160px] bg-[#E8EAED] rounded-full h-1.5 md:h-2">
                   <div
-                    className={`h-2 rounded-full ${scoreBarColor(entry.score)} transition-all duration-700`}
+                    className={`h-1.5 md:h-2 rounded-full ${scoreBarColor(entry.score)} transition-all duration-700`}
                     style={{ width: `${pct}%` }}
                   />
                 </div>
-                <span className={`text-base md:text-lg font-black w-12 text-right shrink-0 ${scoreColor(entry.score)}`}>
+                <span className={`text-sm md:text-lg font-black w-9 md:w-12 text-right shrink-0 ${scoreColor(entry.score)}`}>
                   {entry.score}
                 </span>
               </div>
