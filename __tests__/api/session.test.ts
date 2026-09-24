@@ -34,7 +34,7 @@ describe('POST /api/session', () => {
     expect(data.questions.riddles).toHaveLength(5);
     expect(Array.isArray(data.questions.trivia)).toBe(true);
     expect(data.questions.trivia).toHaveLength(15);
-    expect(data.questions.binaryChar).toMatch(/^[A-Z]$/);
+    expect(data.questions.binaryChar).toMatch(/^\d{1,2}$/);
   });
 
   it('returns 400 for empty name', async () => {
