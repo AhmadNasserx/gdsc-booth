@@ -25,7 +25,7 @@ jest.mock('@/lib/firebaseAdmin', () => {
 const testQuestions: QuestionsPackage = {
   riddleIndices: [0, 1, 2, 3, 4],
   triviaIndices: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
-  binaryChar: 'A',
+  binaryChar: '42',
   wordleWord: 'REACT',
 };
 
@@ -53,7 +53,7 @@ function validBody(tokenOverride?: string) {
         { answer: 'Flutter' },
         { answer: 'Gemini' },
       ],
-      binary: 'A',
+      binary: '42',
       password: 'XkP9#mRv2!LqT7@wNb',
       wordle: ['REACT'],
     },
@@ -107,7 +107,7 @@ describe('POST /api/score', () => {
   it('wrong answers score 0 points, not rejected', async () => {
     const body = validBody();
     body.answers.riddles = ['Wrong', 'Wrong', 'Wrong', 'Wrong', 'Wrong'];
-    body.answers.binary = 'Z'; // binaryChar is 'A', so this is wrong
+    body.answers.binary = '99'; // binaryChar is '42', so this is wrong
     (body.answers as Record<string, unknown>).wordle = ['BYTES', 'CACHE', 'STACK', 'LAYER', 'CLONE', 'REDUX']; // all wrong
     const res = await POST(makeRequest(body));
     expect(res.status).toBe(200);
