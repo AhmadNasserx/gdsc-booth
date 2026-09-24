@@ -8,7 +8,7 @@ export default function SuccessScreen({ name, total, rank }: Props) {
       <p className="text-4xl font-black text-[#1A73E8]">{total} <span className="text-xl font-semibold text-[#5F6368]">pts</span></p>
       <p className="text-sm font-bold text-[#34A853]">You are #{rank} on the leaderboard!</p>
       <a
-        href="https://forms.gle/PLACEHOLDER"
+        href="https://forms.gle/N5UBuhErH9wqjpV87"
         target="_blank"
         rel="noopener noreferrer"
         className="mt-4 bg-[#34A853] hover:bg-[#2C8E45] text-white font-bold px-8 py-3 rounded-full text-sm transition-all shadow"
