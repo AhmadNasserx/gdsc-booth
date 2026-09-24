@@ -17,7 +17,7 @@ const mockQuestions = JSON.stringify({
     { question: "CSS stands for?", options: ['Cascading Style Sheets', 'Other'], answer: 'Cascading Style Sheets' },
     { question: "What does API stand for?", options: ['Application Programming Interface', 'Other'], answer: 'Application Programming Interface' },
   ],
-  binaryChar: 'A',
+  binaryChar: '42',
 });
 
 beforeEach(() => {
