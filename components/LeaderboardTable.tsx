@@ -74,7 +74,6 @@ export default function LeaderboardTable({ entries }: Props) {
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-5 mb-6 md:mb-8">
         {top3.map((entry, i) => {
           const p = PODIUM[i];
-          const pct = Math.min(100, Math.round((entry.score / MAX_SCORE) * 100));
           return (
             <div
               key={`${entry.name}-${entry.timestamp}`}
@@ -87,16 +86,9 @@ export default function LeaderboardTable({ entries }: Props) {
               <span className={`${p.nameSize} font-extrabold text-[#202124] mb-2 w-full truncate`}>
                 {entry.name}
               </span>
-              <span className={`${p.scoreSize} font-black ${scoreColor(entry.score)} mb-2 leading-none`}>
+              <span className={`${p.scoreSize} font-black ${scoreColor(entry.score)} leading-none`}>
                 {entry.score}
               </span>
-              <div className="w-full bg-[#E8EAED] rounded-full h-2">
-                <div
-                  className={`h-2 rounded-full ${p.bar} transition-all duration-700`}
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-              <span className="text-[10px] sm:text-xs text-[#9AA0A6] mt-1">{entry.score} pts</span>
             </div>
           );
         })}
