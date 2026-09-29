@@ -43,3 +43,7 @@ next-env.d.ts
 
 # worktrees and SDD workspace
 .worktrees/
+
+# AI assistant files (AGENTS.md is re-created by next dev)
+AGENTS.md
+.serena/

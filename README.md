@@ -100,7 +100,6 @@ npm run lint
 npm run build
 ```
 
-The design spec and implementation plan are in [`docs/superpowers/`](docs/superpowers/).
 
 ## Author
 
