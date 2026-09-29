@@ -1,6 +1,6 @@
 # GDSC Booth: Interactive Tech Station
 
-The booth app for **Google Developer Groups on Campus, Beirut Arab University (Tripoli)** at the Fall 2026 club fair. Students walk up to a device, enter a display name, play five short tech mini-games and land on a live leaderboard. A second screen at the booth shows the leaderboard updating in real time, and the finish screen links to the chapter sign-up form.
+The booth app for **Google Developer Groups on Campus, Beirut Arab University, Tripoli Campus** at the Fall 2026 club fair. Students walk up to a device, enter a display name, play five short tech mini-games and land on a live leaderboard. A second screen at the booth shows the leaderboard updating in real time, and the finish screen links to the chapter sign-up form.
 
 **50 students played it at the club fair.** It was designed, built and deployed in three days.
 
@@ -79,4 +79,4 @@ The design spec and implementation plan are in [`docs/superpowers/`](docs/superp
 
 ## Author
 
-Built by [Ahmad Nasser](https://ahmadnasserx.com), Tech Lead, GDG on Campus BAU.
+Built by [Ahmad Nasser](https://ahmadnasserx.com), Tech Lead, GDG on Campus BAU Tripoli.
