@@ -52,6 +52,8 @@ export default function NameEntry() {
         return;
       }
       const { token, questions } = data;
+      // A new session starts with no pick; drop any game chosen in a previous session.
+      sessionStorage.removeItem('playerGame');
       sessionStorage.setItem('playerToken', token);
       sessionStorage.setItem('playerName', name.trim());
       sessionStorage.setItem('playerQuestions', JSON.stringify(questions));
@@ -94,6 +96,7 @@ export default function NameEntry() {
           <img src="/gdsc-logo.svg" alt="Google Developer Student Clubs" className="w-72 mx-auto mb-3" />
           <h1 className="text-2xl font-extrabold mt-2">Interactive Tech Station</h1>
           <p className="text-sm text-[#5F6368] mt-1">Test your skills and join GDSC!</p>
+          <p className="text-xs text-[#5F6368] mt-2">Six mini-games. Pick one to score; the rest are practice.</p>
         </div>
 
         <label className="block text-sm font-semibold mb-1 text-[#202124]">

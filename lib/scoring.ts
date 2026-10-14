@@ -1,20 +1,17 @@
 import type { Tab } from './types';
+import { GAMES } from './games';
 
-export const VALID_RIDDLE_SCORES = new Set([0, 40, 80, 120, 160, 200]);
-export const VALID_BINARY_SCORES = new Set([0, 150]);
-export const MAX_TRIVIA_SCORE = 300;
-export const MAX_PASSWORD_SCORE = 200;
-export const VALID_WORDLE_SCORES = new Set([0, 50, 100, 150, 200, 250, 300]);
-export const MAX_TOTAL = 1150;
+export const LEADERBOARD_MAX = 1000;
 
-export function validateScores(scores: Record<Tab, number>): boolean {
-  const { riddles, trivia, binary, password, wordle } = scores;
-  if (!VALID_RIDDLE_SCORES.has(riddles)) return false;
-  if (!Number.isInteger(trivia) || trivia < 0 || trivia > MAX_TRIVIA_SCORE) return false;
-  if (!VALID_BINARY_SCORES.has(binary)) return false;
-  if (!Number.isInteger(password) || password < 0 || password > MAX_PASSWORD_SCORE) return false;
-  if (!VALID_WORDLE_SCORES.has(wordle)) return false;
-  return true;
+function clamp(n: number, min: number, max: number): number {
+  return Math.min(Math.max(n, min), max);
+}
+
+/** Converts a game's raw points into the shared 0..LEADERBOARD_MAX scale. */
+export function normalizeScore(game: Tab, raw: number): number {
+  const { maxRaw } = GAMES[game];
+  const safe = Number.isFinite(raw) ? raw : 0;
+  return Math.round((clamp(safe, 0, maxRaw) / maxRaw) * LEADERBOARD_MAX);
 }
 
 export function calcWordleScore(guesses: number, solved: boolean): number {
@@ -23,8 +20,18 @@ export function calcWordleScore(guesses: number, solved: boolean): number {
   return table[Math.min(guesses - 1, 5)] ?? 0;
 }
 
-export function calcTotal(scores: Record<Tab, number>): number {
-  return scores.riddles + scores.trivia + scores.binary + scores.password + scores.wordle;
+/** Memory Match raw score: 1000 at 8 moves within 20 seconds, minus penalties. */
+export function calcMemoryScore(moves: number, seconds: number): number {
+  const raw = 1000 - (moves - 8) * 25 - Math.max(0, seconds - 20) * 5;
+  return Math.round(clamp(raw, 0, LEADERBOARD_MAX));
+}
+
+/** Rejects memory results that cannot be produced by a real game (8 pairs, sane timing). */
+export function isPlausibleMemory(moves: unknown, seconds: unknown): boolean {
+  return (
+    Number.isInteger(moves) && (moves as number) >= 8 && (moves as number) <= 200 &&
+    Number.isInteger(seconds) && (seconds as number) >= 6 && (seconds as number) <= 3600
+  );
 }
 
 // Matches 3+ repeated chars, common sequences, and dictionary fragments
