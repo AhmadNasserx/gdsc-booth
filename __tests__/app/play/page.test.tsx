@@ -86,8 +86,12 @@ let idCounter = 0;
 
 beforeAll(() => {
   // jsdom does not always provide randomUUID; give each submission a distinct id.
+  // getRandomValues is needed by the player key used for "Play again" (fixed bytes, so the key is predictable).
   Object.defineProperty(globalThis, 'crypto', {
-    value: { randomUUID: () => `sub-${++idCounter}` },
+    value: {
+      randomUUID: () => `sub-${++idCounter}`,
+      getRandomValues: (arr: Uint8Array) => arr.fill(7),
+    },
     configurable: true,
   });
 });
@@ -95,6 +99,7 @@ beforeAll(() => {
 beforeEach(() => {
   jest.clearAllMocks();
   sessionStorage.clear();
+  localStorage.clear();
   global.fetch = jest.fn();
   idCounter = 0;
 });
@@ -248,7 +253,7 @@ describe('Play Page: submitting', () => {
   it('posts { token, submissionId, game, answer } and shows the finish screen', async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ rank: 3, total: 640, game: 'riddles' }),
+      json: async () => ({ rank: 3, total: 640, game: 'riddles', best: 640, improved: true }),
     });
     startSession('riddles');
     render(<PlayPage />);
@@ -268,12 +273,75 @@ describe('Play Page: submitting', () => {
     });
     expect(screen.getByText('Emoji Riddles')).toBeInTheDocument();
     expect(screen.getByText('/ 1000 pts')).toBeInTheDocument();
+    expect(screen.getByText("You're #3 on the leaderboard")).toBeInTheDocument();
+  });
+
+  it('shows the personal best copy when the run became the best', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ rank: 2, total: 720, game: 'riddles', best: 720, improved: true }),
+    });
+    startSession('riddles');
+    render(<PlayPage />);
+    fireEvent.click(screen.getByText('mock-finish-riddles (5)'));
+    fireEvent.click(screen.getByRole('button', { name: 'Submit Score →' }));
+
+    expect(await screen.findByText('🎉 New personal best!')).toBeInTheDocument();
+    expect(screen.queryByText(/your best is/i)).not.toBeInTheDocument();
+  });
+
+  it('shows the existing best when a run does not beat it', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ rank: 4, total: 300, game: 'riddles', best: 850, improved: false }),
+    });
+    startSession('riddles');
+    render(<PlayPage />);
+    fireEvent.click(screen.getByText('mock-finish-riddles (5)'));
+    fireEvent.click(screen.getByRole('button', { name: 'Submit Score →' }));
+
+    expect(await screen.findByText('Your best is 850 / 1000')).toBeInTheDocument();
+    expect(screen.getByText('300')).toBeInTheDocument();
+    expect(screen.queryByText('🎉 New personal best!')).not.toBeInTheDocument();
+  });
+
+  it('Play again starts a new session with the saved name and returns to the game picker', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ rank: 1, total: 500, game: 'riddles', best: 500, improved: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ token: 'new-tok', questions: questionsPackage }),
+      });
+    startSession('riddles');
+    render(<PlayPage />);
+    fireEvent.click(screen.getByText('mock-finish-riddles (5)'));
+    fireEvent.click(screen.getByRole('button', { name: 'Submit Score →' }));
+    await screen.findByText('500');
+
+    fireEvent.click(screen.getByRole('button', { name: /play again/i }));
+
+    expect(await screen.findByRole('heading', { name: 'Pick your challenge' })).toBeInTheDocument();
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/play'));
+    expect(screen.queryByText('/ 1000 pts')).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Games' })).not.toBeInTheDocument();
+
+    const [url, init] = (global.fetch as jest.Mock).mock.calls[1];
+    expect(url).toBe('/api/session');
+    expect(JSON.parse(init.body)).toEqual({
+      name: 'Ahmad',
+      playerKey: expect.stringMatching(/^[0-9a-f]{64}$/),
+    });
+    expect(sessionStorage.getItem('playerToken')).toBe('new-tok');
+    expect(sessionStorage.getItem('playerGame')).toBeNull();
   });
 
   it('submits the answer of the picked game, not of another game', async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ rank: 1, total: 900, game: 'memory' }),
+      json: async () => ({ rank: 1, total: 900, game: 'memory', best: 900, improved: true }),
     });
     startSession('memory');
     render(<PlayPage />);
@@ -295,7 +363,10 @@ describe('Play Page: submitting', () => {
   it('shows the server error and keeps the same submissionId for a retry', async () => {
     (global.fetch as jest.Mock)
       .mockResolvedValueOnce({ ok: false, json: async () => ({ error: 'Session expired' }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ rank: 2, total: 500, game: 'riddles' }) });
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ rank: 2, total: 500, game: 'riddles', best: 500, improved: true }),
+      });
     startSession('riddles');
     render(<PlayPage />);
     fireEvent.click(screen.getByText('mock-finish-riddles (5)'));
@@ -320,7 +391,7 @@ describe('Play Page: submitting', () => {
 
     const busy = await screen.findByRole('button', { name: 'Submitting…' });
     expect(busy).toBeDisabled();
-    resolve({ ok: true, json: async () => ({ rank: 1, total: 100, game: 'riddles' }) });
+    resolve({ ok: true, json: async () => ({ rank: 1, total: 100, game: 'riddles', best: 100, improved: true }) });
     await screen.findByText('100');
   });
 });

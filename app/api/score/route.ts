@@ -9,7 +9,14 @@ import {
 } from '@/lib/scoring';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { BUG_POOL, RIDDLE_POOL, TRIVIA_POOL } from '@/lib/questions';
-import { TABS, type QuestionsPackage, type Tab } from '@/lib/types';
+import { normalizeName } from '@/lib/names';
+import {
+  TABS,
+  type LeaderboardEntry,
+  type QuestionsPackage,
+  type SubmissionRecord,
+  type Tab,
+} from '@/lib/types';
 
 const MIN_PLAY_MS = 20_000;
 const TRIVIA_CORRECT_PTS = 20;
@@ -140,8 +147,15 @@ export async function POST(request: Request) {
   const existingRef = adminDb.ref(`submissions/${submissionId}`);
   const existing = await existingRef.get();
   if (existing.val()) {
-    const prior = existing.val() as { rank: number; total: number; game: Tab };
-    return NextResponse.json({ rank: prior.rank, total: prior.total, game: prior.game });
+    const prior = existing.val() as SubmissionRecord;
+    // Records written before best-per-name lack best/improved; fall back to the run's own score.
+    return NextResponse.json({
+      rank: prior.rank,
+      total: prior.total,
+      game: prior.game,
+      best: prior.best ?? prior.total,
+      improved: prior.improved ?? false,
+    });
   }
 
   // One submission per session — atomic claim
@@ -160,12 +174,29 @@ export async function POST(request: Request) {
   const expiresAt = now + SUBMISSION_TTL_MS;
   const name = session.name;
 
+  // One leaderboard entry per player (keyed by normalized name), holding their best run.
+  // Legacy push-id entries are not touched.
+  // The callback can run more than once, so the outcome is reassigned on every run and only the last one counts.
+  let outcome = { best: total, improved: true };
+  await adminDb.ref(`leaderboard/${normalizeName(name)}`).transaction((current) => {
+    const entry = current as LeaderboardEntry | null;
+    // An expired entry no longer counts as a best, so a fresh run replaces it
+    const live = entry !== null && entry.expiresAt > now;
+    if (live && entry.score >= total) {
+      outcome = { best: entry.score, improved: false };
+      return { ...entry, expiresAt };
+    }
+    outcome = { best: total, improved: true };
+    return { name, score: total, game, timestamp: now, expiresAt };
+  });
+  const { best, improved } = outcome;
+
+  // Rank among everyone else's best scores, using this player's best (not this run)
   const leaderboardSnap = await adminDb.ref('leaderboard').get();
   const entries: Record<string, { score: number }> = leaderboardSnap.val() ?? {};
-  const rank = Object.values(entries).filter((e) => e.score > total).length + 1;
+  const rank = Object.values(entries).filter((e) => e.score > best).length + 1;
 
-  await adminDb.ref('leaderboard').push({ name, score: total, game, timestamp: now, expiresAt });
-  await existingRef.set({ rank, total, game, expiresAt });
+  await existingRef.set({ rank, total, game, best, improved, expiresAt } satisfies SubmissionRecord);
 
-  return NextResponse.json({ rank, total, game });
+  return NextResponse.json({ rank, total, game, best, improved });
 }

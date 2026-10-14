@@ -26,5 +26,9 @@ export interface LeaderboardEntry {
 
 export interface SubmissionRecord {
   rank: number;
+  total: number;
+  game: Tab;
+  best: number;
+  improved: boolean;
   expiresAt: number;
 }
