@@ -99,7 +99,7 @@ describe('TechTrivia', () => {
 
     fireEvent.click(option(GDSC));
     expect(option('Global Data Science Center')).toBeDisabled();
-    expect(mockAct).toHaveBeenCalledWith({ answer: GDSC });
+    expect(mockAct).toHaveBeenCalledWith({ answer: GDSC, q: 0 });
 
     await act(async () => {
       pending.resolve(reply(true, GDSC));
@@ -271,11 +271,35 @@ describe('TechTrivia', () => {
 
     await tap(screen.getByRole('button', { name: 'Try again' }));
     expect(mockAct).toHaveBeenCalledTimes(2);
-    expect(mockAct).toHaveBeenLastCalledWith({ answer: GDSC });
+    expect(mockAct).toHaveBeenLastCalledWith({ answer: GDSC, q: 0 });
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByText('20 pts')).toBeInTheDocument();
 
     await advance(600);
     expect(screen.getByText(FLUTTER)).toBeInTheDocument();
+  });
+
+  it('re-sends the same question index after a failed answer on a later question', async () => {
+    mockAct
+      .mockResolvedValueOnce(reply(true, GDSC))
+      .mockRejectedValueOnce(new Error('Network down'))
+      .mockResolvedValueOnce(reply(true, FLUTTER));
+    render(<TechTrivia questions={questions} act={mockAct} onDone={jest.fn()} />);
+    startGame();
+
+    await tap(option(GDSC));
+    await advance(600);
+    await tap(option(FLUTTER));
+    expect(screen.getByRole('alert')).toHaveTextContent('Network down');
+    expect(screen.getByText(/Q2/)).toBeInTheDocument();
+
+    await tap(screen.getByRole('button', { name: 'Try again' }));
+    expect(mockAct.mock.calls).toEqual([
+      [{ answer: GDSC, q: 0 }],
+      [{ answer: FLUTTER, q: 1 }],
+      [{ answer: FLUTTER, q: 1 }],
+    ]);
+    await advance(600);
+    expect(screen.getByText(GEMINI)).toBeInTheDocument();
   });
 });

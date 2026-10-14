@@ -9,7 +9,7 @@ const WRONG_PENALTY = 10;
 const CORRECT_DELAY_MS = 600;
 const WRONG_LOCKOUT_MS = 1500;
 
-type TriviaBody = { answer: string } | { finish: true };
+type TriviaBody = { answer: string; q: number } | { finish: true };
 
 interface Props {
   questions: TriviaView[];
@@ -92,7 +92,7 @@ export default function TechTrivia({ questions, act, onDone }: Props) {
     }
   }
 
-  async function submitAnswer(opt: string) {
+  async function submitAnswer(opt: string, q: number) {
     if (busyRef.current || doneRef.current || timeUpRef.current || chosenRef.current !== null) return;
     busyRef.current = true;
     setSending(true);
@@ -101,7 +101,7 @@ export default function TechTrivia({ questions, act, onDone }: Props) {
 
     let res: AnswerResponse;
     try {
-      const raw = await act({ answer: opt });
+      const raw = await act({ answer: opt, q });
       if (!isAnswer(raw)) throw new Error('Unexpected response from the server.');
       res = raw;
     } catch (err) {
@@ -112,7 +112,7 @@ export default function TechTrivia({ questions, act, onDone }: Props) {
         requestFinish();
         return;
       }
-      setFailed({ answer: opt });
+      setFailed({ answer: opt, q });
       setError(errorMessage(err));
       return;
     }
@@ -175,7 +175,7 @@ export default function TechTrivia({ questions, act, onDone }: Props) {
   function retry() {
     if (!failed) return;
     if ('finish' in failed) requestFinish();
-    else submitAnswer(failed.answer);
+    else submitAnswer(failed.answer, failed.q);
   }
 
   if (!active) {
@@ -248,7 +248,7 @@ export default function TechTrivia({ questions, act, onDone }: Props) {
                 <button
                   key={opt}
                   type="button"
-                  onClick={() => submitAnswer(opt)}
+                  onClick={() => submitAnswer(opt, idx)}
                   disabled={revealed || sending || timeUp}
                   className={`w-full p-3.5 text-left text-sm font-semibold border-2 rounded-2xl transition-all active:scale-[0.98] disabled:opacity-60 ${
                     revealed

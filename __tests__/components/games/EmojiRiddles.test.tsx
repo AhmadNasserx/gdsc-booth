@@ -75,7 +75,7 @@ describe('EmojiRiddles', () => {
 
     await tap(option('Web Crawler'));
 
-    expect(mockAct).toHaveBeenCalledWith({ answer: 'Web Crawler' });
+    expect(mockAct).toHaveBeenCalledWith({ answer: 'Web Crawler', q: 0 });
     expect(screen.getByRole('button', { name: '✓ Web Crawler' })).toBeDisabled();
     expect(screen.getByText('40 pts')).toBeInTheDocument();
     expect(screen.getByText(/Question 1 of 4/i)).toBeInTheDocument();
@@ -110,7 +110,7 @@ describe('EmojiRiddles', () => {
     await tap(screen.getByRole('button', { name: 'Try again' }));
 
     expect(mockAct).toHaveBeenCalledTimes(2);
-    expect(mockAct).toHaveBeenLastCalledWith({ answer: 'Web Crawler' });
+    expect(mockAct).toHaveBeenLastCalledWith({ answer: 'Web Crawler', q: 0 });
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByText('40 pts')).toBeInTheDocument();
 
@@ -162,6 +162,34 @@ describe('EmojiRiddles', () => {
 
     await advance(5000);
     expect(onDone).toHaveBeenCalledTimes(1);
-    expect(mockAct).toHaveBeenCalledTimes(4);
+    expect(mockAct.mock.calls).toEqual([
+      [{ answer: 'Web Crawler', q: 0 }],
+      [{ answer: 'Docker', q: 1 }],
+      [{ answer: 'SSL/TLS', q: 2 }],
+      [{ answer: 'Python', q: 3 }],
+    ]);
+  });
+
+  it('re-sends the same question index after a failed answer on a later question', async () => {
+    mockAct
+      .mockResolvedValueOnce(reply(true, 'Web Crawler'))
+      .mockRejectedValueOnce(new Error('Timeout'))
+      .mockResolvedValueOnce(reply(true, 'Docker'));
+    render(<EmojiRiddles questions={questions} act={mockAct} onDone={jest.fn()} />);
+
+    await tap(option('Web Crawler'));
+    await advance(1100);
+    await tap(option('Docker'));
+    expect(screen.getByRole('alert')).toHaveTextContent('Timeout');
+    expect(screen.getByText(/Question 2 of 4/i)).toBeInTheDocument();
+
+    await tap(screen.getByRole('button', { name: 'Try again' }));
+    expect(mockAct.mock.calls).toEqual([
+      [{ answer: 'Web Crawler', q: 0 }],
+      [{ answer: 'Docker', q: 1 }],
+      [{ answer: 'Docker', q: 1 }],
+    ]);
+    await advance(1100);
+    expect(screen.getByText(/Question 3 of 4/i)).toBeInTheDocument();
   });
 });

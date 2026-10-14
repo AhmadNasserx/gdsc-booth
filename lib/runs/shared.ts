@@ -94,16 +94,15 @@ export function numberOf(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
-/** Optional `q` (question index) on sequential answers. Lets a retried request be recognised. */
-export function optionalQuestionIndex(body: Record<string, unknown>): number | undefined {
-  if (body.q === undefined) return undefined;
+/** Required `q` (question index) on riddles, trivia and bug answers. A retried request is then recognised. */
+export function requiredQuestionIndex(body: Record<string, unknown>): number {
   if (!Number.isInteger(body.q) || (body.q as number) < 0) {
-    throw new RunError(400, 'Invalid question index');
+    throw new RunError(400, 'q (question index) is required and must be a non-negative integer');
   }
   return body.q as number;
 }
 
 /** Sequential answering: an answer must be for the question that is currently open. */
-export function expectQuestion(q: number | undefined, expected: number): void {
-  if (q !== undefined && q !== expected) throw new RunError(409, 'Answer is out of order');
+export function expectQuestion(q: number, expected: number): void {
+  if (q !== expected) throw new RunError(409, 'Answer is out of order');
 }
