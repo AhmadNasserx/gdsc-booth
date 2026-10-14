@@ -272,7 +272,7 @@ describe('Play Page: submitting', () => {
       answer: ['Web Crawler', 'Docker', 'SSL/TLS', 'Python'],
     });
     expect(screen.getByText('Emoji Riddles')).toBeInTheDocument();
-    expect(screen.getByText('/ 1000 pts')).toBeInTheDocument();
+    expect(screen.getByText('pts')).toBeInTheDocument();
     expect(screen.getByText("You're #3 on the leaderboard")).toBeInTheDocument();
   });
 
@@ -300,7 +300,7 @@ describe('Play Page: submitting', () => {
     fireEvent.click(screen.getByText('mock-finish-riddles (5)'));
     fireEvent.click(screen.getByRole('button', { name: 'Submit Score →' }));
 
-    expect(await screen.findByText('Your best is 850 / 1000')).toBeInTheDocument();
+    expect(await screen.findByText(/Your best is 850 pts\./)).toBeInTheDocument();
     expect(screen.getByText('300')).toBeInTheDocument();
     expect(screen.queryByText('🎉 New personal best!')).not.toBeInTheDocument();
   });
@@ -325,7 +325,7 @@ describe('Play Page: submitting', () => {
 
     expect(await screen.findByRole('heading', { name: 'Pick your challenge' })).toBeInTheDocument();
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/play'));
-    expect(screen.queryByText('/ 1000 pts')).not.toBeInTheDocument();
+    expect(screen.queryByText(/out of|\/ 1000/)).not.toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: 'Games' })).not.toBeInTheDocument();
 
     const [url, init] = (global.fetch as jest.Mock).mock.calls[1];

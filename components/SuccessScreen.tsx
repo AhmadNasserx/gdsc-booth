@@ -66,12 +66,14 @@ export default function SuccessScreen({ name, total, rank, game, best, improved 
       </p>
       <p className="relative text-4xl font-black text-[#1A73E8]">
         <span>{total}</span>{' '}
-        <span className="text-xl font-semibold text-[#5F6368]">/ 1000 pts</span>
+        <span className="text-xl font-semibold text-[#5F6368]">pts</span>
       </p>
       {improved ? (
         <p className="relative text-sm font-bold text-[#B06000]">🎉 New personal best!</p>
       ) : (
-        <p className="relative text-sm text-[#5F6368]">Your best is {best} / 1000</p>
+        <p className="relative text-sm text-[#5F6368]">
+          Your best is {best} pts. <span className="font-semibold text-[#202124]">Can you beat it?</span>
+        </p>
       )}
       <p className="relative text-sm font-bold text-[#34A853]">You&apos;re #{rank} on the leaderboard</p>
 

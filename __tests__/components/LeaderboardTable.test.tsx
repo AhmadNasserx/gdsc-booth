@@ -51,28 +51,41 @@ describe('LeaderboardTable', () => {
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
   });
 
-  it('uses the 1000-point colour bands (920 / 690 / 460)', () => {
+  it('uses one neutral colour for every score, with no colour bands', () => {
     const scored = (name: string, score: number, timestamp: number): LeaderboardEntry =>
       ({ name, score, timestamp, expiresAt: 9999999999999 });
     render(
       <LeaderboardTable
         entries={[
-          scored('A', 1000, 1),
+          scored('A', 950, 1),
           scored('B', 700, 2),
           scored('C', 500, 3),
           scored('D', 920, 4),
-          scored('E', 919, 5),
-          scored('F', 690, 6),
-          scored('G', 460, 7),
-          scored('H', 459, 8),
+          scored('E', 300, 5),
         ]}
       />,
     );
-    expect(screen.getByText('1000')).toHaveClass('text-[#4285F4]');
-    expect(screen.getByText('920')).toHaveClass('text-[#4285F4]');
-    expect(screen.getByText('919')).toHaveClass('text-[#34A853]');
-    expect(screen.getByText('690')).toHaveClass('text-[#34A853]');
-    expect(screen.getByText('460')).toHaveClass('text-[#FBBC04]');
-    expect(screen.getByText('459')).toHaveClass('text-[#EA4335]');
+    for (const score of ['950', '700', '500', '920', '300']) {
+      expect(screen.getByText(score)).toHaveClass('text-[#1A73E8]');
+    }
+  });
+
+  it('shows no progress bars or percentages for any row, including the podium', () => {
+    const many: LeaderboardEntry[] = Array.from({ length: 6 }, (_, i) => ({
+      name: `Player${i}`, score: 100 + i * 50, timestamp: i, expiresAt: 9999999999999,
+    }));
+    const { container } = render(<LeaderboardTable entries={many} />);
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    expect(container.querySelector('[style*="width"]')).not.toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/%/);
+  });
+
+  it('never shows a maximum, a "/ 1000" or an "out of" in the rendered output', () => {
+    const { container } = render(<LeaderboardTable entries={entries} />);
+    const text = container.textContent ?? '';
+    expect(text).not.toContain('1000');
+    expect(text).not.toContain('/ 1000');
+    expect(text).not.toMatch(/max/i);
+    expect(text).not.toMatch(/out of/i);
   });
 });
