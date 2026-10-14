@@ -1,9 +1,15 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { calcPasswordScore, passwordStrengthLabel } from '@/lib/scoring';
+import type { PasswordResponse, RunResult } from '@/lib/apiTypes';
 
-interface Props { onComplete: (password: string) => void; }
+const LOCK_CELEBRATE_MS = 900;
+
+interface Props {
+  act: (body: { password: string }) => Promise<PasswordResponse>;
+  onDone: (result: RunResult) => void;
+}
 
 const TIPS = [
   { label: '8+ chars', check: (p: string) => p.length >= 8 },
@@ -22,19 +28,64 @@ const BAR_COLOR = (score: number) =>
  */
 const barPercent = (score: number) => 90 * (1 - Math.exp(-score / 100));
 
-export default function PasswordChallenge({ onComplete }: Props) {
+export default function PasswordChallenge({ act, onDone }: Props) {
   const [password, setPassword] = useState('');
-  const [locked, setLocked] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const doneRef = useRef(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // The server's verdict once the password is locked in.
+  const [lockedIn, setLockedIn] = useState<PasswordResponse | null>(null);
+
+  // Synchronous guard against double submits.
+  const inFlightRef = useRef(false);
+  const onDoneRef = useRef(onDone);
+  const reportedRef = useRef(false);
+  const aliveRef = useRef(true);
+
   const score = calcPasswordScore(password);
 
-  function lockIn() {
-    if (doneRef.current || !password) return;
-    doneRef.current = true;
-    setLocked(true);
-    onComplete(password);
+  useEffect(() => {
+    onDoneRef.current = onDone;
+  }, [onDone]);
+
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
+
+  // Report the result once, after the locked-in state has been shown for a moment.
+  useEffect(() => {
+    if (!lockedIn) return;
+    const id = window.setTimeout(() => {
+      if (reportedRef.current) return;
+      reportedRef.current = true;
+      onDoneRef.current(lockedIn.result);
+    }, LOCK_CELEBRATE_MS);
+    return () => window.clearTimeout(id);
+  }, [lockedIn]);
+
+  async function lockIn() {
+    if (inFlightRef.current || lockedIn || !password) return;
+    inFlightRef.current = true;
+    setPending(true);
+    setError(null);
+
+    try {
+      const response = await act({ password });
+      if (!aliveRef.current) return;
+      setLockedIn(response);
+      setPending(false);
+    } catch (err) {
+      if (!aliveRef.current) return;
+      inFlightRef.current = false;
+      setPending(false);
+      setError(err instanceof Error ? err.message : 'Something went wrong. Try again.');
+    }
   }
+
+  const locked = lockedIn !== null;
 
   return (
     <div className="flex flex-col items-center">
@@ -49,7 +100,7 @@ export default function PasswordChallenge({ onComplete }: Props) {
           placeholder="Type your password…"
           maxLength={128}
           value={password}
-          disabled={locked}
+          disabled={locked || pending}
           onChange={(e) => setPassword(e.target.value)}
           className="w-full p-3.5 pr-12 border border-[#DADCE0] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#1A73E8] text-sm"
         />
@@ -101,11 +152,22 @@ export default function PasswordChallenge({ onComplete }: Props) {
 
       <button
         onClick={lockIn}
-        disabled={!password || locked}
+        disabled={!password || locked || pending}
+        aria-busy={pending || undefined}
         className="w-full bg-[#34A853] hover:bg-[#2C8E45] active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 rounded-full transition-all"
       >
-        {locked ? `Locked In — ${score} pts ✓` : 'Lock In'}
+        {lockedIn
+          ? `Locked In — ${lockedIn.score} pts ✓`
+          : pending
+            ? 'Locking in…'
+            : 'Lock In'}
       </button>
+
+      {error && (
+        <p role="alert" className="mt-3 text-center text-xs font-semibold text-[#C5221F]">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

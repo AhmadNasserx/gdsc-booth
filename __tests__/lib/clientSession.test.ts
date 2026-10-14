@@ -77,9 +77,7 @@ describe('saved name', () => {
 
 describe('startSession', () => {
   it('posts the trimmed name and a valid player key to /api/session', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce(
-      jsonResponse(200, { token: 'tok', questions: { riddles: [] } }),
-    );
+    (global.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse(200, { token: 'tok' }));
     await loadModule().startSession('  Ahmad  ');
 
     const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
@@ -91,19 +89,17 @@ describe('startSession', () => {
     expect(body.playerKey).toBe(localStorage.getItem('gdscPlayerKey'));
   });
 
-  it('stores the session, drops the previous pick, and saves the name on success', async () => {
-    sessionStorage.setItem('playerGame', 'bugs');
-    (global.fetch as jest.Mock).mockResolvedValueOnce(
-      jsonResponse(200, { token: 'new-token', questions: { wordleWord: 'CRANE' } }),
-    );
+  it('stores only the token and name in sessionStorage, and saves the name', async () => {
+    sessionStorage.setItem('playerQuestions', '{"old":true}');
+    (global.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse(200, { token: 'new-token' }));
 
     const result = await loadModule().startSession('Ahmad');
 
     expect(result).toEqual({ ok: true });
-    expect(sessionStorage.getItem('playerGame')).toBeNull();
     expect(sessionStorage.getItem('playerToken')).toBe('new-token');
     expect(sessionStorage.getItem('playerName')).toBe('Ahmad');
-    expect(JSON.parse(sessionStorage.getItem('playerQuestions') as string)).toEqual({ wordleWord: 'CRANE' });
+    expect(sessionStorage.getItem('playerQuestions')).toBeNull();
+    expect(sessionStorage.getItem('playerGame')).toBeNull();
     expect(localStorage.getItem('gdscPlayerName')).toBe('Ahmad');
   });
 
@@ -126,6 +122,13 @@ describe('startSession', () => {
     expect(result.ok === false && result.error).toMatch(/something went wrong/i);
   });
 
+  it('returns an error when a success response has no token', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse(200, {}));
+    const result = await loadModule().startSession('Ahmad');
+    expect(result.ok).toBe(false);
+    expect(sessionStorage.getItem('playerToken')).toBeNull();
+  });
+
   it('returns an error instead of throwing when the network request fails', async () => {
     (global.fetch as jest.Mock).mockRejectedValueOnce(new TypeError('Failed to fetch'));
     const result = await loadModule().startSession('Ahmad');
@@ -133,30 +136,69 @@ describe('startSession', () => {
   });
 
   it('returns an error when sessionStorage is unavailable', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce(
-      jsonResponse(200, { token: 'tok', questions: {} }),
-    );
+    (global.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse(200, { token: 'tok' }));
     jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('quota'); });
     const result = await loadModule().startSession('Ahmad');
     expect(result.ok).toBe(false);
   });
+});
 
-  it('notifies listeners after a successful start, and not after a failed one', async () => {
+describe('current session', () => {
+  it('returns null when nothing is stored', () => {
+    expect(loadModule().getSession()).toBeNull();
+  });
+
+  it('returns the token and name once a session has started', async () => {
     const mod = loadModule();
-    const listener = jest.fn();
-    const unsubscribe = mod.onSessionStarted(listener);
-
-    (global.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse(409, { error: 'taken' }));
+    (global.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse(200, { token: 'tok' }));
     await mod.startSession('Ahmad');
-    expect(listener).not.toHaveBeenCalled();
+    expect(mod.getSession()).toEqual({ token: 'tok', name: 'Ahmad' });
+  });
 
-    (global.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse(200, { token: 't', questions: {} }));
-    await mod.startSession('Ahmad');
-    expect(listener).toHaveBeenCalledTimes(1);
+  it('returns null when only half of the session is present', () => {
+    sessionStorage.setItem('playerToken', 'tok');
+    expect(loadModule().getSession()).toBeNull();
+  });
 
-    unsubscribe();
-    (global.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse(200, { token: 't', questions: {} }));
-    await mod.startSession('Ahmad');
-    expect(listener).toHaveBeenCalledTimes(1);
+  it('clears the session but keeps the saved name for the next visit', () => {
+    sessionStorage.setItem('playerToken', 'tok');
+    sessionStorage.setItem('playerName', 'Ahmad');
+    localStorage.setItem('gdscPlayerName', 'Ahmad');
+
+    loadModule().clearSession();
+
+    expect(sessionStorage.getItem('playerToken')).toBeNull();
+    expect(sessionStorage.getItem('playerName')).toBeNull();
+    expect(localStorage.getItem('gdscPlayerName')).toBe('Ahmad');
+  });
+
+  it('does not throw when sessionStorage is blocked', () => {
+    jest.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('blocked'); });
+    jest.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => { throw new Error('blocked'); });
+    const mod = loadModule();
+    expect(mod.getSession()).toBeNull();
+    expect(() => mod.clearSession()).not.toThrow();
+  });
+});
+
+describe('session notice', () => {
+  it('returns null when there is no notice', () => {
+    expect(loadModule().takeSessionNotice()).toBeNull();
+  });
+
+  it('shows the notice once: taking it removes it', () => {
+    const mod = loadModule();
+    mod.setSessionNotice('Your session has ended.');
+    expect(sessionStorage.getItem('sessionNotice')).toBe('Your session has ended.');
+    expect(mod.takeSessionNotice()).toBe('Your session has ended.');
+    expect(mod.takeSessionNotice()).toBeNull();
+  });
+
+  it('does not throw when sessionStorage is blocked', () => {
+    jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('blocked'); });
+    jest.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('blocked'); });
+    const mod = loadModule();
+    expect(() => mod.setSessionNotice('x')).not.toThrow();
+    expect(mod.takeSessionNotice()).toBeNull();
   });
 });
