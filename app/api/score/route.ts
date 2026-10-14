@@ -1,12 +1,107 @@
 import { NextResponse } from 'next/server';
 import { verifySession } from '@/lib/session';
-import { calcPasswordScore, calcWordleScore } from '@/lib/scoring';
+import {
+  calcMemoryScore,
+  calcPasswordScore,
+  calcWordleScore,
+  isPlausibleMemory,
+  normalizeScore,
+} from '@/lib/scoring';
 import { adminDb } from '@/lib/firebaseAdmin';
-import { RIDDLE_POOL, TRIVIA_POOL } from '@/lib/questions';
+import { BUG_POOL, RIDDLE_POOL, TRIVIA_POOL } from '@/lib/questions';
+import { TABS, type QuestionsPackage, type Tab } from '@/lib/types';
 
+const MIN_PLAY_MS = 20_000;
 const TRIVIA_CORRECT_PTS = 20;
 const TRIVIA_WRONG_PENALTY = 10;
-const MAX_TRIVIA_SCORE = 300;
+const PER_QUESTION_PTS = 40;
+const SUBMISSION_TTL_MS = 172800000;
+
+function isTab(value: unknown): value is Tab {
+  return typeof value === 'string' && (TABS as string[]).includes(value);
+}
+
+/** Checks the answer shape for one game. Grading happens separately, after the gates. */
+function isValidAnswer(game: Tab, answer: unknown, questions: QuestionsPackage): boolean {
+  switch (game) {
+    case 'riddles':
+      return (
+        Array.isArray(answer) && answer.length === 5 &&
+        answer.every((a) => typeof a === 'string')
+      );
+    case 'trivia':
+      return (
+        Array.isArray(answer) &&
+        answer.length <= questions.triviaIndices.length &&
+        answer.every((a) => {
+          if (typeof a !== 'object' || a === null) return false;
+          return typeof (a as Record<string, unknown>).answer === 'string';
+        })
+      );
+    case 'password':
+      return typeof answer === 'string';
+    case 'wordle':
+      return (
+        Array.isArray(answer) &&
+        answer.length >= 1 && answer.length <= 6 &&
+        answer.every((g) => typeof g === 'string' && /^[A-Z]{5}$/.test(g))
+      );
+    case 'memory': {
+      if (typeof answer !== 'object' || answer === null) return false;
+      const { moves, seconds } = answer as Record<string, unknown>;
+      return isPlausibleMemory(moves, seconds);
+    }
+    case 'bugs':
+      return (
+        Array.isArray(answer) && answer.length === 5 &&
+        answer.every((a) => Number.isInteger(a) && (a as number) >= 0)
+      );
+    default:
+      return false;
+  }
+}
+
+/** Raw points for the chosen game only. Answers are assumed to be shape-validated. */
+function gradeGame(game: Tab, answer: unknown, questions: QuestionsPackage): number {
+  switch (game) {
+    case 'riddles': {
+      const answers = answer as string[];
+      return answers.reduce(
+        (sum, ans, i) => sum + (ans === RIDDLE_POOL[questions.riddleIndices[i]]?.answer ? PER_QUESTION_PTS : 0),
+        0,
+      );
+    }
+    case 'trivia': {
+      const answers = answer as { answer: string }[];
+      // Floor at 0 after each answer, then cap at the game maximum
+      const raw = answers.reduce((sum, a, i) => {
+        const correct = a.answer === TRIVIA_POOL[questions.triviaIndices[i]]?.answer;
+        return Math.max(0, sum + (correct ? TRIVIA_CORRECT_PTS : -TRIVIA_WRONG_PENALTY));
+      }, 0);
+      return Math.min(raw, 300);
+    }
+    case 'password':
+      return calcPasswordScore(answer as string);
+    case 'wordle': {
+      const guesses = answer as string[];
+      const solved = guesses[guesses.length - 1] === questions.wordleWord;
+      return calcWordleScore(guesses.length, solved);
+    }
+    case 'memory': {
+      const { moves, seconds } = answer as { moves: number; seconds: number };
+      return calcMemoryScore(moves, seconds);
+    }
+    case 'bugs': {
+      const answers = answer as number[];
+      return answers.reduce(
+        (sum, ans, i) => sum + (ans === BUG_POOL[questions.bugIndices[i]]?.answer ? PER_QUESTION_PTS : 0),
+        0,
+      );
+    }
+    default:
+      return 0;
+  }
+}
 
 export async function POST(request: Request) {
   let body: Record<string, unknown>;
@@ -22,9 +117,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid or expired session' }, { status: 401 });
   }
 
-  const MIN_PLAY_MS = 45_000;
-  if (Date.now() - session.issuedAt < MIN_PLAY_MS) {
-    return NextResponse.json({ error: 'Score submitted too quickly' }, { status: 429 });
+  const game = body.game;
+  if (!isTab(game)) {
+    return NextResponse.json({ error: 'Invalid game' }, { status: 400 });
   }
 
   const submissionId = body.submissionId as string;
@@ -32,95 +127,45 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid submissionId' }, { status: 400 });
   }
 
-  // Validate answers shape before touching Firebase
-  const answers = body.answers as Record<string, unknown> | undefined;
-  if (!answers || typeof answers !== 'object') {
-    return NextResponse.json({ error: 'Invalid answers' }, { status: 400 });
-  }
-  const { riddles: riddleAnswers, trivia: triviaAnswers, binary: binaryAnswer, password, wordle: wordleGuesses } = answers as {
-    riddles: unknown; trivia: unknown; binary: unknown; password: unknown; wordle: unknown;
-  };
-
-  if (
-    !Array.isArray(riddleAnswers) || riddleAnswers.length !== 5 ||
-    !riddleAnswers.every((a) => typeof a === 'string')
-  ) return NextResponse.json({ error: 'Invalid riddle answers' }, { status: 400 });
-
-  if (
-    !Array.isArray(triviaAnswers) ||
-    triviaAnswers.length > session.questions.triviaIndices.length ||
-    !triviaAnswers.every((a) => {
-      if (typeof a !== 'object' || a === null) return false;
-      return typeof (a as Record<string, unknown>).answer === 'string';
-    })
-  ) return NextResponse.json({ error: 'Invalid trivia answers' }, { status: 400 });
-
-  if (typeof binaryAnswer !== 'string' || !/^\d{1,3}$/.test(binaryAnswer)) {
-    return NextResponse.json({ error: 'Invalid binary answer' }, { status: 400 });
-  }
-  if (typeof password !== 'string') {
-    return NextResponse.json({ error: 'Invalid password' }, { status: 400 });
+  // Validate the answer shape before touching Firebase
+  if (!isValidAnswer(game, body.answer, session.questions)) {
+    return NextResponse.json({ error: `Invalid ${game} answer` }, { status: 400 });
   }
 
-  if (
-    !Array.isArray(wordleGuesses) ||
-    wordleGuesses.length === 0 ||
-    wordleGuesses.length > 6 ||
-    !wordleGuesses.every((g) => typeof g === 'string' && /^[A-Z]{5}$/.test(g))
-  ) return NextResponse.json({ error: 'Invalid wordle guesses' }, { status: 400 });
+  if (Date.now() - session.issuedAt < MIN_PLAY_MS) {
+    return NextResponse.json({ error: 'Score submitted too quickly' }, { status: 429 });
+  }
 
   // Idempotency check
   const existingRef = adminDb.ref(`submissions/${submissionId}`);
   const existing = await existingRef.get();
   if (existing.val()) {
-    return NextResponse.json(existing.val());
+    const prior = existing.val() as { rank: number; total: number; game: Tab };
+    return NextResponse.json({ rank: prior.rank, total: prior.total, game: prior.game });
   }
 
   // One submission per session — atomic claim
   const sessionSlotRef = adminDb.ref(`submissions/by-session/${session.sessionId}`);
   const { committed } = await sessionSlotRef.transaction((current) => {
     if (current !== null) return;
-    return { submissionId, expiresAt: Date.now() + 172800000 };
+    return { submissionId, expiresAt: Date.now() + SUBMISSION_TTL_MS };
   });
   if (!committed) {
     return NextResponse.json({ error: 'Score already submitted for this session' }, { status: 409 });
   }
 
-  // Compute scores server-side from session-assigned questions
-  const { riddleIndices, triviaIndices, binaryChar } = session.questions;
-
-  const riddleScore = (riddleAnswers as string[]).reduce(
-    (sum, ans, i) => sum + (ans === RIDDLE_POOL[riddleIndices[i]]?.answer ? 40 : 0),
-    0,
-  );
-
-  // Mirror client-side logic: correct=+20, wrong=-10 (floor at 0 per answer), cap at MAX
-  const triviaScore = Math.min(
-    (triviaAnswers as { answer: string }[]).reduce((sum, a, i) => {
-      const correct = a.answer === TRIVIA_POOL[triviaIndices[i]]?.answer;
-      return Math.max(0, sum + (correct ? TRIVIA_CORRECT_PTS : -TRIVIA_WRONG_PENALTY));
-    }, 0),
-    MAX_TRIVIA_SCORE,
-  );
-
-  const binaryScore = binaryAnswer === binaryChar ? 150 : 0;
-  const passwordScore = Math.max(0, Math.min(200, calcPasswordScore(password as string)));
-
-  const wGuesses = wordleGuesses as string[];
-  const wordleSolved = wGuesses[wGuesses.length - 1] === session.questions.wordleWord;
-  const wordleScore = calcWordleScore(wGuesses.length, wordleSolved);
-
-  const total = riddleScore + triviaScore + binaryScore + passwordScore + wordleScore;
+  const raw = gradeGame(game, body.answer, session.questions);
+  const total = normalizeScore(game, raw);
   const now = Date.now();
-  const expiresAt = now + 172800000;
+  const expiresAt = now + SUBMISSION_TTL_MS;
   const name = session.name;
 
   const leaderboardSnap = await adminDb.ref('leaderboard').get();
   const entries: Record<string, { score: number }> = leaderboardSnap.val() ?? {};
   const rank = Object.values(entries).filter((e) => e.score > total).length + 1;
 
-  await adminDb.ref('leaderboard').push({ name, score: total, timestamp: now, expiresAt });
-  await existingRef.set({ rank, expiresAt });
+  await adminDb.ref('leaderboard').push({ name, score: total, game, timestamp: now, expiresAt });
+  await existingRef.set({ rank, total, game, expiresAt });
 
-  return NextResponse.json({ rank, total });
+  return NextResponse.json({ rank, total, game });
 }

@@ -2,6 +2,7 @@
  * @jest-environment node
  */
 import { POST } from '@/app/api/session/route';
+import { BUG_POOL } from '@/lib/questions';
 
 process.env.SESSION_SECRET = 'a'.repeat(64);
 
@@ -34,7 +35,29 @@ describe('POST /api/session', () => {
     expect(data.questions.riddles).toHaveLength(5);
     expect(Array.isArray(data.questions.trivia)).toBe(true);
     expect(data.questions.trivia).toHaveLength(15);
-    expect(data.questions.binaryChar).toMatch(/^\d{1,2}$/);
+    expect(typeof data.questions.wordleWord).toBe('string');
+    expect(typeof data.questions.wordleHint).toBe('string');
+  });
+
+  it('returns 5 bug snippets with the client-facing shape', async () => {
+    const res = await POST(makeRequest({ name: 'Ahmad' }));
+    const data = await res.json();
+    expect(data.questions.bugs).toHaveLength(5);
+    for (const bug of data.questions.bugs) {
+      expect(typeof bug.title).toBe('string');
+      expect(typeof bug.language).toBe('string');
+      expect(typeof bug.explanation).toBe('string');
+      expect(Array.isArray(bug.lines)).toBe(true);
+      expect(Number.isInteger(bug.answer)).toBe(true);
+      expect(bug.answer).toBeLessThan(bug.lines.length);
+      expect(BUG_POOL.some((p) => p.title === bug.title && p.answer === bug.answer)).toBe(true);
+    }
+  });
+
+  it('no longer sends binaryChar', async () => {
+    const res = await POST(makeRequest({ name: 'Ahmad' }));
+    const data = await res.json();
+    expect(data.questions).not.toHaveProperty('binaryChar');
   });
 
   it('returns 400 for empty name', async () => {
