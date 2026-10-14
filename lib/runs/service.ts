@@ -171,9 +171,21 @@ async function completeRun(runId: string, run: RunRecord, session: SessionPayloa
     gamesPlayed: board.gamesPlayed,
   };
   const reply = { ...final.response, done: true, result };
-  // One write marks the run settled and keeps the reply, so a later retry returns this same reply.
-  await adminDb.ref(`runs/${runId}/final`).set(toStorable({ ...final, response: reply, settled: true }));
-  return reply;
+  // Settling is a transaction. Whichever request settles the run first stores its reply, and any
+  // other request that reaches this point gets that same stored reply back.
+  const kept: { reply?: Record<string, unknown> } = {};
+  await adminDb.ref(`runs/${runId}/final`).transaction((current) => {
+    const stored = current as RunRecord['final'] | null;
+    // A cache miss shows null first. Returning null makes the server send the real value and retry.
+    if (stored === null) return null;
+    if (stored?.settled) {
+      kept.reply = stored.response;
+      return undefined;
+    }
+    kept.reply = reply;
+    return toStorable({ ...final, response: reply, settled: true });
+  });
+  return kept.reply ?? reply;
 }
 
 /** Applies one action to a run inside a single transaction on runs/{runId}. */
