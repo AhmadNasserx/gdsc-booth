@@ -9,6 +9,7 @@ export const PLAYER_NAME_STORAGE = 'gdscPlayerName';
 // sessionStorage keys for the current game session.
 const TOKEN_KEY = 'playerToken';
 const SESSION_NAME_KEY = 'playerName';
+const LEGACY_SESSION_KEYS = ['playerQuestions', 'playerGame'];
 // One-off message for the home page (for example "your session expired").
 export const SESSION_NOTICE_KEY = 'sessionNotice';
 
@@ -159,6 +160,8 @@ export async function startSession(name: string): Promise<StartSessionResult> {
   }
 
   try {
+    // Drop keys left by the previous game flow, which stored questions and a picked game.
+    LEGACY_SESSION_KEYS.forEach((key) => sessionStorage.removeItem(key));
     sessionStorage.setItem(TOKEN_KEY, body.token);
     sessionStorage.setItem(SESSION_NAME_KEY, trimmed);
   } catch {
