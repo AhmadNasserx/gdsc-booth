@@ -43,9 +43,9 @@ export default function NameEntry() {
       let status: CheckedStatus = 'idle';
       try {
         const playerKey = getPlayerKey();
-        const res = await fetch(
-          `/api/names/check?name=${encodeURIComponent(trimmed)}&playerKey=${encodeURIComponent(playerKey)}`,
-        );
+        const res = await fetch(`/api/names/check?name=${encodeURIComponent(trimmed)}`, {
+          headers: { 'x-player-key': playerKey },
+        });
         const data = await res.json();
         status = data.mine ? 'mine' : data.available ? 'available' : 'taken';
       } catch {

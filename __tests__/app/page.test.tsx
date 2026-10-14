@@ -72,11 +72,14 @@ describe('Name Entry Page', () => {
     await userEvent.type(screen.getByPlaceholderText(/display name/i), 'Ahmad');
 
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
-    const url = (global.fetch as jest.Mock).mock.calls[0][0] as string;
+    const [url, init] = (global.fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
     const params = new URL(url, 'http://localhost').searchParams;
     expect(url.startsWith('/api/names/check?')).toBe(true);
     expect(params.get('name')).toBe('Ahmad');
-    expect(params.get('playerKey')).toMatch(PLAYER_KEY);
+    // The key goes in a header so it never reaches the query string or access logs
+    expect(params.has('playerKey')).toBe(false);
+    expect(url).not.toMatch(PLAYER_KEY);
+    expect((init.headers as Record<string, string>)['x-player-key']).toMatch(PLAYER_KEY);
   });
 
   it('shows the taken message when the name belongs to someone else', async () => {

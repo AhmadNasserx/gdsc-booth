@@ -105,6 +105,13 @@ function body(game: Tab | string, answer: unknown, overrides: Record<string, unk
   };
 }
 
+const TWO_DAYS_MS = 172800000;
+
+/** Session start time recorded in the token. The leaderboard expiry is measured from it. */
+function issuedAtOf(token: string): number {
+  return verifySession(token)?.issuedAt ?? 0;
+}
+
 const correctRiddles = RIDDLE_POOL.slice(0, 5).map((r) => r.answer);
 const correctBugs = BUG_POOL.slice(0, 5).map((b) => b.answer);
 const correctTrivia = TRIVIA_POOL.slice(0, 15).map((q) => ({ answer: q.answer }));
@@ -319,14 +326,23 @@ describe('POST /api/score: grading only the chosen game', () => {
 
 describe('POST /api/score: best per player on the leaderboard', () => {
   it('writes the first run as the player entry, keyed by normalized name', async () => {
-    await POST(makeRequest(body('memory', { moves: 10, seconds: 40 })));
+    const token = tokenIssuedAgo(30_000);
+    await POST(makeRequest(body('memory', { moves: 10, seconds: 40 }, { token })));
     expect(mockRead('leaderboard/ahmad')).toEqual({
       name: 'Ahmad',
       score: 850,
       game: 'memory',
       timestamp: expect.any(Number),
-      expiresAt: expect.any(Number),
+      expiresAt: issuedAtOf(token) + TWO_DAYS_MS,
     });
+  });
+
+  it('expires the leaderboard entry with the name claim (session start + 48h), not the submission time', async () => {
+    const token = tokenIssuedAgo(30_000);
+    await POST(makeRequest(body('memory', { moves: 10, seconds: 40 }, { token })));
+    const entry = mockRead('leaderboard/ahmad') as { expiresAt: number };
+    expect(entry.expiresAt).toBe(issuedAtOf(token) + TWO_DAYS_MS);
+    expect(entry.expiresAt).toBeLessThan(Date.now() + TWO_DAYS_MS);
   });
 
   it('first submission reports best = total and improved = true', async () => {
@@ -334,28 +350,35 @@ describe('POST /api/score: best per player on the leaderboard', () => {
     expect(await res.json()).toEqual({ rank: 1, total: 850, game: 'memory', best: 850, improved: true });
   });
 
-  it('a lower run keeps the old best, reports improved = false, and refreshes expiresAt', async () => {
+  it('a lower run keeps the old best, reports improved = false, and sets expiresAt from session start', async () => {
     const soon = Date.now() + 1000;
     mockWrite('leaderboard/ahmad', { name: 'Ahmad', score: 850, game: 'memory', timestamp: 1, expiresAt: soon });
 
-    const res = await POST(makeRequest(body('riddles', [RIDDLE_POOL[0].answer, 'x', 'x', 'x', 'x'])));
+    const token = tokenIssuedAgo(30_000);
+    const res = await POST(makeRequest(body('riddles', [RIDDLE_POOL[0].answer, 'x', 'x', 'x', 'x'], { token })));
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data).toEqual({ rank: 1, total: ONE_RIDDLE_TOTAL, game: 'riddles', best: 850, improved: false });
 
     const entry = mockRead('leaderboard/ahmad') as Record<string, unknown>;
     expect(entry).toMatchObject({ score: 850, game: 'memory', timestamp: 1 });
-    expect(entry.expiresAt as number).toBeGreaterThan(soon);
+    expect(entry.expiresAt).toBe(issuedAtOf(token) + TWO_DAYS_MS);
   });
 
-  it('a higher run replaces the entry and reports improved = true', async () => {
+  it('a higher run replaces the entry, reports improved = true, and sets expiresAt from session start', async () => {
     mockWrite('leaderboard/ahmad', {
       name: 'Ahmad', score: MEMORY_TOTAL, game: 'memory', timestamp: 1, expiresAt: FUTURE,
     });
 
-    const res = await POST(makeRequest(body('riddles', correctRiddles)));
+    const token = tokenIssuedAgo(30_000);
+    const res = await POST(makeRequest(body('riddles', correctRiddles, { token })));
     expect(await res.json()).toEqual({ rank: 1, total: 1000, game: 'riddles', best: 1000, improved: true });
-    expect(mockRead('leaderboard/ahmad')).toMatchObject({ name: 'Ahmad', score: 1000, game: 'riddles' });
+    expect(mockRead('leaderboard/ahmad')).toMatchObject({
+      name: 'Ahmad',
+      score: 1000,
+      game: 'riddles',
+      expiresAt: issuedAtOf(token) + TWO_DAYS_MS,
+    });
   });
 
   it('an equal run keeps the old best (improved = false)', async () => {
@@ -370,6 +393,20 @@ describe('POST /api/score: best per player on the leaderboard', () => {
     const res = await POST(makeRequest(body('memory', { moves: 10, seconds: 40 })));
     expect(await res.json()).toMatchObject({ best: 850, improved: true });
     expect(mockRead('leaderboard/ahmad')).toMatchObject({ score: 850, game: 'memory' });
+  });
+
+  it('a kept best takes this session expiry even when the stored expiry was later', async () => {
+    // expiresAt always follows the claim of the session that wrote it, so a kept best is
+    // reset to session.issuedAt + 48h, matching the name claim.
+    const token = tokenIssuedAgo(30_000);
+    mockWrite('leaderboard/ahmad', {
+      name: 'Ahmad', score: 900, game: 'bugs', timestamp: 1, expiresAt: FUTURE + TWO_DAYS_MS,
+    });
+    await POST(makeRequest(body('memory', { moves: 10, seconds: 40 }, { token })));
+    expect(mockRead('leaderboard/ahmad')).toMatchObject({
+      score: 900,
+      expiresAt: issuedAtOf(token) + TWO_DAYS_MS,
+    });
   });
 
   it('leaves legacy push-id entries and other players entries untouched', async () => {
