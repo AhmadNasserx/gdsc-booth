@@ -1,4 +1,5 @@
-import type { LeaderboardEntry, Tab } from '@/lib/types';
+import type { LeaderboardEntry } from '@/lib/types';
+import { TABS, type Tab } from '@/lib/types';
 import { GAMES } from '@/lib/games';
 
 // One neutral brand colour for every score, so no score reads as "good" or "bad".
@@ -32,13 +33,28 @@ const PODIUM = [
   },
 ];
 
-// Small emoji for the game an entry was scored in. Older entries have no game.
-function GameBadge({ game }: { game?: Tab }) {
-  const meta = game ? GAMES[game] : undefined;
-  if (!meta) return null;
+/** Highest score first; on a tie, whoever reached their total first. */
+export function sortEntries(entries: LeaderboardEntry[]): LeaderboardEntry[] {
+  return [...entries].sort((a, b) => b.score - a.score || a.timestamp - b.timestamp);
+}
+
+// One small emoji per game the player has a score in. Older entries may have no games.
+function GameChips({ games }: { games?: LeaderboardEntry['games'] }) {
+  const played = TABS.filter((tab: Tab) => typeof games?.[tab] === 'number');
+  if (played.length === 0) return null;
   return (
-    <span role="img" aria-label={meta.title} title={meta.title} className="shrink-0 leading-none">
-      {meta.emoji}
+    <span className="flex flex-wrap items-center justify-center gap-1">
+      {played.map((tab) => (
+        <span
+          key={tab}
+          role="img"
+          aria-label={GAMES[tab].title}
+          title={GAMES[tab].title}
+          className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-[#F1F3F4] text-xs leading-none"
+        >
+          {GAMES[tab].emoji}
+        </span>
+      ))}
     </span>
   );
 }
@@ -46,7 +62,7 @@ function GameBadge({ game }: { game?: Tab }) {
 interface Props { entries: LeaderboardEntry[]; }
 
 export default function LeaderboardTable({ entries }: Props) {
-  const sorted = [...entries].sort((a, b) => b.score - a.score).slice(0, 20);
+  const sorted = sortEntries(entries).slice(0, 20);
 
   if (sorted.length === 0) {
     return (
@@ -79,13 +95,16 @@ export default function LeaderboardTable({ entries }: Props) {
               <span className="text-[10px] font-bold text-[#5F6368] uppercase tracking-widest mb-1.5">
                 {p.label}
               </span>
-              <span className={`${p.nameSize} font-extrabold text-[#202124] mb-2 w-full flex items-center justify-center gap-2 min-w-0`}>
-                <GameBadge game={entry.game} />
-                <span className="truncate min-w-0">{entry.name}</span>
+              <span className={`${p.nameSize} font-extrabold text-[#202124] mb-1 w-full truncate min-w-0`}>
+                {entry.name}
+              </span>
+              <span className="mb-2">
+                <GameChips games={entry.games} />
               </span>
               <span className={`${p.scoreSize} font-black ${SCORE_TEXT} leading-none`}>
                 {entry.score}
               </span>
+              <span className="text-[10px] font-semibold text-[#5F6368] mt-1">pts</span>
             </div>
           );
         })}
@@ -103,12 +122,12 @@ export default function LeaderboardTable({ entries }: Props) {
                 <span className="w-7 md:w-8 text-sm md:text-lg font-black text-[#9AA0A6] text-center shrink-0">
                   #{rank}
                 </span>
-                <span className="flex-1 min-w-0 flex items-center gap-2 text-sm md:text-lg font-semibold text-[#202124]">
-                  <GameBadge game={entry.game} />
-                  <span className="truncate min-w-0">{entry.name}</span>
+                <span className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+                  <span className="truncate min-w-0 text-sm md:text-lg font-semibold text-[#202124]">{entry.name}</span>
+                  <GameChips games={entry.games} />
                 </span>
-                <span className={`text-sm md:text-lg font-black w-9 md:w-12 text-right shrink-0 ${SCORE_TEXT}`}>
-                  {entry.score}
+                <span className={`text-sm md:text-lg font-black text-right shrink-0 whitespace-nowrap ${SCORE_TEXT}`}>
+                  {entry.score} <span className="text-xs font-semibold text-[#5F6368]">pts</span>
                 </span>
               </div>
             );
