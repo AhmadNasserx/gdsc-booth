@@ -85,7 +85,7 @@ export default function LeaderboardPage() {
       </div>
 
       <p className="text-center text-xs text-[#9AA0A6] mt-8 md:mt-10">
-        Scores reset automatically after 48 hours
+        Ties go to whoever reached their total first · Scores reset automatically after 48 hours
       </p>
     </div>
   );

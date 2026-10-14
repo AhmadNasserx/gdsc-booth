@@ -2,29 +2,20 @@ export type Tab = 'riddles' | 'trivia' | 'password' | 'wordle' | 'memory' | 'bug
 
 export const TABS: Tab[] = ['riddles', 'trivia', 'password', 'wordle', 'memory', 'bugs'];
 
-export interface QuestionsPackage {
-  riddleIndices: number[];
-  triviaIndices: number[];
-  bugIndices: number[];
-  wordleWord: string;
-}
-
+/** Contents of the signed session token. Nothing about the questions travels in it. */
 export interface SessionPayload {
   sessionId: string;
   name: string;
   issuedAt: number;
-  questions: QuestionsPackage;
 }
 
 export interface LeaderboardEntry {
   name: string;
+  /** Sum of the player's best score in each game they have played. */
   score: number;
-  game?: Tab;
+  /** Best score per game (0 is a valid best). */
+  games?: Partial<Record<Tab, number>>;
+  /** When the current total was last reached. Earlier timestamps win ties. */
   timestamp: number;
-  expiresAt: number;
-}
-
-export interface SubmissionRecord {
-  rank: number;
   expiresAt: number;
 }
