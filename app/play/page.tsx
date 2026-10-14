@@ -12,7 +12,6 @@ import MemoryMatch from '@/components/games/MemoryMatch';
 import PasswordChallenge from '@/components/games/PasswordChallenge';
 import type {
   ActionBody,
-  AnswerResponse,
   BatchResponse,
   FlipResponse,
   GameView,
@@ -265,7 +264,7 @@ function renderGame(
       return (
         <EmojiRiddles
           questions={view.questions}
-          act={(body) => act<AnswerResponse>(body)}
+          act={(body) => act<BatchResponse>(body)}
           onDone={onDone}
         />
       );
@@ -281,7 +280,7 @@ function renderGame(
       return (
         <BugHunter
           questions={view.questions}
-          act={(body) => act<AnswerResponse>(body)}
+          act={(body) => act<BatchResponse>(body)}
           onDone={onDone}
         />
       );

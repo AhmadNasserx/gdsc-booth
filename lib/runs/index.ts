@@ -1,14 +1,21 @@
 import type { GameView } from '../apiTypes';
 import type { Tab } from '../types';
-import type { RandomInt, Step } from './shared';
-import { applyBugAnswer, hydrateBugs, parseBugAction, startBugs, type BugState } from './bugs';
-import { applyRiddleAnswer, hydrateRiddles, parseRiddleAction, startRiddles, type RiddleState } from './riddles';
+import type { BatchAction, BatchReply, RandomInt, Step } from './shared';
+import { gradeBugs, hydrateBugs, parseBugBatch, startBugs, type BugState } from './bugs';
+import { gradeRiddles, hydrateRiddles, parseRiddleBatch, startRiddles, type RiddleState } from './riddles';
 import { applyMemoryFlip, hydrateMemory, parseMemoryAction, startMemory, type MemoryState } from './memory';
 import { applyPassword, hydratePassword, parsePasswordAction, startPassword, type PasswordState } from './password';
-import { applyTriviaAction, hydrateTrivia, parseTriviaAction, startTrivia, type TriviaState } from './trivia';
+import { gradeTrivia, hydrateTrivia, parseTriviaBatch, startTrivia, type TriviaState } from './trivia';
 import { applyWordleGuess, hydrateWordle, parseWordleAction, startWordle, type WordleState } from './wordle';
 
 export type GameState = RiddleState | TriviaState | BugState | WordleState | MemoryState | PasswordState;
+
+/** Games graded in one batch submission. Their questions are answered locally and sent together. */
+export type BatchGame = 'riddles' | 'trivia' | 'bugs';
+
+export function isBatchGame(game: Tab): game is BatchGame {
+  return game === 'riddles' || game === 'trivia' || game === 'bugs';
+}
 
 /**
  * Fresh content for one run. `picked` is the pool selection for the content games (indices, or
@@ -40,9 +47,9 @@ export function hydrateState(game: Tab, raw: unknown): GameState {
 }
 
 export type ParsedAction =
-  | { game: 'riddles'; action: ReturnType<typeof parseRiddleAction> }
-  | { game: 'trivia'; action: ReturnType<typeof parseTriviaAction> }
-  | { game: 'bugs'; action: ReturnType<typeof parseBugAction> }
+  | { game: 'riddles'; action: BatchAction<string> }
+  | { game: 'trivia'; action: BatchAction<string> }
+  | { game: 'bugs'; action: BatchAction<number> }
   | { game: 'wordle'; action: ReturnType<typeof parseWordleAction> }
   | { game: 'memory'; action: ReturnType<typeof parseMemoryAction> }
   | { game: 'password'; action: ReturnType<typeof parsePasswordAction> };
@@ -50,9 +57,9 @@ export type ParsedAction =
 /** Checks the body against the shape this game accepts. Throws RunError(400) otherwise. */
 export function parseAction(game: Tab, body: Record<string, unknown>): ParsedAction {
   switch (game) {
-    case 'riddles': return { game, action: parseRiddleAction(body) };
-    case 'trivia': return { game, action: parseTriviaAction(body) };
-    case 'bugs': return { game, action: parseBugAction(body) };
+    case 'riddles': return { game, action: { answers: parseRiddleBatch(body) } };
+    case 'trivia': return { game, action: { answers: parseTriviaBatch(body) } };
+    case 'bugs': return { game, action: { answers: parseBugBatch(body) } };
     case 'wordle': return { game, action: parseWordleAction(body) };
     case 'memory': return { game, action: parseMemoryAction(body) };
     case 'password': return { game, action: parsePasswordAction(body) };
@@ -63,11 +70,11 @@ export function parseAction(game: Tab, body: Record<string, unknown>): ParsedAct
 export function applyAction(state: GameState, parsed: ParsedAction): Step<GameState, Record<string, unknown>> {
   switch (parsed.game) {
     case 'riddles':
-      return applyRiddleAnswer(state as RiddleState, parsed.action) as Step<GameState, Record<string, unknown>>;
+      return gradeRiddles(state as RiddleState, parsed.action.answers) as Step<GameState, BatchReply>;
     case 'trivia':
-      return applyTriviaAction(state as TriviaState, parsed.action) as Step<GameState, Record<string, unknown>>;
+      return gradeTrivia(state as TriviaState, parsed.action.answers) as Step<GameState, BatchReply>;
     case 'bugs':
-      return applyBugAnswer(state as BugState, parsed.action) as Step<GameState, Record<string, unknown>>;
+      return gradeBugs(state as BugState, parsed.action.answers) as Step<GameState, BatchReply>;
     case 'wordle':
       return applyWordleGuess(state as WordleState, parsed.action) as Step<GameState, Record<string, unknown>>;
     case 'memory':
