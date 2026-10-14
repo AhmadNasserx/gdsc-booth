@@ -5,7 +5,7 @@ import {
   expectQuestion,
   listOf,
   numberOf,
-  optionalQuestionIndex,
+  requiredQuestionIndex,
   pickIndices,
   RunError,
   secureRandomInt,
@@ -24,13 +24,16 @@ export interface TriviaState {
 }
 
 export type TriviaAction =
-  | { kind: 'answer'; answer: string; q?: number }
+  | { kind: 'answer'; answer: string; q: number }
   | { kind: 'finish' };
 
 export type TriviaResponse = Omit<AnswerResponse, 'done' | 'result'> | Omit<FinishResponse, 'done' | 'result'>;
 
-export function startTrivia(rand: RandomInt = secureRandomInt): { state: TriviaState; view: { game: 'trivia'; questions: TriviaView[] } } {
-  const indices = pickIndices(TRIVIA_POOL.length, TRIVIA_COUNT, rand);
+export function startTrivia(
+  picked?: number[],
+  rand: RandomInt = secureRandomInt,
+): { state: TriviaState; view: { game: 'trivia'; questions: TriviaView[] } } {
+  const indices = picked ?? pickIndices(TRIVIA_POOL.length, TRIVIA_COUNT, rand);
   const questions = indices.map((i) => {
     const q = TRIVIA_POOL[i];
     return { question: q.question, options: shuffle(q.options, rand) };
@@ -49,7 +52,7 @@ export function hydrateTrivia(raw: Partial<TriviaState> | null | undefined): Tri
 export function parseTriviaAction(body: Record<string, unknown>): TriviaAction {
   if (body.finish === true) return { kind: 'finish' };
   if (typeof body.answer !== 'string') throw new RunError(400, 'answer must be a string or finish must be true');
-  return { kind: 'answer', answer: body.answer, q: optionalQuestionIndex(body) };
+  return { kind: 'answer', answer: body.answer, q: requiredQuestionIndex(body) };
 }
 
 export function applyTriviaAction(state: TriviaState, action: TriviaAction): Step<TriviaState, TriviaResponse> {

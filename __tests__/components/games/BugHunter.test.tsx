@@ -108,7 +108,7 @@ describe('BugHunter', () => {
 
     await tap(line(3));
 
-    expect(mockAct).toHaveBeenCalledWith({ answer: 2 });
+    expect(mockAct).toHaveBeenCalledWith({ answer: 2, q: 0 });
     expect(screen.getByRole('button', { name: /your answer, correct$/ })).toBeInTheDocument();
     expect(screen.getByText('+40')).toBeInTheDocument();
     expect(screen.getByText('40 pts')).toBeInTheDocument();
@@ -167,7 +167,7 @@ describe('BugHunter', () => {
     await tap(screen.getByRole('button', { name: 'Try again' }));
 
     expect(mockAct).toHaveBeenCalledTimes(2);
-    expect(mockAct).toHaveBeenLastCalledWith({ answer: 2 });
+    expect(mockAct).toHaveBeenLastCalledWith({ answer: 2, q: 0 });
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByText('40 pts')).toBeInTheDocument();
   });
@@ -202,7 +202,11 @@ describe('BugHunter', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Finish' }));
     expect(onDone).toHaveBeenCalledTimes(1);
     expect(onDone).toHaveBeenCalledWith(result);
-    expect(mockAct.mock.calls).toEqual([[{ answer: 2 }], [{ answer: 1 }], [{ answer: 1 }]]);
+    expect(mockAct.mock.calls).toEqual([
+      [{ answer: 2, q: 0 }],
+      [{ answer: 1, q: 1 }],
+      [{ answer: 1, q: 2 }],
+    ]);
   });
 
   it('shows Finish straight away for a single snippet and reports the result once', async () => {
@@ -218,5 +222,27 @@ describe('BugHunter', () => {
     expect(onDone).toHaveBeenCalledTimes(1);
     expect(onDone).toHaveBeenCalledWith(result);
     expect(mockAct).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-sends the same question index after a failed pick on a later snippet', async () => {
+    mockAct
+      .mockResolvedValueOnce(reply(true, 2, EXPLANATION_1))
+      .mockRejectedValueOnce(new Error('Server busy'))
+      .mockResolvedValueOnce(reply(false, 0, EXPLANATION_2));
+    render(<BugHunter questions={questions} act={mockAct} onDone={jest.fn()} />);
+
+    await tap(line(3));
+    fireEvent.click(screen.getByRole('button', { name: 'Next →' }));
+    await tap(line(2));
+    expect(screen.getByRole('alert')).toHaveTextContent('Server busy');
+    expect(screen.getByText('Snippet 2 of 3')).toBeInTheDocument();
+
+    await tap(screen.getByRole('button', { name: 'Try again' }));
+    expect(mockAct.mock.calls).toEqual([
+      [{ answer: 2, q: 0 }],
+      [{ answer: 1, q: 1 }],
+      [{ answer: 1, q: 1 }],
+    ]);
+    expect(screen.getByText(/Not quite\. The bug is on line 1\./)).toBeInTheDocument();
   });
 });

@@ -4,7 +4,7 @@ import {
   expectQuestion,
   listOf,
   numberOf,
-  optionalQuestionIndex,
+  requiredQuestionIndex,
   pickIndices,
   RunError,
   secureRandomInt,
@@ -23,13 +23,16 @@ export interface BugState {
 
 export interface BugAction {
   answer: number;
-  q?: number;
+  q: number;
 }
 
 export type BugResponse = Omit<AnswerResponse, 'done' | 'result'>;
 
-export function startBugs(rand: RandomInt = secureRandomInt): { state: BugState; view: { game: 'bugs'; questions: BugView[] } } {
-  const indices = pickIndices(BUG_POOL.length, BUG_COUNT, rand);
+export function startBugs(
+  picked?: number[],
+  rand: RandomInt = secureRandomInt,
+): { state: BugState; view: { game: 'bugs'; questions: BugView[] } } {
+  const indices = picked ?? pickIndices(BUG_POOL.length, BUG_COUNT, rand);
   const questions = indices.map((i) => {
     const bug = BUG_POOL[i];
     return { title: bug.title, language: bug.language, lines: [...bug.lines] };
@@ -47,7 +50,7 @@ export function hydrateBugs(raw: Partial<BugState> | null | undefined): BugState
 
 export function parseBugAction(body: Record<string, unknown>): BugAction {
   if (!Number.isInteger(body.answer)) throw new RunError(400, 'answer must be a line index');
-  return { answer: body.answer as number, q: optionalQuestionIndex(body) };
+  return { answer: body.answer as number, q: requiredQuestionIndex(body) };
 }
 
 export function applyBugAnswer(state: BugState, action: BugAction): Step<BugState, BugResponse> {

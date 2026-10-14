@@ -7,7 +7,7 @@ const POINTS = 40;
 
 interface Props {
   questions: BugView[];
-  act: (body: { answer: number }) => Promise<AnswerResponse>;
+  act: (body: { answer: number; q: number }) => Promise<AnswerResponse>;
   onDone: (result: RunResult) => void;
 }
 
@@ -23,7 +23,7 @@ export default function BugHunter({ questions, act, onDone }: Props) {
   const [score, setScore] = useState(0);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [failedLine, setFailedLine] = useState<number | null>(null);
+  const [failed, setFailed] = useState<{ line: number; q: number } | null>(null);
   // Set by the last answer's response; Finish reports it without another request.
   const [finalResult, setFinalResult] = useState<RunResult | null>(null);
   // Refs reject rapid repeat taps before React re-renders.
@@ -42,20 +42,20 @@ export default function BugHunter({ questions, act, onDone }: Props) {
   const correct = revealed && chosen === correctLine;
   const isLast = idx === questions.length - 1;
 
-  async function pick(line: number) {
+  async function pick(line: number, q: number) {
     if (busyRef.current || chosenRef.current !== null || finishedRef.current) return;
     busyRef.current = true;
     setSending(true);
     setError(null);
-    setFailedLine(null);
+    setFailed(null);
 
     let res: AnswerResponse;
     try {
-      res = await act({ answer: line });
+      res = await act({ answer: line, q });
     } catch (err) {
       busyRef.current = false;
       setSending(false);
-      setFailedLine(line);
+      setFailed({ line, q });
       setError(errorMessage(err));
       return;
     }
@@ -156,7 +156,7 @@ export default function BugHunter({ questions, act, onDone }: Props) {
                   <button
                     key={n}
                     type="button"
-                    onClick={() => pick(n)}
+                    onClick={() => pick(n, idx)}
                     disabled={revealed || sending}
                     aria-label={`Line ${n + 1}: ${line.trim()}${statusLabel ? `, ${statusLabel}` : ''}`}
                     className={`flex min-h-11 w-full items-center gap-3 px-3 py-2 text-left transition-colors disabled:cursor-default ${rowClass}`}
@@ -195,7 +195,7 @@ export default function BugHunter({ questions, act, onDone }: Props) {
             <button
               type="button"
               onClick={() => {
-                if (failedLine !== null) pick(failedLine);
+                if (failed) pick(failed.line, failed.q);
               }}
               disabled={sending}
               className="rounded-full bg-[#1A73E8] px-5 py-2 text-xs font-bold text-white shadow-md transition-all hover:bg-[#1557B0] active:scale-95 disabled:opacity-60"

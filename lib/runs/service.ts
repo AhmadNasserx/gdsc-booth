@@ -4,6 +4,7 @@ import { normalizeName } from '../names';
 import type { LeaderboardEntry, SessionPayload, Tab } from '../types';
 import type { MeResponse, RunResult, StartResponse } from '../apiTypes';
 import { startGame } from './index';
+import { CONTENT_COUNT, contentKeys, isContentGame, pickFresh, SEEN_TTL_MS, servedFrom, type ContentGame, type SeenRecord } from './content';
 import { applyRunToEntry, computeRank, gamesPlayedOf, isLive, liveEntries, sumBests } from './ranking';
 import { RUN_TTL_MS, RunError, toStorable, type RunRecord } from './shared';
 import { transition, type Transition } from './transition';
@@ -11,13 +12,32 @@ import { transition, type Transition } from './transition';
 type Json = Record<string, unknown>;
 
 /** Starts a fresh run of one game. The previous run of the same game in this session is abandoned. */
+/**
+ * Picks content this player has not been served yet. The seen record is read and written in one
+ * transaction, so two starts at the same moment cannot be given the same questions.
+ */
+async function pickContent(normKey: string, game: ContentGame, now: number): Promise<Array<number | string>> {
+  const box: { picked?: Array<number | string> } = {};
+  await adminDb.ref(`seen/${normKey}/${game}`).transaction((current) => {
+    const served = servedFrom(current, now);
+    const result = pickFresh(contentKeys(game), served, CONTENT_COUNT[game]);
+    box.picked = result.picked;
+    const record: SeenRecord = { served: result.served, expiresAt: now + SEEN_TTL_MS };
+    return toStorable(record);
+  });
+  if (!box.picked) throw new Error('seen transaction did not run');
+  return box.picked;
+}
+
 export async function startRun(session: SessionPayload, game: Tab, now: number): Promise<StartResponse> {
   const runId = randomUUID();
-  const { state, view } = startGame(game);
+  const normKey = normalizeName(session.name);
+  const picked = isContentGame(game) ? await pickContent(normKey, game, now) : undefined;
+  const { state, view } = startGame(game, picked);
   const run: RunRecord = {
     sessionId: session.sessionId,
     game,
-    normKey: normalizeName(session.name),
+    normKey,
     name: session.name,
     startedAt: now,
     lastActionAt: now,

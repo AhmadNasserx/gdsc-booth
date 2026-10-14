@@ -8,7 +8,7 @@ const FEEDBACK_MS = 1100;
 
 interface Props {
   questions: RiddleView[];
-  act: (body: { answer: string }) => Promise<AnswerResponse>;
+  act: (body: { answer: string; q: number }) => Promise<AnswerResponse>;
   onDone: (result: RunResult) => void;
 }
 
@@ -23,7 +23,7 @@ export default function EmojiRiddles({ questions, act, onDone }: Props) {
   const [correctAnswer, setCorrectAnswer] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [failedOpt, setFailedOpt] = useState<string | null>(null);
+  const [failed, setFailed] = useState<{ answer: string; q: number } | null>(null);
   const [animKey, setAnimKey] = useState(0);
   const [animType, setAnimType] = useState<'pop' | 'shake' | null>(null);
   // Refs block double taps before React re-renders; doneRef keeps onDone to one call.
@@ -38,20 +38,20 @@ export default function EmojiRiddles({ questions, act, onDone }: Props) {
     };
   }, []);
 
-  async function submit(opt: string) {
+  async function submit(opt: string, q: number) {
     if (busyRef.current || doneRef.current || chosenRef.current !== null) return;
     busyRef.current = true;
     setBusy(true);
     setError(null);
-    setFailedOpt(null);
+    setFailed(null);
 
     let res: AnswerResponse;
     try {
-      res = await act({ answer: opt });
+      res = await act({ answer: opt, q });
     } catch (err) {
       busyRef.current = false;
       setBusy(false);
-      setFailedOpt(opt);
+      setFailed({ answer: opt, q });
       setError(errorMessage(err));
       return;
     }
@@ -108,7 +108,7 @@ export default function EmojiRiddles({ questions, act, onDone }: Props) {
             <button
               key={opt}
               type="button"
-              onClick={() => submit(opt)}
+              onClick={() => submit(opt, idx)}
               disabled={busy || revealed}
               className={`p-4 text-sm font-semibold rounded-2xl border-2 transition-all duration-150 disabled:opacity-60 ${
                 revealed
@@ -135,7 +135,7 @@ export default function EmojiRiddles({ questions, act, onDone }: Props) {
           <button
             type="button"
             onClick={() => {
-              if (failedOpt !== null) submit(failedOpt);
+              if (failed) submit(failed.answer, failed.q);
             }}
             disabled={busy}
             className="rounded-full bg-[#1A73E8] px-5 py-2 text-xs font-bold text-white shadow-md transition-all hover:bg-[#1557B0] active:scale-95 disabled:opacity-60"

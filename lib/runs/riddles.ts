@@ -4,7 +4,7 @@ import {
   expectQuestion,
   listOf,
   numberOf,
-  optionalQuestionIndex,
+  requiredQuestionIndex,
   pickIndices,
   RunError,
   secureRandomInt,
@@ -25,13 +25,16 @@ export interface RiddleState {
 
 export interface RiddleAction {
   answer: string;
-  q?: number;
+  q: number;
 }
 
 export type RiddleResponse = Omit<AnswerResponse, 'done' | 'result'>;
 
-export function startRiddles(rand: RandomInt = secureRandomInt): { state: RiddleState; view: { game: 'riddles'; questions: RiddleView[] } } {
-  const indices = pickIndices(RIDDLE_POOL.length, RIDDLE_COUNT, rand);
+export function startRiddles(
+  picked?: number[],
+  rand: RandomInt = secureRandomInt,
+): { state: RiddleState; view: { game: 'riddles'; questions: RiddleView[] } } {
+  const indices = picked ?? pickIndices(RIDDLE_POOL.length, RIDDLE_COUNT, rand);
   const questions = indices.map((i) => {
     const riddle = RIDDLE_POOL[i];
     return { emojis: riddle.emojis, hint: riddle.hint, options: shuffle(riddle.options, rand) };
@@ -49,7 +52,7 @@ export function hydrateRiddles(raw: Partial<RiddleState> | null | undefined): Ri
 
 export function parseRiddleAction(body: Record<string, unknown>): RiddleAction {
   if (typeof body.answer !== 'string') throw new RunError(400, 'answer must be a string');
-  return { answer: body.answer, q: optionalQuestionIndex(body) };
+  return { answer: body.answer, q: requiredQuestionIndex(body) };
 }
 
 export function applyRiddleAnswer(state: RiddleState, action: RiddleAction): Step<RiddleState, RiddleResponse> {
