@@ -7,6 +7,15 @@ import { RunError } from '@/lib/runs/shared';
 
 const FIXED: BugState = { indices: [0, 1, 2, 3, 4], answers: [], correct: 0 };
 
+function statusOf(fn: () => unknown): number | undefined {
+  try {
+    fn();
+  } catch (err) {
+    return err instanceof RunError ? err.status : -1;
+  }
+  return undefined;
+}
+
 describe('startBugs', () => {
   it('shows five snippets with title, language and lines only', () => {
     const { view } = startBugs();
@@ -24,6 +33,11 @@ describe('startBugs', () => {
       expect(view.questions[i].lines).toEqual(BUG_POOL[poolIndex].lines);
     });
   });
+
+  it('uses the picked pool indices when given', () => {
+    const { state } = startBugs([3, 4, 5, 6, 7]);
+    expect(state.indices).toEqual([3, 4, 5, 6, 7]);
+  });
 });
 
 describe('hydrateBugs', () => {
@@ -34,17 +48,21 @@ describe('hydrateBugs', () => {
 
 describe('parseBugAction', () => {
   it('requires an integer line index', () => {
-    expect(parseBugAction({ answer: 3 })).toEqual({ answer: 3, q: undefined });
-    expect(() => parseBugAction({ answer: '3' })).toThrow(RunError);
-    expect(() => parseBugAction({ answer: 1.5 })).toThrow(RunError);
-    expect(() => parseBugAction({})).toThrow(RunError);
+    expect(parseBugAction({ answer: 3, q: 0 })).toEqual({ answer: 3, q: 0 });
+    expect(() => parseBugAction({ answer: '3', q: 0 })).toThrow(RunError);
+    expect(() => parseBugAction({ answer: 1.5, q: 0 })).toThrow(RunError);
+    expect(() => parseBugAction({ q: 0 })).toThrow(RunError);
+  });
+
+  it('requires the question index q', () => {
+    expect(statusOf(() => parseBugAction({ answer: 3 }))).toBe(400);
   });
 });
 
 describe('applyBugAnswer', () => {
   it('grades the correct line, with the explanation after answering', () => {
     const bug = BUG_POOL[0];
-    const step = applyBugAnswer(FIXED, { answer: bug.answer });
+    const step = applyBugAnswer(FIXED, { answer: bug.answer, q: 0 });
     expect(step.response).toEqual({ correct: true, correctAnswer: bug.answer, explanation: bug.explanation });
     expect(step.state.correct).toBe(1);
   });
@@ -52,23 +70,24 @@ describe('applyBugAnswer', () => {
   it('grades a wrong line as wrong and still reveals the answer', () => {
     const bug = BUG_POOL[0];
     const wrongLine = bug.answer === 0 ? 1 : 0;
-    const step = applyBugAnswer(FIXED, { answer: wrongLine });
+    const step = applyBugAnswer(FIXED, { answer: wrongLine, q: 0 });
     expect(step.response.correct).toBe(false);
     expect(step.response.correctAnswer).toBe(bug.answer);
   });
 
   it('rejects a line index outside the snippet', () => {
     const lines = BUG_POOL[0].lines.length;
-    expect(() => applyBugAnswer(FIXED, { answer: lines })).toThrow(RunError);
-    expect(() => applyBugAnswer(FIXED, { answer: -1 })).toThrow(RunError);
+    expect(() => applyBugAnswer(FIXED, { answer: lines, q: 0 })).toThrow(RunError);
+    expect(() => applyBugAnswer(FIXED, { answer: -1, q: 0 })).toThrow(RunError);
   });
 
   it('finishes after five answers with performance correct / 5', () => {
     let state: BugState = FIXED;
     let last;
     for (let i = 0; i < 5; i++) {
-      const answer = i < 4 ? BUG_POOL[FIXED.indices[i]].answer : (BUG_POOL[FIXED.indices[i]].answer + 1) % BUG_POOL[FIXED.indices[i]].lines.length;
-      last = applyBugAnswer(state, { answer });
+      const bug = BUG_POOL[FIXED.indices[i]];
+      const answer = i < 4 ? bug.answer : (bug.answer + 1) % bug.lines.length;
+      last = applyBugAnswer(state, { answer, q: i });
       state = last.state;
     }
     expect(last?.performance).toBe(4 / 5);
@@ -76,10 +95,11 @@ describe('applyBugAnswer', () => {
 
   it('refuses a sixth answer', () => {
     const done: BugState = { ...FIXED, answers: [0, 0, 0, 0, 0] };
-    expect(() => applyBugAnswer(done, { answer: 0 })).toThrow(RunError);
+    expect(() => applyBugAnswer(done, { answer: 0, q: 5 })).toThrow(RunError);
   });
 
-  it('enforces the question order when q is given', () => {
-    expect(() => applyBugAnswer(FIXED, { answer: 0, q: 2 })).toThrow(RunError);
+  it('enforces the question order: q must be the open question', () => {
+    expect(statusOf(() => applyBugAnswer(FIXED, { answer: 0, q: 2 }))).toBe(409);
+    expect(statusOf(() => applyBugAnswer(FIXED, { answer: 0, q: 0 }))).toBeUndefined();
   });
 });

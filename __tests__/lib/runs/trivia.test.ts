@@ -8,6 +8,15 @@ import { RunError } from '@/lib/runs/shared';
 const ALL_INDICES = Array.from({ length: 15 }, (_, i) => i);
 const FRESH: TriviaState = { indices: ALL_INDICES, answers: [], points: 0 };
 
+function statusOf(fn: () => unknown): number | undefined {
+  try {
+    fn();
+  } catch (err) {
+    return err instanceof RunError ? err.status : -1;
+  }
+  return undefined;
+}
+
 describe('startTrivia', () => {
   it('asks 15 distinct questions with options only', () => {
     const { state, view } = startTrivia();
@@ -19,6 +28,11 @@ describe('startTrivia', () => {
     }
     expect(JSON.stringify(view)).not.toContain('"answer"');
   });
+
+  it('uses the picked pool indices when given', () => {
+    const picked = Array.from({ length: 15 }, (_, i) => i + 2);
+    expect(startTrivia(picked).state.indices).toEqual(picked);
+  });
 });
 
 describe('hydrateTrivia', () => {
@@ -28,18 +42,22 @@ describe('hydrateTrivia', () => {
 });
 
 describe('parseTriviaAction', () => {
-  it('reads {finish:true} as a finish', () => {
+  it('reads {finish:true} as a finish, which needs no q', () => {
     expect(parseTriviaAction({ finish: true })).toEqual({ kind: 'finish' });
   });
 
-  it('reads a string answer', () => {
-    expect(parseTriviaAction({ answer: 'Flutter' })).toEqual({ kind: 'answer', answer: 'Flutter' });
+  it('reads a string answer with its required q', () => {
+    expect(parseTriviaAction({ answer: 'Flutter', q: 1 })).toEqual({ kind: 'answer', answer: 'Flutter', q: 1 });
+  });
+
+  it('requires q on an answer', () => {
+    expect(statusOf(() => parseTriviaAction({ answer: 'Flutter' }))).toBe(400);
   });
 
   it('rejects a body with neither an answer nor a finish', () => {
-    expect(() => parseTriviaAction({})).toThrow(RunError);
+    expect(() => parseTriviaAction({ q: 0 })).toThrow(RunError);
     expect(() => parseTriviaAction({ finish: false })).toThrow(RunError);
-    expect(() => parseTriviaAction({ answer: 2 })).toThrow(RunError);
+    expect(() => parseTriviaAction({ answer: 2, q: 0 })).toThrow(RunError);
   });
 });
 
@@ -47,26 +65,26 @@ describe('applyTriviaAction', () => {
   const rightOf = (i: number) => TRIVIA_POOL[i].answer;
 
   it('adds 20 points for a right answer', () => {
-    const step = applyTriviaAction(FRESH, { kind: 'answer', answer: rightOf(0) });
+    const step = applyTriviaAction(FRESH, { kind: 'answer', answer: rightOf(0), q: 0 });
     expect(step.state.points).toBe(20);
     expect(step.response).toEqual({ correct: true, correctAnswer: rightOf(0) });
   });
 
   it('takes 10 points for a wrong answer, never below zero', () => {
-    const step = applyTriviaAction(FRESH, { kind: 'answer', answer: '' });
+    const step = applyTriviaAction(FRESH, { kind: 'answer', answer: '', q: 0 });
     expect(step.state.points).toBe(0);
     expect(step.response).toMatchObject({ correct: false });
   });
 
   it('rejects text that is not one of the options', () => {
-    expect(() => applyTriviaAction(FRESH, { kind: 'answer', answer: 'nope' })).toThrow(RunError);
+    expect(() => applyTriviaAction(FRESH, { kind: 'answer', answer: 'nope', q: 0 })).toThrow(RunError);
   });
 
   it('evolves points over several answers: right, wrong, right, right', () => {
     let state = FRESH;
     const picks = [true, false, true, true];
     picks.forEach((right, i) => {
-      state = applyTriviaAction(state, { kind: 'answer', answer: right ? rightOf(i) : '' }).state;
+      state = applyTriviaAction(state, { kind: 'answer', answer: right ? rightOf(i) : '', q: i }).state;
     });
     expect(state.points).toBe(20 - 10 + 20 + 20);
   });
@@ -75,7 +93,7 @@ describe('applyTriviaAction', () => {
     let state = FRESH;
     let last;
     for (let i = 0; i < 15; i++) {
-      last = applyTriviaAction(state, { kind: 'answer', answer: rightOf(i) });
+      last = applyTriviaAction(state, { kind: 'answer', answer: rightOf(i), q: i });
       state = last.state;
     }
     expect(last?.performance).toBe(1);
@@ -83,7 +101,7 @@ describe('applyTriviaAction', () => {
 
   it('finishes early on {finish:true} with the answers so far', () => {
     let state = FRESH;
-    for (let i = 0; i < 3; i++) state = applyTriviaAction(state, { kind: 'answer', answer: rightOf(i) }).state;
+    for (let i = 0; i < 3; i++) state = applyTriviaAction(state, { kind: 'answer', answer: rightOf(i), q: i }).state;
     const step = applyTriviaAction(state, { kind: 'finish' });
     expect(step.performance).toBeCloseTo(60 / 300);
     expect(step.response).toEqual({});
@@ -95,11 +113,11 @@ describe('applyTriviaAction', () => {
 
   it('refuses a 16th answer', () => {
     const done = { ...FRESH, answers: Array(15).fill('x') };
-    expect(() => applyTriviaAction(done, { kind: 'answer', answer: '' })).toThrow(RunError);
+    expect(() => applyTriviaAction(done, { kind: 'answer', answer: '', q: 15 })).toThrow(RunError);
   });
 
-  it('enforces the question order when q is given', () => {
-    expect(() => applyTriviaAction(FRESH, { kind: 'answer', answer: '', q: 4 })).toThrow(RunError);
-    expect(() => applyTriviaAction(FRESH, { kind: 'answer', answer: '', q: 0 })).not.toThrow();
+  it('enforces the question order: q must be the open question', () => {
+    expect(statusOf(() => applyTriviaAction(FRESH, { kind: 'answer', answer: '', q: 4 }))).toBe(409);
+    expect(statusOf(() => applyTriviaAction(FRESH, { kind: 'answer', answer: '', q: 0 }))).toBeUndefined();
   });
 });

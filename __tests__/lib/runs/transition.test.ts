@@ -10,7 +10,7 @@ const T0 = 1_700_000_000_000;
 const SESSION = 'session-1';
 
 function runFor(game: 'riddles' | 'password' | 'memory' | 'wordle', overrides: Partial<RunRecord> = {}): RunRecord {
-  const { state } = startGame(game, () => 0);
+  const { state } = startGame(game);
   return {
     sessionId: SESSION,
     game,
@@ -71,8 +71,8 @@ describe('transition: gates', () => {
 
   it('429 inside the throttle window and allowed at exactly the window', () => {
     const run = runFor('riddles');
-    expect(statusOf(() => transition(run, SESSION, { answer: '' }, T0 + 299))).toBe(429);
-    expect(statusOf(() => transition(run, SESSION, { answer: '' }, T0 + 300))).toBeUndefined();
+    expect(statusOf(() => transition(run, SESSION, { answer: '', q: 0 }, T0 + 299))).toBe(429);
+    expect(statusOf(() => transition(run, SESSION, { answer: '', q: 0 }, T0 + 300))).toBeUndefined();
   });
 
   it('memory uses the 120ms window', () => {
@@ -84,13 +84,14 @@ describe('transition: gates', () => {
   it('a rejected body is a 400 and leaves the run untouched', () => {
     const run = frozen(runFor('riddles'));
     expect(statusOf(() => transition(run, SESSION, { flip: 1 }, T0 + 1000))).toBe(400);
+    expect(statusOf(() => transition(run, SESSION, { answer: '' }, T0 + 1000))).toBe(400);
   });
 });
 
 describe('transition: applying actions', () => {
   it('moves lastActionAt to now and keeps the run active while the game goes on', () => {
     const run = frozen(runFor('riddles'));
-    const t = transition(run, SESSION, { answer: '' }, T0 + 1000);
+    const t = transition(run, SESSION, { answer: '', q: 0 }, T0 + 1000);
     expect(t).toMatchObject({ kind: 'applied', finished: false, next: { status: 'active', lastActionAt: T0 + 1000 } });
     expect(run.lastActionAt).toBe(T0);
   });
@@ -123,7 +124,7 @@ describe('transition: applying actions', () => {
   });
 
   it('a riddles answer in the middle of a game does not finish it', () => {
-    const t = transition(runFor('riddles'), SESSION, { answer: '' }, T0 + 1000);
+    const t = transition(runFor('riddles'), SESSION, { answer: '', q: 0 }, T0 + 1000);
     expect(t.kind === 'applied' && t.next.final).toBeUndefined();
   });
 });

@@ -182,9 +182,9 @@ describe('POST /api/game/action: throttling', () => {
     const { token } = login();
     const { runId } = await start('riddles', token);
     tick(300);
-    expect((await act(token, runId, { answer: '' })).status).toBe(200);
+    expect((await act(token, runId, { answer: '', q: 0 })).status).toBe(200);
     tick(299);
-    const res = await act(token, runId, { answer: '' });
+    const res = await act(token, runId, { answer: '', q: 0 });
     expect(res.status).toBe(429);
     expect(res.data).toEqual({ error: 'Too fast' });
   });
@@ -193,9 +193,9 @@ describe('POST /api/game/action: throttling', () => {
     const { token } = login();
     const { runId } = await start('bugs', token);
     tick(300);
-    await act(token, runId, { answer: 0 });
+    await act(token, runId, { answer: 0, q: 0 });
     tick(300);
-    expect((await act(token, runId, { answer: 0 })).status).toBe(200);
+    expect((await act(token, runId, { answer: 0, q: 1 })).status).toBe(200);
   });
 
   it('uses a 120ms gap for memory flips', async () => {
@@ -213,9 +213,9 @@ describe('POST /api/game/action: throttling', () => {
     const { token } = login();
     const { runId } = await start('riddles', token);
     tick(300);
-    await act(token, runId, { answer: '' });
+    await act(token, runId, { answer: '', q: 0 });
     const before = run(runId);
-    await act(token, runId, { answer: '' });
+    await act(token, runId, { answer: '', q: 0 });
     expect(run(runId).state).toEqual(before.state);
   });
 
@@ -238,7 +238,7 @@ describe('riddles', () => {
     for (let i = 0; i < 5; i++) {
       tick();
       const answer = i < 3 ? RIDDLE_POOL[indices[i]].answer : '';
-      const res = await act(token, runId, { answer });
+      const res = await act(token, runId, { answer, q: i });
       expect(res.status).toBe(200);
       expect(res.data.correct).toBe(i < 3);
       expect(res.data.correctAnswer).toBe(RIDDLE_POOL[indices[i]].answer);
@@ -260,7 +260,7 @@ describe('riddles', () => {
     const { token } = login();
     const { runId } = await start('riddles', token);
     tick();
-    expect((await act(token, runId, { answer: '' })).status).toBe(200);
+    expect((await act(token, runId, { answer: '', q: 0 })).status).toBe(200);
     tick();
     expect((await act(token, runId, { answer: '', q: 0 })).status).toBe(409);
     expect(run(runId).state.answers).toHaveLength(1);
@@ -277,7 +277,7 @@ describe('riddles', () => {
     const { token } = login();
     const { runId } = await start('riddles', token);
     tick();
-    const res = await act(token, runId, { answer: 'Not An Option' });
+    const res = await act(token, runId, { answer: 'Not An Option', q: 0 });
     expect(res.status).toBe(400);
   });
 });
@@ -290,7 +290,7 @@ describe('trivia', () => {
     let last: Json = {};
     for (let i = 0; i < 15; i++) {
       tick();
-      last = (await act(token, runId, { answer: TRIVIA_POOL[indices[i]].answer })).data;
+      last = (await act(token, runId, { answer: TRIVIA_POOL[indices[i]].answer, q: i })).data;
     }
     expect(last.done).toBe(true);
     expect(last.result.score).toBeGreaterThan(1000);
@@ -304,7 +304,7 @@ describe('trivia', () => {
     const indices: number[] = run(runId).state.indices;
     for (let i = 0; i < 3; i++) {
       tick();
-      await act(token, runId, { answer: TRIVIA_POOL[indices[i]].answer });
+      await act(token, runId, { answer: TRIVIA_POOL[indices[i]].answer, q: i });
     }
     tick();
     const res = await act(token, runId, { finish: true });
@@ -327,7 +327,7 @@ describe('trivia', () => {
     tick();
     await act(token, runId, { finish: true });
     tick();
-    expect((await act(token, runId, { answer: '' })).status).toBe(409);
+    expect((await act(token, runId, { answer: '', q: 0 })).status).toBe(409);
   });
 });
 
@@ -340,7 +340,7 @@ describe('bug hunter', () => {
     for (let i = 0; i < 5; i++) {
       tick();
       const bug = BUG_POOL[indices[i]];
-      last = (await act(token, runId, { answer: bug.answer })).data;
+      last = (await act(token, runId, { answer: bug.answer, q: i })).data;
       expect(last.correct).toBe(true);
       expect(last.correctAnswer).toBe(bug.answer);
       expect(last.explanation).toBe(bug.explanation);
@@ -497,7 +497,7 @@ describe('double requests and retries', () => {
     const { token } = login();
     const { runId } = await start('riddles', token);
     tick();
-    const [a, b] = await Promise.all([act(token, runId, { answer: '' }), act(token, runId, { answer: '' })]);
+    const [a, b] = await Promise.all([act(token, runId, { answer: '', q: 0 }), act(token, runId, { answer: '', q: 0 })]);
     const statuses = [a.status, b.status].sort();
     expect(statuses).toEqual([200, 429].sort());
     expect(run(runId).state.answers).toHaveLength(1);
@@ -571,7 +571,7 @@ describe('leaderboard effects', () => {
     tick();
     for (let i = 0; i < 5; i++) {
       tick();
-      await act(token, first.runId, { answer: '' });
+      await act(token, first.runId, { answer: '', q: i });
     }
     const low = (readPath('leaderboard/ahmad') as Json).games.riddles as number;
 
@@ -579,7 +579,7 @@ describe('leaderboard effects', () => {
     const indices: number[] = run(second.runId).state.indices;
     for (let i = 0; i < 5; i++) {
       tick();
-      const res = await act(token, second.runId, { answer: i < 4 ? RIDDLE_POOL[indices[i]].answer : '' });
+      const res = await act(token, second.runId, { answer: i < 4 ? RIDDLE_POOL[indices[i]].answer : '', q: i });
       if (i === 4) {
         expect(res.data.result).toMatchObject({ improved: true, best: res.data.result.score });
         expect(res.data.result.score).toBeGreaterThan(low);
@@ -592,7 +592,7 @@ describe('leaderboard effects', () => {
     const third = await start('riddles', token);
     for (let i = 0; i < 5; i++) {
       tick();
-      await act(token, third.runId, { answer: '' });
+      await act(token, third.runId, { answer: '', q: i });
     }
     const after = readPath('leaderboard/ahmad') as Json;
     expect(after.games.riddles).toBe(afterHigh.games.riddles);
@@ -604,7 +604,7 @@ describe('leaderboard effects', () => {
     const { runId } = await start('bugs', token);
     for (let i = 0; i < 5; i++) {
       tick();
-      await act(token, runId, { answer: (BUG_POOL[run(runId).state.indices[i]].answer + 1) % 5 });
+      await act(token, runId, { answer: (BUG_POOL[run(runId).state.indices[i]].answer + 1) % 5, q: i });
     }
     const entry = readPath('leaderboard/ahmad') as Json;
     expect(entry.games).toEqual({ bugs: 0 });
@@ -640,7 +640,7 @@ describe('leaderboard effects', () => {
     let last: Json = {};
     for (let i = 0; i < 5; i++) {
       tick();
-      last = (await act(token, second, { answer: '' })).data;
+      last = (await act(token, second, { answer: '', q: i })).data;
     }
     expect(last.result.total).toBe(score);
     expect(last.result.rank).toBe(2);
@@ -657,7 +657,7 @@ describe('transactions that start from a cache miss', () => {
     let last: Json = {};
     for (let i = 0; i < 5; i++) {
       tick();
-      last = (await act(token, riddles.runId, { answer: i < 2 ? RIDDLE_POOL[indices[i]].answer : '' })).data;
+      last = (await act(token, riddles.runId, { answer: i < 2 ? RIDDLE_POOL[indices[i]].answer : '', q: i })).data;
     }
     expect(last.done).toBe(true);
     expect(last.result.score).toBe(calcRunScore('riddles', 0.4, clock.now - run(riddles.runId).startedAt));
@@ -668,5 +668,54 @@ describe('transactions that start from a cache miss', () => {
     const res = await act(token, pw.runId, { password: 'XkP9#mRv2!LqT7@wNbZcQdEf' });
     expect(res.data.result.total).toBe(last.result.score + res.data.result.score);
     expect(readPath('leaderboard/ahmad')).toMatchObject({ games: { riddles: last.result.score, password: res.data.result.score } });
+  });
+});
+
+describe('question index q on sequential answers', () => {
+  it.each([
+    ['riddles', { answer: '' }],
+    ['trivia', { answer: '' }],
+    ['bugs', { answer: 0 }],
+  ] as const)('%s: an answer without q is 400 and changes nothing', async (game, body) => {
+    const { token } = login();
+    const { runId } = await start(game, token);
+    tick();
+    const res = await act(token, runId, body);
+    expect(res.status).toBe(400);
+    expect(res.data.error).toMatch(/q \(question index\) is required/);
+    expect(run(runId).state.answers ?? []).toEqual([]);
+    expect(run(runId).lastActionAt).toBe(run(runId).startedAt);
+  });
+
+  it.each([
+    ['riddles', { answer: '', q: '0' }],
+    ['trivia', { answer: '', q: 0.5 }],
+    ['bugs', { answer: 0, q: -1 }],
+  ] as const)('%s: a non-integer or negative q is 400', async (game, body) => {
+    const { token } = login();
+    const { runId } = await start(game, token);
+    tick();
+    expect((await act(token, runId, body)).status).toBe(400);
+  });
+
+  it.each([
+    ['riddles', (i: number) => ({ answer: '', q: i })],
+    ['trivia', (i: number) => ({ answer: '', q: i })],
+    ['bugs', (i: number) => ({ answer: 0, q: i })],
+  ] as const)('%s: q for a question other than the open one is 409 and changes nothing', async (game, body) => {
+    const { token } = login();
+    const { runId } = await start(game, token);
+    tick();
+    const res = await act(token, runId, body(3));
+    expect(res.status).toBe(409);
+    expect(res.data).toEqual({ error: 'Answer is out of order' });
+    expect(run(runId).state.answers ?? []).toEqual([]);
+  });
+
+  it('trivia {finish:true} needs no q', async () => {
+    const { token } = login();
+    const { runId } = await start('trivia', token);
+    tick();
+    expect((await act(token, runId, { finish: true })).status).toBe(200);
   });
 });

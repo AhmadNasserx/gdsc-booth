@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 
-/** Paths whose entries carry an `expiresAt` timestamp. Expired entries are removed. */
+/** Top-level paths whose entries carry an `expiresAt` timestamp. Expired entries are removed. */
 const EXPIRING_PATHS = ['leaderboard', 'names', 'runs'];
 
 export async function GET(request: Request) {
@@ -19,6 +19,18 @@ export async function GET(request: Request) {
     for (const [key, entry] of Object.entries(data)) {
       if (typeof entry?.expiresAt === 'number' && entry.expiresAt < now) {
         await adminDb.ref(path).child(key).remove();
+        deleted++;
+      }
+    }
+  }
+
+  // seen/{normKey}/{game} is two levels deep: each game record has its own expiresAt.
+  const seenSnap = await adminDb.ref('seen').get();
+  const seen = (seenSnap.val() ?? {}) as Record<string, Record<string, { expiresAt?: number }>>;
+  for (const [normKey, games] of Object.entries(seen)) {
+    for (const [game, record] of Object.entries(games ?? {})) {
+      if (typeof record?.expiresAt === 'number' && record.expiresAt < now) {
+        await adminDb.ref(`seen/${normKey}`).child(game).remove();
         deleted++;
       }
     }

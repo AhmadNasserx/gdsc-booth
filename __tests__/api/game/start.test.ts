@@ -4,6 +4,7 @@
 import { POST } from '@/app/api/game/start/route';
 import { signSession, verifySession } from '@/lib/session';
 import { RIDDLE_POOL, TRIVIA_POOL, BUG_POOL, WORDLE_POOL } from '@/lib/questions';
+import { CONTENT_COUNT } from '@/lib/runs/content';
 import { TABS, type Tab } from '@/lib/types';
 import { clock, installClock, readPath, resetDb, simulateCacheMisses, writePath } from '@/test/support/rtdbMock';
 
@@ -231,5 +232,120 @@ describe('POST /api/game/start: settling a predecessor', () => {
     await startGame('password', t);
     expect(readPath('leaderboard/ahmad')).toBeNull();
     expect(readPath(`runs/${first.runId}`)).toMatchObject({ status: 'done' });
+  });
+});
+
+describe('POST /api/game/start: no repeats per player', () => {
+  const sizes = {
+    riddles: RIDDLE_POOL.length,
+    trivia: TRIVIA_POOL.length,
+    bugs: BUG_POOL.length,
+    wordle: WORDLE_POOL.length,
+  } as const;
+
+  /** The pool indices (or words) that a start handed out, read back from the stored run. */
+  function servedBy(runId: string, game: 'riddles' | 'trivia' | 'bugs' | 'wordle'): Array<number | string> {
+    const state = (readPath(`runs/${runId}`) as { state: Record<string, unknown> }).state;
+    if (game === 'wordle') return [state.word as string];
+    return state.indices as number[];
+  }
+
+  function seenFor(name: string, game: string): Array<number | string> {
+    return ((readPath(`seen/${name}/${game}`) as { served?: Array<number | string> } | null)?.served ?? []) as Array<number | string>;
+  }
+
+  it.each(['riddles', 'trivia', 'bugs', 'wordle'] as const)(
+    'consecutive %s starts never repeat until the pool is used up, then reset',
+    async (game) => {
+      const t = token('Ahmad');
+      const perStart = game === 'wordle' ? 1 : CONTENT_COUNT[game];
+      const pool = sizes[game];
+      const fullStarts = Math.floor(pool / perStart);
+      const seen = new Set<number | string>();
+
+      for (let i = 0; i < fullStarts; i++) {
+        const data = await startGame(game, t);
+        for (const k of servedBy(data.runId, game)) {
+          expect(seen.has(k)).toBe(false);
+          seen.add(k);
+        }
+        clock.now += 1000;
+      }
+      expect(seen.size).toBe(fullStarts * perStart);
+
+      // Next start: the leftovers come first, then the rest comes from what has been served
+      const leftover = pool - seen.size;
+      const next = await startGame(game, t);
+      const nextKeys = servedBy(next.runId, game);
+      expect(new Set(nextKeys).size).toBe(perStart);
+      if (leftover > 0) {
+        expect(nextKeys.filter((k) => !seen.has(k))).toHaveLength(leftover);
+      }
+      // The served list resets to exactly what was handed out now
+      expect([...seenFor('ahmad', game)].sort()).toEqual([...nextKeys].sort());
+    },
+  );
+
+  it('records the served keys with a 48 hour expiry that each start refreshes', async () => {
+    const t = token('Ahmad');
+    await startGame('bugs', t);
+    const first = readPath('seen/ahmad/bugs') as { expiresAt: number };
+    expect(first.expiresAt).toBe(clock.now + 48 * 60 * 60 * 1000);
+    clock.now += 60_000;
+    await startGame('bugs', t);
+    const second = readPath('seen/ahmad/bugs') as { expiresAt: number; served: number[] };
+    expect(second.expiresAt).toBe(clock.now + 48 * 60 * 60 * 1000);
+    expect(second.served).toHaveLength(10);
+  });
+
+  it('an expired record counts as nothing served', async () => {
+    const all = Array.from({ length: RIDDLE_POOL.length }, (_, i) => i);
+    writePath('seen/ahmad/riddles', { served: all, expiresAt: clock.now - 1 });
+    const data = await startGame('riddles', token('Ahmad'));
+    const keys = servedBy(data.runId, 'riddles');
+    expect(new Set(keys).size).toBe(CONTENT_COUNT.riddles);
+    expect([...seenFor('ahmad', 'riddles')].sort((a, b) => (a as number) - (b as number))).toEqual([...keys].sort((a, b) => (a as number) - (b as number)));
+  });
+
+  it('players are independent: one player exhausting a pool does not affect another', async () => {
+    const ahmad = token('Ahmad');
+    const bilal = token('Bilal');
+    for (let i = 0; i < 4; i++) await startGame('riddles', ahmad);
+    expect(seenFor('ahmad', 'riddles')).toHaveLength(20);
+
+    const first = await startGame('riddles', bilal);
+    expect(seenFor('bilal', 'riddles')).toHaveLength(5);
+    expect(new Set(servedBy(first.runId, 'riddles')).size).toBe(5);
+    expect(seenFor('ahmad', 'riddles')).toHaveLength(20);
+  });
+
+  it('two starts at the same moment are given different content', async () => {
+    const t = token('Ahmad');
+    // Riddles: two starts of 5 from a pool that holds both sets without overlap
+    const [a, b] = await Promise.all([startGame('riddles', t), startGame('riddles', t)]);
+    const keysA = servedBy(a.runId, 'riddles');
+    const keysB = servedBy(b.runId, 'riddles');
+    expect(keysA.filter((k) => keysB.includes(k))).toEqual([]);
+    expect(new Set(seenFor('ahmad', 'riddles')).size).toBe(10);
+  });
+
+  it('stays correct when the first pass of the transaction sees an empty cache', async () => {
+    simulateCacheMisses(true);
+    const t = token('Ahmad');
+    const seen = new Set<number>();
+    for (let i = 0; i < 3; i++) {
+      const data = await startGame('riddles', t);
+      for (const k of servedBy(data.runId, 'riddles')) {
+        expect(seen.has(k as number)).toBe(false);
+        seen.add(k as number);
+      }
+    }
+    expect(seen.size).toBe(15);
+  });
+
+  it('games without a pool (memory, password) leave no seen record', async () => {
+    await startGame('memory', token('Ahmad'));
+    await startGame('password', token('Ahmad'));
+    expect(readPath('seen/ahmad')).toBeNull();
   });
 });
