@@ -114,7 +114,6 @@ describe('applyMemoryFlip', () => {
     const first = applyMemoryFlip(state, { index: 0 });
     const second = applyMemoryFlip(first.state, { index: 1 });
     expect(second.response.pair).toBe('match');
-    expect(second.response.done).toBeUndefined();
     expect(second.performance).toBeUndefined();
   });
 

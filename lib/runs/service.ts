@@ -37,15 +37,39 @@ export async function startRun(session: SessionPayload, game: Tab, now: number):
 
   const previous = swapped.previous;
   if (previous && previous !== runId) {
-    await adminDb.ref(`runs/${previous}`).transaction((current) => {
+    await abandonOrSettle(previous, session, now);
+  }
+
+  return { runId, view };
+}
+
+/**
+ * Retires the run that a new start replaced. An active run is abandoned. A finished run whose
+ * score never reached the leaderboard is settled now, because the player cannot come back to it.
+ */
+async function abandonOrSettle(runId: string, session: SessionPayload, now: number): Promise<void> {
+  const snap = await adminDb.ref(`runs/${runId}`).get();
+  const prior = snap.val() as RunRecord | null;
+  if (!prior) return;
+
+  if (prior.status === 'active') {
+    await adminDb.ref(`runs/${runId}`).transaction((current) => {
       if (current === null || current === undefined) return null;
       const old = current as RunRecord;
       if (old.status !== 'active') return undefined;
       return { ...old, status: 'abandoned' };
     });
+    return;
   }
 
-  return { runId, view };
+  if (prior.status === 'done' && prior.final && !prior.final.settled) {
+    try {
+      await completeRun(runId, prior, session, now);
+    } catch (err) {
+      // Left unsettled, so a later retry can still record it. Starting a new game must not fail.
+      console.error('Could not settle a finished run', err);
+    }
+  }
 }
 
 interface LeaderboardEvent {
