@@ -40,7 +40,7 @@ Players pick **one** game to score. Only that game's score goes on the leaderboa
 | Password Challenge | Build the strongest password you can, scored live | Length, character variety and no predictable patterns (200 max) |
 | Tech Wordle | Guess a five-letter tech word in six tries, with a hint after two guesses | Fewer guesses, more points (300 max) |
 | Memory Match | Flip cards and match 8 tech pairs | Fewer moves and seconds, more points (1000 max) |
-| Bug Hunter | Spot the buggy line in 5 short code snippets | 40 pts per snippet (200 max) |
+| Bug Hunter | Spot the bug in 5 short Java snippets | 40 pts per snippet (200 max) |
 
 Every chosen score is normalised to a 0–1000 scale, so the leaderboard compares like with like no matter which game someone picked.
 

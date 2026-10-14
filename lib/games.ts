@@ -54,7 +54,7 @@ export const GAMES: Record<Tab, GameMeta> = {
     id: 'bugs',
     emoji: '🐞',
     title: 'Bug Hunter',
-    tagline: 'Spot the buggy line in 5 code snippets',
+    tagline: 'Spot the bug in Java code',
     howItScores: '40 pts each',
     maxRaw: 200,
   },
