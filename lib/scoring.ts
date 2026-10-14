@@ -33,8 +33,10 @@ function unit(p: number): number {
  */
 export function calcRunScore(game: Tab, performance: number, durationMs: number): number {
   const p = unit(performance);
-  const durationSec = Number.isFinite(durationMs) ? Math.max(0, durationMs) / 1000 : 0;
-  const speed = Math.max(0, 1 - durationSec / GAME_TIME_LIMIT[game]);
+  // An unknown duration earns no speed bonus.
+  const speed = Number.isFinite(durationMs)
+    ? Math.max(0, 1 - Math.max(0, durationMs) / 1000 / GAME_TIME_LIMIT[game])
+    : 0;
   return Math.round(BASE_POINTS * p) + Math.round(SPEED_POINTS * p * speed);
 }
 
