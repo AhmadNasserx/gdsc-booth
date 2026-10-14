@@ -1,12 +1,16 @@
 /**
  * @jest-environment node
  */
-import { applyTriviaAction, hydrateTrivia, parseTriviaAction, startTrivia, type TriviaState } from '@/lib/runs/trivia';
+import { gradeTrivia, hydrateTrivia, parseTriviaBatch, startTrivia, TRIVIA_COUNT, type TriviaState } from '@/lib/runs/trivia';
 import { TRIVIA_POOL } from '@/lib/questions';
 import { RunError } from '@/lib/runs/shared';
+import { triviaPerformance } from '@/lib/scoring';
 
 const ALL_INDICES = Array.from({ length: 15 }, (_, i) => i);
-const FRESH: TriviaState = { indices: ALL_INDICES, answers: [], points: 0 };
+const FRESH: TriviaState = { indices: ALL_INDICES };
+
+const rightOf = (i: number) => TRIVIA_POOL[ALL_INDICES[i]].answer;
+const wrongOf = (i: number) => TRIVIA_POOL[ALL_INDICES[i]].options.find((o) => o !== rightOf(i)) as string;
 
 function statusOf(fn: () => unknown): number | undefined {
   try {
@@ -36,88 +40,87 @@ describe('startTrivia', () => {
 });
 
 describe('hydrateTrivia', () => {
-  it('fills in a missing answers list', () => {
-    expect(hydrateTrivia({ indices: ALL_INDICES, points: 20 }).answers).toEqual([]);
+  it('keeps the question indices and fills in a missing list', () => {
+    expect(hydrateTrivia({ indices: ALL_INDICES })).toEqual(FRESH);
+    expect(hydrateTrivia(null)).toEqual({ indices: [] });
   });
 });
 
-describe('parseTriviaAction', () => {
-  it('reads {finish:true} as a finish, which needs no q', () => {
-    expect(parseTriviaAction({ finish: true })).toEqual({ kind: 'finish' });
+describe('parseTriviaBatch', () => {
+  it('reads up to 15 entries, each an option text or null', () => {
+    expect(parseTriviaBatch({ answers: ['Flutter', null] })).toEqual(['Flutter', null]);
+    expect(TRIVIA_COUNT).toBe(15);
   });
 
-  it('reads a string answer with its required q', () => {
-    expect(parseTriviaAction({ answer: 'Flutter', q: 1 })).toEqual({ kind: 'answer', answer: 'Flutter', q: 1 });
+  it('accepts an empty batch, which scores nothing', () => {
+    expect(parseTriviaBatch({ answers: [] })).toEqual([]);
   });
 
-  it('requires q on an answer', () => {
-    expect(statusOf(() => parseTriviaAction({ answer: 'Flutter' }))).toBe(400);
+  it('rejects more than 15 entries', () => {
+    expect(statusOf(() => parseTriviaBatch({ answers: Array(16).fill(null) }))).toBe(400);
   });
 
-  it('rejects a body with neither an answer nor a finish', () => {
-    expect(() => parseTriviaAction({ q: 0 })).toThrow(RunError);
-    expect(() => parseTriviaAction({ finish: false })).toThrow(RunError);
-    expect(() => parseTriviaAction({ answer: 2, q: 0 })).toThrow(RunError);
+  it('rejects a missing answers array or a wrong entry type', () => {
+    expect(statusOf(() => parseTriviaBatch({}))).toBe(400);
+    expect(statusOf(() => parseTriviaBatch({ answers: { 0: 'x' } }))).toBe(400);
+    expect(statusOf(() => parseTriviaBatch({ answers: [4] }))).toBe(400);
+    expect(statusOf(() => parseTriviaBatch({ answer: 'Flutter', q: 0 }))).toBe(400);
+    expect(statusOf(() => parseTriviaBatch({ finish: true }))).toBe(400);
   });
 });
 
-describe('applyTriviaAction', () => {
-  const rightOf = (i: number) => TRIVIA_POOL[i].answer;
-
+describe('gradeTrivia', () => {
   it('adds 20 points for a right answer', () => {
-    const step = applyTriviaAction(FRESH, { kind: 'answer', answer: rightOf(0), q: 0 });
-    expect(step.state.points).toBe(20);
-    expect(step.response).toEqual({ correct: true, correctAnswer: rightOf(0) });
+    const step = gradeTrivia(FRESH, [rightOf(0)]);
+    expect(step.response.results[0]).toEqual({ answered: true, correct: true, correctAnswer: rightOf(0) });
+    expect(step.performance).toBeCloseTo(triviaPerformance(20));
   });
 
   it('takes 10 points for a wrong answer, never below zero', () => {
-    const step = applyTriviaAction(FRESH, { kind: 'answer', answer: '', q: 0 });
-    expect(step.state.points).toBe(0);
-    expect(step.response).toMatchObject({ correct: false });
+    const step = gradeTrivia(FRESH, [wrongOf(0)]);
+    expect(step.response.results[0]).toMatchObject({ answered: true, correct: false });
+    expect(step.performance).toBe(0);
   });
 
-  it('rejects text that is not one of the options', () => {
-    expect(() => applyTriviaAction(FRESH, { kind: 'answer', answer: 'nope', q: 0 })).toThrow(RunError);
+  it('applies points in order, so a floor hit early is not undone by later answers', () => {
+    // In order: 0, 0, 20. Summed first and floored at the end the total would be 0.
+    const step = gradeTrivia(FRESH, [wrongOf(0), wrongOf(1), rightOf(2)]);
+    expect(step.performance).toBeCloseTo(triviaPerformance(20));
   });
 
-  it('evolves points over several answers: right, wrong, right, right', () => {
-    let state = FRESH;
-    const picks = [true, false, true, true];
-    picks.forEach((right, i) => {
-      state = applyTriviaAction(state, { kind: 'answer', answer: right ? rightOf(i) : '', q: i }).state;
-    });
-    expect(state.points).toBe(20 - 10 + 20 + 20);
+  it('evolves points over several answers: right, wrong, right, right gives 50', () => {
+    const step = gradeTrivia(FRESH, [rightOf(0), wrongOf(1), rightOf(2), rightOf(3)]);
+    expect(step.performance).toBeCloseTo(triviaPerformance(20 - 10 + 20 + 20));
   });
 
-  it('finishes when the 15th question is answered, with performance from the points', () => {
-    let state = FRESH;
-    let last;
-    for (let i = 0; i < 15; i++) {
-      last = applyTriviaAction(state, { kind: 'answer', answer: rightOf(i), q: i });
-      state = last.state;
-    }
-    expect(last?.performance).toBe(1);
+  it('skips a null answer: no points change, and the question is reported as unanswered', () => {
+    const step = gradeTrivia(FRESH, [rightOf(0), null, wrongOf(2)]);
+    expect(step.response.results[1]).toEqual({ answered: false, correct: false, correctAnswer: rightOf(1) });
+    // 20, then skip, then 10 after the wrong answer
+    expect(step.performance).toBeCloseTo(triviaPerformance(10));
   });
 
-  it('finishes early on {finish:true} with the answers so far', () => {
-    let state = FRESH;
-    for (let i = 0; i < 3; i++) state = applyTriviaAction(state, { kind: 'answer', answer: rightOf(i), q: i }).state;
-    const step = applyTriviaAction(state, { kind: 'finish' });
-    expect(step.performance).toBeCloseTo(60 / 300);
-    expect(step.response).toEqual({});
+  it('a skipped question between two wrong answers does not add a penalty', () => {
+    const step = gradeTrivia(FRESH, [wrongOf(0), null, wrongOf(2), rightOf(3)]);
+    // 0, skip, 0, 20
+    expect(step.performance).toBeCloseTo(triviaPerformance(20));
   });
 
-  it('finishing with no answers gives zero performance', () => {
-    expect(applyTriviaAction(FRESH, { kind: 'finish' }).performance).toBe(0);
+  it('returns a review entry for every one of the 15 questions, including ones past the batch', () => {
+    const { results } = gradeTrivia(FRESH, [rightOf(0), null]).response;
+    expect(results).toHaveLength(15);
+    expect(results.slice(2).every((r) => r.answered === false)).toBe(true);
+    expect(results[14].correctAnswer).toBe(rightOf(14));
   });
 
-  it('refuses a 16th answer', () => {
-    const done = { ...FRESH, answers: Array(15).fill('x') };
-    expect(() => applyTriviaAction(done, { kind: 'answer', answer: '', q: 15 })).toThrow(RunError);
+  it('gives full performance for 15 right answers and zero for an empty batch', () => {
+    const all = ALL_INDICES.map((_, i) => rightOf(i));
+    expect(gradeTrivia(FRESH, all).performance).toBe(1);
+    expect(gradeTrivia(FRESH, []).performance).toBe(0);
   });
 
-  it('enforces the question order: q must be the open question', () => {
-    expect(statusOf(() => applyTriviaAction(FRESH, { kind: 'answer', answer: '', q: 4 }))).toBe(409);
-    expect(statusOf(() => applyTriviaAction(FRESH, { kind: 'answer', answer: '', q: 0 }))).toBeUndefined();
+  it('rejects text that is not one of the options for that question', () => {
+    expect(statusOf(() => gradeTrivia(FRESH, ['nope']))).toBe(400);
+    expect(statusOf(() => gradeTrivia(FRESH, [''] ))).toBe(400);
   });
 });

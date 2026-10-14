@@ -27,21 +27,22 @@ export interface StartResponse { runId: string; view: GameView }
 
 // ---- actions (POST /api/game/action body = { token, runId, ...action }) ----
 export type ActionBody =
-  | { answer: string; q?: number }  // riddles, trivia ('' = unanswered/timeout counts wrong); q = question index, required by the server
-  | { answer: number; q?: number }  // bugs: 0-based line index; q = question index, required by the server
-  | { finish: true }              // trivia only: time ran out, finalise with answers so far
-  | { guess: string }             // wordle: 5 letters A-Z
-  | { flip: number }              // memory: card index 0..15
-  | { password: string };         // password: final submission
+  | { answers: (string | number | null)[] }  // riddles, trivia (option text), bugs (0-based line index). The whole run in one submission; null = unanswered
+  | { guess: string }                        // wordle: 5 letters A-Z
+  | { flip: number }                         // memory: card index 0..15
+  | { password: string };                    // password: final submission
 
-export interface AnswerResponse {   // riddles, trivia, bugs
+/** One entry per question of a batch-graded run. Sent in BatchResponse, for every question. */
+export interface ReviewItem {
+  answered: boolean;
   correct: boolean;
-  correctAnswer: string | number;   // revealed after answering (string for riddles/trivia, line index for bugs)
+  correctAnswer: string | number;   // string for riddles/trivia, line index for bugs
   explanation?: string;             // bugs only
-  done: boolean;
-  result?: RunResult;               // present when done
 }
-export interface FinishResponse { done: true; result: RunResult }  // trivia {finish:true}
+
+/** Reply to the one batch submission of a riddles, trivia or bugs run. Also returned again on a retry. */
+export interface BatchResponse { results: ReviewItem[]; done: true; result: RunResult }
+
 export interface GuessResponse {   // wordle
   states: LetterState[];            // length 5
   solved: boolean;

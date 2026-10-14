@@ -1,7 +1,7 @@
 /**
  * @jest-environment node
  */
-import { expectQuestion, listOf, minIntervalMs, numberOf, pickIndices, requiredQuestionIndex, RunError, shuffle, toStorable } from '@/lib/runs/shared';
+import { answeredOf, BATCH_MS_PER_ANSWER, listOf, minIntervalMs, numberOf, pickIndices, readAnswers, RunError, shuffle, toStorable } from '@/lib/runs/shared';
 
 describe('shuffle and pickIndices', () => {
   it('keeps every element', () => {
@@ -67,18 +67,41 @@ describe('listOf and numberOf', () => {
   });
 });
 
-describe('question order', () => {
-  it('requires a non-negative integer q', () => {
-    expect(requiredQuestionIndex({ q: 3 })).toBe(3);
-    expect(requiredQuestionIndex({ q: 0 })).toBe(0);
-    expect(() => requiredQuestionIndex({})).toThrow(RunError);
-    expect(() => requiredQuestionIndex({ q: '1' })).toThrow(RunError);
-    expect(() => requiredQuestionIndex({ q: -1 })).toThrow(RunError);
-    expect(() => requiredQuestionIndex({ q: 1.5 })).toThrow(RunError);
+describe('readAnswers', () => {
+  const isString = (v: unknown): v is string => typeof v === 'string';
+
+  it('reads an exact-size list of nulls and accepted values', () => {
+    expect(readAnswers({ answers: ['a', null, 'b'] }, isString, 'text', { exact: 3 })).toEqual(['a', null, 'b']);
   });
 
-  it('accepts the expected question and refuses any other', () => {
-    expect(() => expectQuestion(4, 4)).not.toThrow();
-    expect(() => expectQuestion(3, 4)).toThrow(RunError);
+  it('refuses a list of the wrong exact length', () => {
+    expect(() => readAnswers({ answers: ['a', null] }, isString, 'text', { exact: 3 })).toThrow(RunError);
+    expect(() => readAnswers({ answers: ['a', null, null, null] }, isString, 'text', { exact: 3 })).toThrow(RunError);
+  });
+
+  it('accepts any length up to the maximum, including zero', () => {
+    expect(readAnswers({ answers: [] }, isString, 'text', { max: 3 })).toEqual([]);
+    expect(readAnswers({ answers: ['a'] }, isString, 'text', { max: 3 })).toEqual(['a']);
+    expect(() => readAnswers({ answers: [null, null, null, null] }, isString, 'text', { max: 3 })).toThrow(RunError);
+  });
+
+  it('refuses a missing or non-array answers field', () => {
+    expect(() => readAnswers({}, isString, 'text', { max: 3 })).toThrow(RunError);
+    expect(() => readAnswers({ answers: 'abc' }, isString, 'text', { max: 3 })).toThrow(RunError);
+  });
+
+  it('refuses an entry of the wrong type and names its position', () => {
+    expect(() => readAnswers({ answers: ['a', 2] }, isString, 'text', { max: 3 })).toThrow(/answers\[1\] must be null or text/);
+  });
+});
+
+describe('answeredOf and BATCH_MS_PER_ANSWER', () => {
+  it('counts the entries that are not null', () => {
+    expect(answeredOf([null, 'a', null, 0])).toBe(2);
+    expect(answeredOf([])).toBe(0);
+  });
+
+  it('allows half a second per answered question', () => {
+    expect(BATCH_MS_PER_ANSWER).toBe(500);
   });
 });
