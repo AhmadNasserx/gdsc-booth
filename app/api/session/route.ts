@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { signSession } from '@/lib/session';
-import { RIDDLE_POOL, TRIVIA_POOL, WORDLE_POOL } from '@/lib/questions';
+import { RIDDLE_POOL, TRIVIA_POOL, BUG_POOL, WORDLE_POOL } from '@/lib/questions';
 import { adminDb } from '@/lib/firebaseAdmin';
 import type { QuestionsPackage } from '@/lib/types';
 
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
   const questions: QuestionsPackage = {
     riddleIndices: pickIndices(RIDDLE_POOL.length, 5),
     triviaIndices: pickIndices(TRIVIA_POOL.length, 15),
-    binaryChar: String(Math.floor(Math.random() * 99) + 1), // 1–99
+    bugIndices: pickIndices(BUG_POOL.length, 5),
     wordleWord: wordleEntry.word,
   };
 
@@ -77,7 +77,7 @@ export async function POST(request: Request) {
         const q = TRIVIA_POOL[i];
         return { ...q, options: shuffleArray([...q.options]) };
       }),
-      binaryChar: questions.binaryChar,
+      bugs: questions.bugIndices.map((i) => ({ ...BUG_POOL[i] })),
       wordleWord: questions.wordleWord,
       wordleHint: wordleEntry.hint,
     },

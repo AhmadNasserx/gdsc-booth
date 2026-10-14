@@ -1,15 +1,15 @@
 # GDSC Booth: Interactive Tech Station
 
-The booth app for **Google Developer Groups on Campus, Beirut Arab University, Tripoli Campus** at the Fall 2026 club fair. Students walk up to a device, enter a display name, play five short tech mini-games and land on a live leaderboard. A second screen at the booth shows the leaderboard updating in real time, and the finish screen links to the chapter sign-up form.
+The booth app for **Google Developer Groups on Campus, Beirut Arab University, Tripoli Campus** at the Fall 2026 club fair. Students walk up to a device, enter a display name, pick one of six short tech mini-games to score, and land on a live leaderboard. The other games stay playable as practice. A second screen at the booth shows the leaderboard updating in real time, and the finish screen links to the chapter sign-up form.
 
-**50 students played it at the club fair.** It was designed, built and deployed in three days.
+**50 students played it at the club fair.** It was designed, built and deployed in three days. Since then it has been reworked so each player picks one game to score, with two new games and a rebuilt Wordle keyboard.
 
-> **Status:** ran live at the club fair in September 2026 and is now offline. The screenshots and video below come from a local run of the same code, with sample names on the leaderboard.
+> **Status:** ran live at the club fair in September 2026 and is now offline. The screenshots and video below come from a local run with sample names on the leaderboard. They were recorded before the pick-one-game redesign (an earlier five-game version that included a Binary Decoder), so the game picker, Memory Match and Bug Hunter aren't pictured yet.
 
 <p align="center">
-  <img src="docs/screenshots/playthrough.gif" width="300" alt="A full playthrough: entering a name, playing all five games, submitting and landing on the leaderboard (sped up 2x)">
+  <img src="docs/screenshots/playthrough.gif" width="300" alt="A playthrough of the earlier five-game version: entering a name, playing, submitting and landing on the leaderboard (sped up 2x)">
 </p>
-<p align="center"><sub>Full playthrough, sped up 2×. <a href="docs/screenshots/playthrough.mp4">Watch it at normal speed (MP4, 1:25)</a>.</sub></p>
+<p align="center"><sub>Earlier version, sped up 2×. <a href="docs/screenshots/playthrough.mp4">Watch it at normal speed (MP4, 1:25)</a>.</sub></p>
 
 ## Screenshots
 
@@ -17,9 +17,9 @@ The booth app for **Google Developer Groups on Campus, Beirut Arab University, T
 |---|---|---|
 | <img src="docs/screenshots/name-entry.webp" width="260" alt="Name entry screen with consent notice"> | <img src="docs/screenshots/emoji-riddles.webp" width="260" alt="Emoji Riddles question"> | <img src="docs/screenshots/tech-trivia.webp" width="260" alt="Timed Tech Trivia question"> |
 
-| Binary Decoder | Password Challenge | Wordle |
-|---|---|---|
-| <img src="docs/screenshots/binary-decoder.webp" width="260" alt="Binary Decoder showing the player's name in binary and a decimal challenge"> | <img src="docs/screenshots/password-challenge.webp" width="260" alt="Password Challenge with live strength meter"> | <img src="docs/screenshots/wordle.webp" width="260" alt="Tech Wordle with the hint unlocked after two guesses"> |
+| Password Challenge | Wordle |
+|---|---|
+| <img src="docs/screenshots/password-challenge.webp" width="260" alt="Password Challenge with live strength meter"> | <img src="docs/screenshots/wordle.webp" width="260" alt="Tech Wordle with the hint unlocked after two guesses"> |
 
 | Finish | Leaderboard (phone) |
 |---|---|
@@ -31,13 +31,20 @@ The booth app for **Google Developer Groups on Campus, Beirut Arab University, T
 
 ## The games
 
-| Game | What you do |
-|---|---|
-| Emoji Riddles | Work out the tech term or everyday word hidden in a row of emoji |
-| Tech Trivia | 35-second speed round of tech and general trivia; wrong answers cost points |
-| Binary Decoder | Turn a binary number into decimal (1–99) |
-| Password Challenge | Build the strongest password you can, scored live |
-| Wordle | Guess a five-letter tech word in six tries, with a hint after two guesses |
+Players pick **one** game to score. Only that game's score goes on the leaderboard. The other five are practice: they can be replayed freely and their results are never stored or submitted.
+
+| Game | What you do | How it scores |
+|---|---|---|
+| Emoji Riddles | Work out the tech term or everyday word hidden in a row of emoji | 40 pts per riddle (200 max) |
+| Tech Trivia | Fast round of tech and general trivia | +20 right, −10 wrong (300 max) |
+| Password Challenge | Build the strongest password you can, scored live | Length, character variety and no predictable patterns (200 max) |
+| Tech Wordle | Guess a five-letter tech word in six tries, with a hint after two guesses | Fewer guesses, more points (300 max) |
+| Memory Match | Flip cards and match 8 tech pairs | Fewer moves and seconds, more points (1000 max) |
+| Bug Hunter | Spot the buggy line in 5 short code snippets | 40 pts per snippet (200 max) |
+
+Every chosen score is normalised to a 0–1000 scale, so the leaderboard compares like with like no matter which game someone picked.
+
+**Tech Wordle** has an on-screen keyboard that spans the full card width with large touch targets, a staggered tile-flip reveal and keyboard colours that only update once the row has flipped. Physical keyboards work too.
 
 Each player gets a fresh random set of questions, with answer options shuffled (Fisher–Yates) so the right answer isn't always in the same spot.
 
@@ -46,9 +53,9 @@ Each player gets a fresh random set of questions, with answer options shuffled (
 A public leaderboard at a fair is an open invitation to cheat, so the client is never trusted with a score.
 
 - **Encrypted sessions.** Entering a name calls `POST /api/session`, which picks the player's questions and seals them, with the name and a timestamp, into an AES-256-GCM token. The browser can't swap in easier questions or change the name it plays under.
-- **Server-side scoring.** `POST /api/score` accepts raw answers only. The server decrypts the token, grades each answer against the question pools and calculates the total itself.
+- **Server-side scoring.** `POST /api/score` accepts the raw answer for the one game the player picked. The server decrypts the token, grades that game against its question pool (or validates the moves and time for Memory Match) and calculates the total itself.
 - **One run per player.** Each session can submit only once, claimed with a Firebase transaction, so replays and parallel submissions fail with `409`. Every submission also carries an ID, so a retried request returns the same result instead of adding a second entry.
-- **A minimum play time.** Scores sent within 45 seconds of starting are rejected, and tokens expire after 30 minutes.
+- **A minimum play time.** Scores sent within 20 seconds of starting are rejected, and tokens expire after 30 minutes.
 - **Unique names.** A display name is reserved for the day, so nobody can pose as another player.
 - **Locked-down headers.** A Content-Security-Policy limits scripts and connections to the app and Firebase.
 
@@ -74,8 +81,9 @@ app/
   api/names/check        display-name availability
   api/leaderboard        leaderboard read via the Admin SDK
   api/cron/cleanup       deletes expired records
-components/games/        the five mini-games
-lib/                     session crypto, scoring, question pools, Firebase
+components/games/        the six mini-games
+components/              game picker, tab bar, finish screen, leaderboard table
+lib/                     session crypto, scoring, game metadata, question pools, Firebase
 __tests__/               unit, component and API route tests
 ```
 

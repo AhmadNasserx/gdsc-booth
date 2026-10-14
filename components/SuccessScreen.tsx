@@ -1,22 +1,55 @@
-interface Props { name: string; total: number; rank: number; }
+import { GAMES } from '@/lib/games';
+import type { Tab } from '@/lib/types';
 
-export default function SuccessScreen({ name, total, rank }: Props) {
+// Pure CSS confetti. Positions are fixed so server and client render the same markup.
+const CONFETTI_COLORS = ['#4285F4', '#EA4335', '#FBBC04', '#34A853'];
+const CONFETTI = Array.from({ length: 24 }, (_, i) => ({
+  left: (i * 37) % 100,
+  delay: (i % 8) * 0.15,
+  duration: 2.4 + (i % 5) * 0.3,
+  color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+}));
+
+interface Props { name: string; total: number; rank: number; game: Tab; }
+
+export default function SuccessScreen({ name, total, rank, game }: Props) {
+  const meta = GAMES[game];
   return (
-    <div className="flex flex-col items-center text-center py-8 space-y-4">
-      <div className="text-5xl">🏆</div>
-      <h2 className="text-2xl font-extrabold text-[#202124]">Well done, {name}!</h2>
-      <p className="text-4xl font-black text-[#1A73E8]">{total} <span className="text-xl font-semibold text-[#5F6368]">pts</span></p>
-      <p className="text-sm font-bold text-[#34A853]">You are #{rank} on the leaderboard!</p>
+    <div className="relative overflow-hidden flex flex-col items-center text-center py-8 space-y-4">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+        {CONFETTI.map((piece, i) => (
+          <span
+            key={i}
+            className="anim-confetti absolute top-0 block w-2 h-3 rounded-sm"
+            style={{
+              left: `${piece.left}%`,
+              background: piece.color,
+              animationDelay: `${piece.delay}s`,
+              animationDuration: `${piece.duration}s`,
+            }}
+          />
+        ))}
+      </div>
+      <div className="relative text-5xl">🏆</div>
+      <h2 className="relative text-2xl font-extrabold text-[#202124]">Well done, {name}!</h2>
+      <p className="relative text-sm font-semibold text-[#5F6368]">
+        <span aria-hidden="true">{meta.emoji}</span> {meta.title}
+      </p>
+      <p className="relative text-4xl font-black text-[#1A73E8]">
+        <span>{total}</span>{' '}
+        <span className="text-xl font-semibold text-[#5F6368]">/ 1000 pts</span>
+      </p>
+      <p className="relative text-sm font-bold text-[#34A853]">You are #{rank} on the leaderboard!</p>
       <a
         href="https://forms.gle/N5UBuhErH9wqjpV87"
         target="_blank"
         rel="noopener noreferrer"
-        className="mt-4 bg-[#34A853] hover:bg-[#2C8E45] text-white font-bold px-8 py-3 rounded-full text-sm transition-all shadow"
+        className="relative mt-4 bg-[#34A853] hover:bg-[#2C8E45] text-white font-bold px-8 py-3 rounded-full text-sm transition-all shadow"
       >
         Join GDSC →
       </a>
-      <a href="/leaderboard" className="text-xs text-[#1A73E8] underline">View Live Leaderboard</a>
-      <div className="flex items-center gap-3 pt-2">
+      <a href="/leaderboard" className="relative text-xs text-[#1A73E8] underline">View Live Leaderboard</a>
+      <div className="relative flex items-center gap-3 pt-2">
         <a
           href="https://www.instagram.com/gdsc.bau.tripoli/"
           target="_blank"
