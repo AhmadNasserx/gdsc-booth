@@ -39,6 +39,7 @@ export default function TechTrivia({ questions, act, onDone }: Props) {
   // Refs hold the guards that async callbacks and timers read, where state would be stale.
   const busyRef = useRef(false);
   const chosenRef = useRef<string | null>(null);
+  const timeLeftRef = useRef(GAME_SECS);
   const timeUpRef = useRef(false);
   const doneRef = useRef(false);
   const resultRef = useRef<RunResult | null>(null);
@@ -148,17 +149,22 @@ export default function TechTrivia({ questions, act, onDone }: Props) {
     }, isWrong ? WRONG_LOCKOUT_MS : CORRECT_DELAY_MS);
   }
 
+  function expire() {
+    timeUpRef.current = true;
+    setTimeUp(true);
+    requestFinish();
+  }
+
   useEffect(() => {
     if (!active || timeUp) return;
-    if (timeLeft <= 0) {
-      timeUpRef.current = true;
-      setTimeUp(true);
-      requestFinish();
-      return;
-    }
-    const id = setTimeout(() => setTimeLeft((t) => t - 1), 1000);
+    const id = setTimeout(() => {
+      const next = timeLeftRef.current - 1;
+      timeLeftRef.current = next;
+      setTimeLeft(next);
+      if (next <= 0) expire();
+    }, 1000);
     return () => clearTimeout(id);
-    // requestFinish only reads refs and state setters, so the tick effect deliberately ignores it.
+    // expire and requestFinish read only refs and state setters, so the tick effect deliberately ignores them.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, timeLeft, timeUp]);
 
