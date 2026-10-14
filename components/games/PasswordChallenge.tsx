@@ -16,6 +16,12 @@ const TIPS = [
 const BAR_COLOR = (score: number) =>
   score >= 172 ? '#34A853' : score >= 142 ? '#1A73E8' : score >= 102 ? '#FBBC04' : '#EA4335';
 
+/**
+ * Open-ended fill: rises quickly at first, then flattens towards 90% and never reaches it,
+ * so the bar never looks maxed out. 0 -> 0%, 200 -> ~78%.
+ */
+const barPercent = (score: number) => 90 * (1 - Math.exp(-score / 100));
+
 export default function PasswordChallenge({ onComplete }: Props) {
   const [password, setPassword] = useState('');
   const [locked, setLocked] = useState(false);
@@ -61,7 +67,7 @@ export default function PasswordChallenge({ onComplete }: Props) {
       <div className="w-full bg-[#DADCE0] h-3 rounded-full overflow-hidden mb-1">
         <div
           className="h-full rounded-full transition-all duration-300"
-          style={{ width: `${(score / 200) * 100}%`, backgroundColor: BAR_COLOR(score) }}
+          style={{ width: `${barPercent(score)}%`, backgroundColor: BAR_COLOR(score) }}
         />
       </div>
       <div className="w-full flex justify-between items-center mb-5">
@@ -69,7 +75,7 @@ export default function PasswordChallenge({ onComplete }: Props) {
           {password ? passwordStrengthLabel(score) : 'Start typing…'}
         </span>
         <span className="text-xs font-bold" style={{ color: BAR_COLOR(score) || '#5F6368' }}>
-          {score}/200
+          {score} pts
         </span>
       </div>
 
@@ -98,7 +104,7 @@ export default function PasswordChallenge({ onComplete }: Props) {
         disabled={!password || locked}
         className="w-full bg-[#34A853] hover:bg-[#2C8E45] active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 rounded-full transition-all"
       >
-        {locked ? `Locked In — ${score}/200 pts ✓` : 'Lock In'}
+        {locked ? `Locked In — ${score} pts ✓` : 'Lock In'}
       </button>
     </div>
   );

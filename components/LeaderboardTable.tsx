@@ -1,18 +1,13 @@
 import type { LeaderboardEntry, Tab } from '@/lib/types';
 import { GAMES } from '@/lib/games';
 
-const MAX_SCORE = 1000;
-
-// Score colour bands as shares of the 1000-point scale: 92%, 69% and 46%.
-const HIGH_SCORE = Math.round(MAX_SCORE * 0.92); // 920
-const MID_SCORE = Math.round(MAX_SCORE * 0.69);  // 690
-const LOW_SCORE = Math.round(MAX_SCORE * 0.46);  // 460
+// One neutral brand colour for every score, so no score reads as "good" or "bad".
+const SCORE_TEXT = 'text-[#1A73E8]';
 
 const PODIUM = [
   {
     border: 'border-[#FBBC04]',
     bg: 'bg-gradient-to-b from-[#FFF8E1] to-white',
-    bar: 'bg-[#FBBC04]',
     badge: '🥇',
     label: '1st Place',
     // full-width on mobile → can afford larger text
@@ -22,7 +17,6 @@ const PODIUM = [
   {
     border: 'border-[#9AA0A6]',
     bg: 'bg-gradient-to-b from-[#F1F3F4] to-white',
-    bar: 'bg-[#9AA0A6]',
     badge: '🥈',
     label: '2nd Place',
     nameSize: 'text-sm sm:text-xl md:text-2xl',
@@ -31,27 +25,12 @@ const PODIUM = [
   {
     border: 'border-[#CD7F32]',
     bg: 'bg-gradient-to-b from-[#FFF3E0] to-white',
-    bar: 'bg-[#CD7F32]',
     badge: '🥉',
     label: '3rd Place',
     nameSize: 'text-sm sm:text-xl md:text-2xl',
     scoreSize: 'text-xl sm:text-3xl md:text-4xl',
   },
 ];
-
-function scoreColor(score: number): string {
-  if (score >= HIGH_SCORE) return 'text-[#4285F4]';
-  if (score >= MID_SCORE) return 'text-[#34A853]';
-  if (score >= LOW_SCORE) return 'text-[#FBBC04]';
-  return 'text-[#EA4335]';
-}
-
-function scoreBarColor(score: number): string {
-  if (score >= HIGH_SCORE) return 'bg-[#4285F4]';
-  if (score >= MID_SCORE) return 'bg-[#34A853]';
-  if (score >= LOW_SCORE) return 'bg-[#FBBC04]';
-  return 'bg-[#EA4335]';
-}
 
 // Small emoji for the game an entry was scored in. Older entries have no game.
 function GameBadge({ game }: { game?: Tab }) {
@@ -104,7 +83,7 @@ export default function LeaderboardTable({ entries }: Props) {
                 <GameBadge game={entry.game} />
                 <span className="truncate min-w-0">{entry.name}</span>
               </span>
-              <span className={`${p.scoreSize} font-black ${scoreColor(entry.score)} leading-none`}>
+              <span className={`${p.scoreSize} font-black ${SCORE_TEXT} leading-none`}>
                 {entry.score}
               </span>
             </div>
@@ -116,7 +95,6 @@ export default function LeaderboardTable({ entries }: Props) {
         <div className="space-y-2">
           {rest.map((entry, i) => {
             const rank = i + 4;
-            const pct = Math.min(100, Math.round((entry.score / MAX_SCORE) * 100));
             return (
               <div
                 key={`${entry.name}-${entry.timestamp}`}
@@ -129,13 +107,7 @@ export default function LeaderboardTable({ entries }: Props) {
                   <GameBadge game={entry.game} />
                   <span className="truncate min-w-0">{entry.name}</span>
                 </span>
-                <div className="flex-1 max-w-[80px] sm:max-w-[140px] md:max-w-[160px] bg-[#E8EAED] rounded-full h-1.5 md:h-2">
-                  <div
-                    className={`h-1.5 md:h-2 rounded-full ${scoreBarColor(entry.score)} transition-all duration-700`}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-                <span className={`text-sm md:text-lg font-black w-9 md:w-12 text-right shrink-0 ${scoreColor(entry.score)}`}>
+                <span className={`text-sm md:text-lg font-black w-9 md:w-12 text-right shrink-0 ${SCORE_TEXT}`}>
                   {entry.score}
                 </span>
               </div>

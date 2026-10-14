@@ -35,6 +35,19 @@ describe('GamePicker', () => {
 
   it('shows the scoring rule on each card', () => {
     render(<GamePicker name="Ahmad" onPick={jest.fn()} />);
-    expect(screen.getByRole('button', { name: /tech trivia/i })).toHaveTextContent('+20 right / −10 wrong');
+    expect(screen.getByRole('button', { name: /tech trivia/i })).toHaveTextContent(
+      'Right answers add, wrong ones cost you',
+    );
+    expect(screen.getByRole('button', { name: /emoji riddles/i })).toHaveTextContent('Every correct answer scores');
+    expect(screen.getByRole('button', { name: /bug hunter/i })).toHaveTextContent('Every bug you catch scores');
+  });
+
+  it('never shows a maximum, a "/ 1000" or an "out of" in the rendered output', () => {
+    const { container } = render(<GamePicker name="Ahmad" onPick={jest.fn()} />);
+    const text = container.textContent ?? '';
+    expect(text).not.toContain('1000');
+    expect(text).not.toContain('/ 1000');
+    expect(text).not.toMatch(/max/i);
+    expect(text).not.toMatch(/out of/i);
   });
 });

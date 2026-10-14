@@ -25,6 +25,13 @@ describe('game metadata', () => {
     expect(GAMES.bugs.maxRaw).toBe(200);
   });
 
+  it('describes scoring without revealing per-item values, caps or totals', () => {
+    for (const game of GAME_LIST) {
+      expect(game.howItScores).not.toMatch(/\d/);
+      expect(game.howItScores).not.toMatch(/max|out of|\/\s*1000|of 1000/i);
+    }
+  });
+
   it('has non-empty display fields for every game', () => {
     for (const game of GAME_LIST) {
       expect(game.emoji.length).toBeGreaterThan(0);

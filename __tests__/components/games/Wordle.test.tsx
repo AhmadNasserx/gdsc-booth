@@ -58,6 +58,16 @@ function rowEl(row: number): HTMLElement {
   return screen.getAllByRole('row')[row];
 }
 
+const SCORE_CHIPS = ['300', '250', '200', '150', '100', '50'];
+
+/** Fails if any rendered text shows a score, a maximum, or a "/200"-style ratio. */
+function expectNoScoreLeaks() {
+  const text = document.body.textContent ?? '';
+  expect(text).not.toContain('/200');
+  expect(text).not.toMatch(/max/i);
+  for (const chip of SCORE_CHIPS) expect(text).not.toContain(chip);
+}
+
 /** Accessible name of an on-screen letter key (changes once the key is coloured). */
 function keyLabel(letter: string): string {
   const key = screen.getAllByRole('button').find((b) => b.textContent === letter);
@@ -74,10 +84,37 @@ describe('Wordle', () => {
     expect(screen.getAllByRole('gridcell')).toHaveLength(30);
   });
 
-  it('shows score hints (300 down to 50)', () => {
+  it('never reveals a score, a maximum or per-guess score chips', () => {
     setup();
-    expect(screen.getByText('300')).toBeInTheDocument();
-    expect(screen.getByText('50')).toBeInTheDocument();
+    expectNoScoreLeaks();
+    submitAndReveal('BYTES');
+    expectNoScoreLeaks();
+    submitAndReveal('BYTES');
+    expectNoScoreLeaks();
+    submit('BYTES');
+    expectNoScoreLeaks();
+    advance(REVEAL_MS);
+    expectNoScoreLeaks();
+    advance(LOSS_HOLD_MS);
+    expectNoScoreLeaks();
+  });
+
+  it('never reveals a score on a win either', () => {
+    const onComplete = setup();
+    submitAndReveal('BYTES');
+    submit(WORD);
+    advance(REVEAL_MS);
+    expectNoScoreLeaks();
+    advance(WIN_HOLD_MS);
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    expectNoScoreLeaks();
+  });
+
+  it('keeps the guess counter (attempts, not score)', () => {
+    setup();
+    expect(screen.getByText('0/6 guesses')).toBeInTheDocument();
+    submitAndReveal('BYTES');
+    expect(screen.getByText('1/6 guesses')).toBeInTheDocument();
   });
 
   it('typing letters fills the active row (physical keys, case-insensitive)', () => {
