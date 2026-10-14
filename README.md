@@ -72,7 +72,7 @@ A public leaderboard with a prize at the end of the day is an open invitation to
 - **Unique names.** A display name is reserved for 48 hours, so nobody can pose as another player.
 - **Locked-down headers.** A Content-Security-Policy limits scripts and connections to the app and Firebase.
 
-**Known limit:** the game endpoints are public HTTP routes, so a determined player can script their way through the games without the browser. Server grading and timing make this harder, not impossible. For that reason the prize winner should be confirmed in person before the prize is handed over.
+**Known limit:** the game endpoints are public HTTP routes, so a determined player can script their way through the games without the browser. The end-of-game review also shows the correct answers, so a script that plays many rounds could collect the question pool and later replay known answers. Server grading and timing make this harder, not impossible. For that reason the prize winner should be confirmed in person before the prize is handed over.
 
 ## Privacy
 
