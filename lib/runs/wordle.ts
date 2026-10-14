@@ -20,8 +20,16 @@ export interface WordleAction {
 
 export type WordleResponse = Omit<GuessResponse, 'done' | 'result'>;
 
-export function startWordle(rand: RandomInt = secureRandomInt): { state: WordleState; view: { game: 'wordle' } } {
-  const entry = WORDLE_POOL[rand(WORDLE_POOL.length)];
+export function startWordle(
+  word?: string,
+  rand: RandomInt = secureRandomInt,
+): { state: WordleState; view: { game: 'wordle' } } {
+  let entry = WORDLE_POOL[rand(WORDLE_POOL.length)];
+  if (word !== undefined) {
+    const chosen = WORDLE_POOL.find((w) => w.word === word);
+    if (!chosen) throw new Error(`unknown wordle word ${word}`);
+    entry = chosen;
+  }
   return { state: { word: entry.word, hint: entry.hint, guesses: [] }, view: { game: 'wordle' } };
 }
 

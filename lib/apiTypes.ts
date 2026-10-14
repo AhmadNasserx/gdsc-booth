@@ -27,8 +27,8 @@ export interface StartResponse { runId: string; view: GameView }
 
 // ---- actions (POST /api/game/action body = { token, runId, ...action }) ----
 export type ActionBody =
-  | { answer: string }            // riddles, trivia ('' = unanswered/timeout counts wrong)
-  | { answer: number }            // bugs: 0-based line index
+  | { answer: string; q?: number }  // riddles, trivia ('' = unanswered/timeout counts wrong); q = question index, required by the server
+  | { answer: number; q?: number }  // bugs: 0-based line index; q = question index, required by the server
   | { finish: true }              // trivia only: time ran out, finalise with answers so far
   | { guess: string }             // wordle: 5 letters A-Z
   | { flip: number }              // memory: card index 0..15

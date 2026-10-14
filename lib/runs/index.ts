@@ -10,13 +10,17 @@ import { applyWordleGuess, hydrateWordle, parseWordleAction, startWordle, type W
 
 export type GameState = RiddleState | TriviaState | BugState | WordleState | MemoryState | PasswordState;
 
-/** Fresh content for one run. The view never carries answers, the word or the layout. */
-export function startGame(game: Tab, rand?: RandomInt): { state: GameState; view: GameView } {
+/**
+ * Fresh content for one run. `picked` is the pool selection for the content games (indices, or
+ * the wordle word). It comes from the no-repeat picker. The view never carries answers, the
+ * word or the layout.
+ */
+export function startGame(game: Tab, picked?: Array<number | string>, rand?: RandomInt): { state: GameState; view: GameView } {
   switch (game) {
-    case 'riddles': return startRiddles(rand);
-    case 'trivia': return startTrivia(rand);
-    case 'bugs': return startBugs(rand);
-    case 'wordle': return startWordle(rand);
+    case 'riddles': return startRiddles(picked as number[] | undefined, rand);
+    case 'trivia': return startTrivia(picked as number[] | undefined, rand);
+    case 'bugs': return startBugs(picked as number[] | undefined, rand);
+    case 'wordle': return startWordle(picked?.[0] as string | undefined, rand);
     case 'memory': return startMemory(rand);
     case 'password': return startPassword();
   }
