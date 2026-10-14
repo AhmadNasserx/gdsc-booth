@@ -13,7 +13,7 @@ import PasswordChallenge from '@/components/games/PasswordChallenge';
 import type {
   ActionBody,
   AnswerResponse,
-  FinishResponse,
+  BatchResponse,
   FlipResponse,
   GameView,
   GuessResponse,
@@ -273,7 +273,7 @@ function renderGame(
       return (
         <TechTrivia
           questions={view.questions}
-          act={(body) => act<AnswerResponse | FinishResponse>(body)}
+          act={(body) => act<BatchResponse>(body)}
           onDone={onDone}
         />
       );

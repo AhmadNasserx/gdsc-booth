@@ -64,10 +64,10 @@ Each run gets a fresh random set of questions, a new Wordle word and a newly shu
 
 A public leaderboard with a prize at the end of the day is an open invitation to cheat, so the browser is never trusted with a score.
 
-- **Answers stay on the server.** Correct answers, the Wordle word and the Memory Match layout are never sent to the browser before the player has acted. The browser learns whether an answer was right only after it has been given.
-- **Every answer is graded as it arrives.** The server checks each answer when it is submitted and keeps the run's state in one transaction, so double taps can't count twice and answers can't be retried or reordered.
+- **Answers stay on the server.** Correct answers, the Wordle word and the Memory Match layout are never sent to the browser before the player has acted. Answers to Emoji Riddles, Tech Trivia and Bug Hunter never reach the browser before the player submits them, and the browser learns which were right only from the server's reply to that submission.
+- **Graded on the server.** Emoji Riddles, Tech Trivia and Bug Hunter are graded in one batch when the round ends: the browser sends all of its answers together, and the server grades them then. Wordle and Memory Match are graded step by step, one guess or card flip at a time. The server keeps each run's state in one transaction, so double taps can't count twice.
 - **The server measures time.** Each run's duration is taken from the server's clock, not the browser's.
-- **One run at a time, in order.** A run can be finished only once, and answers are taken one at a time, in order, with no retries. Starting a new run of a game ends any earlier run of that game that is still open.
+- **One run at a time.** A run can be finished only once. Wordle and Memory Match take their moves one at a time, in order, with no retries. Starting a new run of a game ends any earlier run of that game that is still open.
 - **Sessions expire.** Session tokens are encrypted, carry only the name and an issue time, and last 90 minutes.
 - **Unique names.** A display name is reserved for 48 hours, so nobody can pose as another player.
 - **Locked-down headers.** A Content-Security-Policy limits scripts and connections to the app and Firebase.
