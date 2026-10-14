@@ -1,10 +1,16 @@
-// Browser-side session helpers shared by the name entry page and the success screen.
+// Browser-side session helpers shared by the name entry page and the game pages.
 // Every storage access is wrapped in try/catch: localStorage and sessionStorage can be
 // blocked, full, or missing (private windows, embedded frames, disabled site data).
 // Nothing here runs during render, so server and client markup stay identical.
 
 export const PLAYER_KEY_STORAGE = 'gdscPlayerKey';
 export const PLAYER_NAME_STORAGE = 'gdscPlayerName';
+
+// sessionStorage keys for the current game session.
+const TOKEN_KEY = 'playerToken';
+const SESSION_NAME_KEY = 'playerName';
+// One-off message for the home page (for example "your session expired").
+export const SESSION_NOTICE_KEY = 'sessionNotice';
 
 const PLAYER_KEY_PATTERN = /^[0-9a-f]{64}$/;
 const GENERIC_ERROR = 'Something went wrong. Please try again.';
@@ -13,6 +19,11 @@ const STORAGE_ERROR = "Couldn't save your session. Check that your browser allow
 export type StartSessionResult =
   | { ok: true }
   | { ok: false; status: number; error: string };
+
+export interface PlayerSession {
+  token: string;
+  name: string;
+}
 
 // Used only when localStorage is unavailable: the key then lasts for this page load.
 let memoryKey: string | null = null;
@@ -65,19 +76,45 @@ export function saveName(name: string): void {
   }
 }
 
-type SessionStartedListener = () => void;
-const sessionStartedListeners = new Set<SessionStartedListener>();
+/** The current session's token and name, or null when there is no complete session. */
+export function getSession(): PlayerSession | null {
+  try {
+    const token = sessionStorage.getItem(TOKEN_KEY);
+    const name = sessionStorage.getItem(SESSION_NAME_KEY);
+    return token && name ? { token, name } : null;
+  } catch {
+    return null;
+  }
+}
 
-/**
- * Runs `listener` after each successful startSession(). The play page uses this to
- * reset its state when "Play again" starts a new session at the same URL.
- * Returns an unsubscribe function.
- */
-export function onSessionStarted(listener: SessionStartedListener): () => void {
-  sessionStartedListeners.add(listener);
-  return () => {
-    sessionStartedListeners.delete(listener);
-  };
+/** Forgets the current game session. The saved name stays, so the name entry page can prefill it. */
+export function clearSession(): void {
+  try {
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(SESSION_NAME_KEY);
+  } catch {
+    // Nothing to clear if storage is unavailable.
+  }
+}
+
+/** Leaves a message for the home page to show once. */
+export function setSessionNotice(message: string): void {
+  try {
+    sessionStorage.setItem(SESSION_NOTICE_KEY, message);
+  } catch {
+    // The player still lands on the home page; only the explanation is lost.
+  }
+}
+
+/** Returns the pending home page notice and removes it, so it shows only once. */
+export function takeSessionNotice(): string | null {
+  try {
+    const message = sessionStorage.getItem(SESSION_NOTICE_KEY);
+    sessionStorage.removeItem(SESSION_NOTICE_KEY);
+    return message;
+  } catch {
+    return null;
+  }
 }
 
 async function readJson(res: Response): Promise<unknown> {
@@ -90,8 +127,8 @@ async function readJson(res: Response): Promise<unknown> {
 
 /**
  * Creates a new game session for `name` (POST /api/session) with this browser's player key.
- * On success, stores the session in sessionStorage, drops any game picked in a previous
- * session, and remembers the name. Never throws.
+ * On success, stores only the token and name in sessionStorage and remembers the name.
+ * Never throws.
  */
 export async function startSession(name: string): Promise<StartSessionResult> {
   const trimmed = name.trim();
@@ -117,21 +154,17 @@ export async function startSession(name: string): Promise<StartSessionResult> {
       error: typeof body.error === 'string' ? body.error : GENERIC_ERROR,
     };
   }
-  if (typeof body.token !== 'string' || !body.questions) {
+  if (typeof body.token !== 'string') {
     return { ok: false, status: res.status, error: GENERIC_ERROR };
   }
 
   try {
-    // A new session starts with no pick; drop any game chosen in a previous session.
-    sessionStorage.removeItem('playerGame');
-    sessionStorage.setItem('playerToken', body.token);
-    sessionStorage.setItem('playerName', trimmed);
-    sessionStorage.setItem('playerQuestions', JSON.stringify(body.questions));
+    sessionStorage.setItem(TOKEN_KEY, body.token);
+    sessionStorage.setItem(SESSION_NAME_KEY, trimmed);
   } catch {
     return { ok: false, status: 0, error: STORAGE_ERROR };
   }
 
   saveName(trimmed);
-  sessionStartedListeners.forEach((listener) => listener());
   return { ok: true };
 }

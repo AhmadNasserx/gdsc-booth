@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { getPlayerKey, getSavedName, startSession } from '@/lib/clientSession';
+import { getPlayerKey, getSavedName, startSession, takeSessionNotice } from '@/lib/clientSession';
 
 const NAME_PATTERN = /^[A-Za-z0-9À-ɏ ]{2,30}$/;
 
@@ -17,11 +17,15 @@ export default function NameEntry() {
   const [check, setCheck] = useState<{ name: string; status: CheckedStatus } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // Set when the player was sent here because their session ended. Shown once.
+  const [notice, setNotice] = useState('');
 
   // Prefill with the name used last time. Read after mount so server and client markup match.
   useEffect(() => {
     const saved = getSavedName();
     if (saved) setName(saved);
+    const pending = takeSessionNotice();
+    if (pending) setNotice(pending);
   }, []);
 
   const trimmedName = name.trim();
@@ -91,7 +95,7 @@ export default function NameEntry() {
     invalid: 'Use letters, numbers, and spaces only (2–30 characters).',
     checking: '',
     available: 'This name is available!',
-    mine: `Welcome back, ${trimmedName}! Your best score is kept.`,
+    mine: `Welcome back, ${trimmedName}! Your best scores are kept.`,
     taken: 'This name is already taken — choose another.',
   };
 
@@ -111,7 +115,9 @@ export default function NameEntry() {
           <img src="/gdsc-logo.svg" alt="Google Developer Student Clubs" className="w-72 mx-auto mb-3" />
           <h1 className="text-2xl font-extrabold mt-2">Interactive Tech Station</h1>
           <p className="text-sm text-[#5F6368] mt-1">Test your skills and join GDSC!</p>
-          <p className="text-xs text-[#5F6368] mt-2">Six mini-games. Pick one to score; the rest are practice.</p>
+          <p className="text-sm font-semibold text-[#202124] mt-3">
+            Play all six games — your best score in each adds up. Top the leaderboard by the end of the day to win a prize.
+          </p>
         </div>
 
         <label htmlFor="display-name" className="block text-sm font-semibold mb-1 text-[#202124]">
@@ -144,8 +150,14 @@ export default function NameEntry() {
         <p className="text-xs text-[#5F6368] mb-4 bg-[#F8F9FA] rounded-xl p-3 border border-[#DADCE0]">
           Letters, numbers, and spaces · 2–30 characters · no duplicates.{' '}
           Your name and score appear on the public leaderboard and are deleted after 48 hours.{' '}
-          You can play again any time, and only your best score counts.
+          You can play any game again any time, and only your best score in each game counts.
         </p>
+
+        {notice && (
+          <p role="status" className="text-xs text-[#B06000] bg-[#FEF7E0] border border-[#FBBC04] rounded-xl p-3 mb-3">
+            {notice}
+          </p>
+        )}
 
         {error && (
           <p role="alert" className="text-xs text-[#EA4335] mb-3">{error}</p>

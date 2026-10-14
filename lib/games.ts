@@ -6,7 +6,6 @@ export interface GameMeta {
   title: string;
   tagline: string;
   howItScores: string;
-  maxRaw: number;
 }
 
 export const GAMES: Record<Tab, GameMeta> = {
@@ -16,7 +15,6 @@ export const GAMES: Record<Tab, GameMeta> = {
     title: 'Emoji Riddles',
     tagline: 'Decode 5 emoji puzzles',
     howItScores: 'Every correct answer scores',
-    maxRaw: 200,
   },
   trivia: {
     id: 'trivia',
@@ -24,7 +22,6 @@ export const GAMES: Record<Tab, GameMeta> = {
     title: 'Tech Trivia',
     tagline: '15 fast questions',
     howItScores: 'Right answers add, wrong ones cost you',
-    maxRaw: 300,
   },
   password: {
     id: 'password',
@@ -32,7 +29,6 @@ export const GAMES: Record<Tab, GameMeta> = {
     title: 'Password Challenge',
     tagline: 'Craft the strongest password',
     howItScores: 'Longer, more varied and less predictable scores higher',
-    maxRaw: 200,
   },
   wordle: {
     id: 'wordle',
@@ -40,7 +36,6 @@ export const GAMES: Record<Tab, GameMeta> = {
     title: 'Tech Wordle',
     tagline: 'Guess the 5-letter tech word in 6 tries',
     howItScores: 'Fewer guesses, bigger score',
-    maxRaw: 300,
   },
   memory: {
     id: 'memory',
@@ -48,7 +43,6 @@ export const GAMES: Record<Tab, GameMeta> = {
     title: 'Memory Match',
     tagline: 'Flip cards and match 8 tech pairs',
     howItScores: 'Fewer moves and less time, bigger score',
-    maxRaw: 1000,
   },
   bugs: {
     id: 'bugs',
@@ -56,7 +50,6 @@ export const GAMES: Record<Tab, GameMeta> = {
     title: 'Bug Hunter',
     tagline: 'Spot the bug in Java code',
     howItScores: 'Every bug you catch scores',
-    maxRaw: 200,
   },
 };
 

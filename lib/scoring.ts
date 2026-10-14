@@ -1,41 +1,80 @@
 import type { Tab } from './types';
-import { GAMES } from './games';
 
-export const LEADERBOARD_MAX = 1000;
+/**
+ * Seconds allowed per game before the speed bonus reaches zero. Server-side only:
+ * the client never needs these numbers, so they are not part of any response.
+ */
+export const GAME_TIME_LIMIT: Record<Tab, number> = {
+  riddles: 90,
+  trivia: 240,
+  bugs: 120,
+  wordle: 180,
+  memory: 90,
+  password: 90,
+};
+
+const BASE_POINTS = 1000;
+const SPEED_POINTS = 250;
 
 function clamp(n: number, min: number, max: number): number {
   return Math.min(Math.max(n, min), max);
 }
 
-/** Converts a game's raw points into the shared 0..LEADERBOARD_MAX scale. */
-export function normalizeScore(game: Tab, raw: number): number {
-  const { maxRaw } = GAMES[game];
-  const safe = Number.isFinite(raw) ? raw : 0;
-  return Math.round((clamp(safe, 0, maxRaw) / maxRaw) * LEADERBOARD_MAX);
+/** Performance in [0, 1] from a value that may be out of range or not finite. */
+function unit(p: number): number {
+  return Number.isFinite(p) ? clamp(p, 0, 1) : 0;
 }
 
+/**
+ * Score for one finished run.
+ *   score = round(1000 * P) + round(250 * P * max(0, 1 - durationSec / T[game]))
+ * P = 0 gives no points at all. An instant finish gets the full speed bonus (250 * P).
+ * A run that takes T seconds or longer gets no speed bonus.
+ */
+export function calcRunScore(game: Tab, performance: number, durationMs: number): number {
+  const p = unit(performance);
+  const durationSec = Number.isFinite(durationMs) ? Math.max(0, durationMs) / 1000 : 0;
+  const speed = Math.max(0, 1 - durationSec / GAME_TIME_LIMIT[game]);
+  return Math.round(BASE_POINTS * p) + Math.round(SPEED_POINTS * p * speed);
+}
+
+/** Trivia points evolve one answer at a time: +20 for a right answer, -10 for a wrong one, never below 0. */
+export const TRIVIA_CORRECT_POINTS = 20;
+export const TRIVIA_WRONG_PENALTY = 10;
+const TRIVIA_POINTS_CAP = 300;
+
+export function triviaStep(points: number, correct: boolean): number {
+  return Math.max(0, points + (correct ? TRIVIA_CORRECT_POINTS : -TRIVIA_WRONG_PENALTY));
+}
+
+/** Trivia performance from the running points total. */
+export function triviaPerformance(points: number): number {
+  return unit(clamp(points, 0, TRIVIA_POINTS_CAP) / TRIVIA_POINTS_CAP);
+}
+
+/** Memory performance: 8 moves (every pair found first time) is full marks, 32 moves or more is zero. */
+export function memoryPerformance(moves: number): number {
+  return unit((32 - moves) / 24);
+}
+
+const WORDLE_POINTS = [300, 250, 200, 150, 100, 50];
+const WORDLE_CAP = 300;
+
+/** Wordle points: fewer guesses, more points. Zero when the word was not found. */
 export function calcWordleScore(guesses: number, solved: boolean): number {
   if (!solved) return 0;
-  const table = [300, 250, 200, 150, 100, 50];
-  return table[Math.min(guesses - 1, 5)] ?? 0;
+  return WORDLE_POINTS[Math.min(guesses - 1, WORDLE_POINTS.length - 1)] ?? 0;
 }
 
-/** Memory Match raw score: 1000 at 8 moves within 20 seconds, minus penalties. */
-export function calcMemoryScore(moves: number, seconds: number): number {
-  const raw = 1000 - (moves - 8) * 25 - Math.max(0, seconds - 20) * 5;
-  return Math.round(clamp(raw, 0, LEADERBOARD_MAX));
-}
-
-/** Rejects memory results that cannot be produced by a real game (8 pairs, sane timing). */
-export function isPlausibleMemory(moves: unknown, seconds: unknown): boolean {
-  return (
-    Number.isInteger(moves) && (moves as number) >= 8 && (moves as number) <= 200 &&
-    Number.isInteger(seconds) && (seconds as number) >= 6 && (seconds as number) <= 3600
-  );
+/** Wordle performance from the guess count. */
+export function wordlePerformance(guesses: number, solved: boolean): number {
+  return unit(calcWordleScore(guesses, solved) / WORDLE_CAP);
 }
 
 // Matches 3+ repeated chars, common sequences, and dictionary fragments
 const WEAK_PATTERN = /(.)\1{2,}|012|123|234|345|456|567|678|789|890|abc|bcd|cde|qwerty|password|admin|letmein/i;
+
+const PASSWORD_CAP = 200;
 
 export function calcPasswordScore(pass: string): number {
   if (!pass) return 0;
@@ -54,7 +93,12 @@ export function calcPasswordScore(pass: string): number {
   // Pattern penalty: known weak sequences reduce the score
   const penalty = WEAK_PATTERN.test(pass) ? 30 : 0;
 
-  return Math.max(0, Math.min(200, Math.round(lengthScore + hasUpper + hasDigit + hasSymbol + uniquenessScore - penalty)));
+  return Math.max(0, Math.min(PASSWORD_CAP, Math.round(lengthScore + hasUpper + hasDigit + hasSymbol + uniquenessScore - penalty)));
+}
+
+/** Password performance from the strength points. */
+export function passwordPerformance(pass: string): number {
+  return unit(calcPasswordScore(pass) / PASSWORD_CAP);
 }
 
 export function passwordStrengthLabel(score: number): string {
