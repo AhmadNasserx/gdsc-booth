@@ -13,6 +13,7 @@ import BugHunter from '@/components/games/BugHunter';
 import SuccessScreen from '@/components/SuccessScreen';
 import { TABS, type Tab } from '@/lib/types';
 import { GAMES } from '@/lib/games';
+import { onSessionStarted } from '@/lib/clientSession';
 import type { Riddle, TriviaQuestion, BugQuestion } from '@/lib/questions';
 
 interface ClientQuestions {
@@ -35,10 +36,13 @@ interface AnswerMap {
 
 type Answer = AnswerMap[Tab];
 
-interface SubmitResult {
+// Response of POST /api/score. Stored whole and passed to SuccessScreen.
+interface ScoreResult {
   rank: number;
   total: number;
   game: Tab;
+  best: number;
+  improved: boolean;
 }
 
 const INITIAL_RUNS: Record<Tab, number> = {
@@ -81,6 +85,14 @@ function renderGame(tab: Tab, q: ClientQuestions, onComplete: (answer: Answer) =
 }
 
 export default function PlayPage() {
+  // Bumped when "Play again" starts a new session at the same URL. Keying the play flow
+  // on this remounts it with fresh state, instead of keeping the previous run's result.
+  const [sessionVersion, setSessionVersion] = useState(0);
+  useEffect(() => onSessionStarted(() => setSessionVersion((v) => v + 1)), []);
+  return <PlaySession key={sessionVersion} />;
+}
+
+function PlaySession() {
   const router = useRouter();
   const [name, setName] = useState('');
   const [token, setToken] = useState('');
@@ -96,7 +108,7 @@ export default function PlayPage() {
   const [runs, setRuns] = useState<Record<Tab, number>>(INITIAL_RUNS);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [result, setResult] = useState<SubmitResult | null>(null);
+  const [result, setResult] = useState<ScoreResult | null>(null);
   // Reused across retries so a repeated request returns the same result, not a second entry.
   const submissionIdRef = useRef<string | null>(null);
 
@@ -171,7 +183,7 @@ export default function PlayPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? 'Submission failed');
-      setResult(data as SubmitResult);
+      setResult(data as ScoreResult);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -185,7 +197,7 @@ export default function PlayPage() {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="w-full max-w-2xl bg-white border border-[#DADCE0] rounded-3xl p-8 shadow-sm">
-          <SuccessScreen name={name} total={result.total} rank={result.rank} game={result.game} />
+          <SuccessScreen name={name} {...result} />
         </div>
       </div>
     );

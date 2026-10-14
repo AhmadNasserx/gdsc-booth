@@ -1,4 +1,9 @@
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { GAMES } from '@/lib/games';
+import { startSession } from '@/lib/clientSession';
 import type { Tab } from '@/lib/types';
 
 // Pure CSS confetti. Positions are fixed so server and client render the same markup.
@@ -10,10 +15,34 @@ const CONFETTI = Array.from({ length: 24 }, (_, i) => ({
   color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
 }));
 
-interface Props { name: string; total: number; rank: number; game: Tab; }
+interface Props {
+  name: string;
+  total: number; // This run's score.
+  rank: number;
+  game: Tab;
+  best: number; // The player's best score on the leaderboard.
+  improved: boolean; // Whether this run became the player's best.
+}
 
-export default function SuccessScreen({ name, total, rank, game }: Props) {
+export default function SuccessScreen({ name, total, rank, game, best, improved }: Props) {
+  const router = useRouter();
   const meta = GAMES[game];
+  const [starting, setStarting] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handlePlayAgain() {
+    if (starting) return;
+    setStarting(true);
+    setError('');
+    const result = await startSession(name);
+    if (result.ok) {
+      router.push('/play');
+      return; // Stay disabled until the play page replaces this screen.
+    }
+    setError(result.error);
+    setStarting(false);
+  }
+
   return (
     <div className="relative overflow-hidden flex flex-col items-center text-center py-8 space-y-4">
       <div aria-hidden="true" className="pointer-events-none absolute inset-0">
@@ -39,12 +68,35 @@ export default function SuccessScreen({ name, total, rank, game }: Props) {
         <span>{total}</span>{' '}
         <span className="text-xl font-semibold text-[#5F6368]">/ 1000 pts</span>
       </p>
-      <p className="relative text-sm font-bold text-[#34A853]">You are #{rank} on the leaderboard!</p>
+      {improved ? (
+        <p className="relative text-sm font-bold text-[#B06000]">🎉 New personal best!</p>
+      ) : (
+        <p className="relative text-sm text-[#5F6368]">Your best is {best} / 1000</p>
+      )}
+      <p className="relative text-sm font-bold text-[#34A853]">You&apos;re #{rank} on the leaderboard</p>
+
+      <div className="relative flex flex-col items-center gap-2 pt-2 w-full">
+        <button
+          type="button"
+          onClick={handlePlayAgain}
+          disabled={starting}
+          className="min-h-14 w-full max-w-xs px-8 py-4 rounded-full bg-[#1A73E8] hover:bg-[#1557B0] disabled:opacity-60 disabled:cursor-not-allowed text-white text-lg font-extrabold shadow transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#1A73E8]/40"
+        >
+          {starting ? 'Starting…' : (
+            <>
+              Play again <span aria-hidden="true">🔁</span>
+            </>
+          )}
+        </button>
+        <p className="text-xs text-[#5F6368]">Each run gets new questions. Your best score counts.</p>
+        {error && <p role="alert" className="text-xs text-[#EA4335]">{error}</p>}
+      </div>
+
       <a
         href="https://forms.gle/N5UBuhErH9wqjpV87"
         target="_blank"
         rel="noopener noreferrer"
-        className="relative mt-4 bg-[#34A853] hover:bg-[#2C8E45] text-white font-bold px-8 py-3 rounded-full text-sm transition-all shadow"
+        className="relative mt-2 bg-[#34A853] hover:bg-[#2C8E45] text-white font-bold px-8 py-3 rounded-full text-sm transition-all shadow"
       >
         Join GDSC →
       </a>
