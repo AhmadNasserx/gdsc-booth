@@ -165,7 +165,7 @@ export interface BugQuestion {
 // Each snippet contains exactly one buggy line. `answer` is its index in `lines`.
 export const BUG_POOL: BugQuestion[] = [
   {
-    title: 'Sum every price',
+    title: 'Sum an array',
     language: 'JavaScript',
     lines: [
       'function sumAll(nums) {',
