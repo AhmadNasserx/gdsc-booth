@@ -1,33 +1,13 @@
 import { TRIVIA_POOL } from '../questions';
-import type { AnswerResponse, FinishResponse, TriviaView } from '../apiTypes';
+import type { ReviewItem, TriviaView } from '../apiTypes';
 import { triviaPerformance, triviaStep } from '../scoring';
-import {
-  expectQuestion,
-  listOf,
-  numberOf,
-  requiredQuestionIndex,
-  pickIndices,
-  RunError,
-  secureRandomInt,
-  shuffle,
-  type RandomInt,
-  type Step,
-} from './shared';
+import { listOf, pickIndices, readAnswers, RunError, secureRandomInt, shuffle, type BatchReply, type RandomInt, type Step } from './shared';
 
 export const TRIVIA_COUNT = 15;
 
 export interface TriviaState {
   indices: number[];
-  answers: string[];
-  /** Running points: +20 right, -10 wrong, never below 0. */
-  points: number;
 }
-
-export type TriviaAction =
-  | { kind: 'answer'; answer: string; q: number }
-  | { kind: 'finish' };
-
-export type TriviaResponse = Omit<AnswerResponse, 'done' | 'result'> | Omit<FinishResponse, 'done' | 'result'>;
 
 export function startTrivia(
   picked?: number[],
@@ -38,51 +18,37 @@ export function startTrivia(
     const q = TRIVIA_POOL[i];
     return { question: q.question, options: shuffle(q.options, rand) };
   });
-  return { state: { indices, answers: [], points: 0 }, view: { game: 'trivia', questions } };
+  return { state: { indices }, view: { game: 'trivia', questions } };
 }
 
 export function hydrateTrivia(raw: Partial<TriviaState> | null | undefined): TriviaState {
-  return {
-    indices: listOf<number>(raw?.indices),
-    answers: listOf<string>(raw?.answers),
-    points: numberOf(raw?.points),
-  };
+  return { indices: listOf<number>(raw?.indices) };
 }
 
-export function parseTriviaAction(body: Record<string, unknown>): TriviaAction {
-  if (body.finish === true) return { kind: 'finish' };
-  if (typeof body.answer !== 'string') throw new RunError(400, 'answer must be a string or finish must be true');
-  return { kind: 'answer', answer: body.answer, q: requiredQuestionIndex(body) };
+/** The batch: up to one entry per question, in order. Questions after the last entry are open. */
+export function parseTriviaBatch(body: Record<string, unknown>): Array<string | null> {
+  return readAnswers(body, (value): value is string => typeof value === 'string', 'an option text', { max: TRIVIA_COUNT });
 }
 
-export function applyTriviaAction(state: TriviaState, action: TriviaAction): Step<TriviaState, TriviaResponse> {
-  if (action.kind === 'finish') {
-    // Finalise with the answers so far. Unanswered questions are simply not counted.
-    return {
-      state,
-      response: {},
-      performance: triviaPerformance(state.points),
-    };
-  }
-
-  const answered = state.answers.length;
-  if (answered >= TRIVIA_COUNT) throw new RunError(409, 'This game is already finished');
-  expectQuestion(action.q, answered);
-
-  const question = TRIVIA_POOL[state.indices[answered]];
-  if (action.answer !== '' && !question.options.includes(action.answer)) {
-    throw new RunError(400, 'Answer is not one of the options');
-  }
-  const correct = action.answer === question.answer;
-  const next: TriviaState = {
-    indices: state.indices,
-    answers: [...state.answers, action.answer],
-    points: triviaStep(state.points, correct),
-  };
-  const finished = next.answers.length === TRIVIA_COUNT;
-  return {
-    state: next,
-    response: { correct, correctAnswer: question.answer },
-    performance: finished ? triviaPerformance(next.points) : undefined,
-  };
+/**
+ * Grades the batch in order. Points run +20 for a right answer and -10 for a wrong one, never
+ * below 0, applied one question at a time. A skipped question (null or missing) leaves the points
+ * as they are. Every question gets a review entry. Pure.
+ */
+export function gradeTrivia(state: TriviaState, answers: ReadonlyArray<string | null>): Step<TriviaState, BatchReply> {
+  let points = 0;
+  const results: ReviewItem[] = [];
+  state.indices.forEach((poolIndex, i) => {
+    const question = TRIVIA_POOL[poolIndex];
+    const given = answers[i] ?? null;
+    if (given === null) {
+      results.push({ answered: false, correct: false, correctAnswer: question.answer });
+      return;
+    }
+    if (!question.options.includes(given)) throw new RunError(400, `answers[${i}] is not one of the options`);
+    const right = given === question.answer;
+    points = triviaStep(points, right);
+    results.push({ answered: true, correct: right, correctAnswer: question.answer });
+  });
+  return { state, response: { results }, performance: triviaPerformance(points) };
 }

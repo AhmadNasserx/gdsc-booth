@@ -222,6 +222,23 @@ describe('Play page: playing a game', () => {
     expect(fetchCalls('/api/game/action')).toEqual([{ token: 'tok', runId: 'run-wordle', guess: 'CRANE' }]);
   });
 
+  it('sends Tech Trivia its whole batch of answers in one action, with no question index', async () => {
+    startSession();
+    handler = (url, body) =>
+      url === '/api/game/action'
+        ? { body: { results: [], done: true, result: runResult({ game: 'trivia' }) } }
+        : defaultHandler(url, body);
+    render(<PlayPage />);
+    await openGame(/tech trivia/i, 'trivia');
+
+    const { response } = await gameAct('trivia', { answers: ['Flutter', null] });
+
+    expect(response).toEqual({ results: [], done: true, result: runResult({ game: 'trivia' }) });
+    expect(fetchCalls('/api/game/action')).toEqual([
+      { token: 'tok', runId: 'run-trivia', answers: ['Flutter', null] },
+    ]);
+  });
+
   it('shows a friendly retry when the game cannot be started, and retries it', async () => {
     startSession();
     let failing = true;

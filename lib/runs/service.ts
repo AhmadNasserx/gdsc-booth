@@ -111,25 +111,30 @@ export interface BoardSnapshot {
 
 /** Records one finished run on the player's leaderboard entry and returns where they now stand. */
 async function recordOnLeaderboard(event: LeaderboardEvent): Promise<BoardSnapshot> {
-  const ref = adminDb.ref(`leaderboard/${event.normKey}`);
   const applied: { outcome?: ReturnType<typeof applyRunToEntry> } = {};
-  await ref.transaction((current) => {
-    const outcome = applyRunToEntry(current as LeaderboardEntry | null, {
-      name: event.name,
-      game: event.game,
-      score: event.score,
-      now: event.now,
-      issuedAt: event.issuedAt,
-    });
-    applied.outcome = outcome;
-    return outcome.entry;
-  });
+  // The write and the read of the board do not depend on each other, so they run together. The
+  // player's own entry is left out of the read, which keeps the rank the same whichever lands first.
+  const [, snap] = await Promise.all([
+    adminDb.ref(`leaderboard/${event.normKey}`).transaction((current) => {
+      const outcome = applyRunToEntry(current as LeaderboardEntry | null, {
+        name: event.name,
+        game: event.game,
+        score: event.score,
+        now: event.now,
+        issuedAt: event.issuedAt,
+      });
+      applied.outcome = outcome;
+      return outcome.entry;
+    }),
+    adminDb.ref('leaderboard').get(),
+  ]);
   const outcome = applied.outcome;
   if (!outcome) throw new Error('leaderboard transaction did not run');
 
-  const snap = await adminDb.ref('leaderboard').get();
-  const all = Object.values((snap.val() ?? {}) as Record<string, LeaderboardEntry>);
-  const rank = computeRank(liveEntries(all, event.now), event.now, outcome.entry.score, outcome.entry.timestamp);
+  const others = Object.entries((snap.val() ?? {}) as Record<string, LeaderboardEntry>)
+    .filter(([key]) => key !== event.normKey)
+    .map(([, entry]) => entry);
+  const rank = computeRank(liveEntries(others, event.now), event.now, outcome.entry.score, outcome.entry.timestamp);
   return {
     best: outcome.best,
     improved: outcome.improved,
@@ -140,12 +145,13 @@ async function recordOnLeaderboard(event: LeaderboardEvent): Promise<BoardSnapsh
 }
 
 /**
- * Builds the response for a finished run: records the score (idempotent, so retrying is safe)
- * and marks the run settled.
+ * Settles a finished run: records its score (idempotent, so retrying is safe) and stores the full
+ * reply on the run. The stored reply is what a repeated batch gets back.
  */
 async function completeRun(runId: string, run: RunRecord, session: SessionPayload, now: number): Promise<Json> {
   const final = run.final;
   if (!final) throw new Error('completeRun called on a run that has not finished');
+  if (final.settled) return final.response;
 
   const board = await recordOnLeaderboard({
     normKey: run.normKey,
@@ -155,8 +161,6 @@ async function completeRun(runId: string, run: RunRecord, session: SessionPayloa
     issuedAt: session.issuedAt,
     now,
   });
-  if (!final.settled) await adminDb.ref(`runs/${runId}/final/settled`).set(true);
-
   const result: RunResult = {
     game: run.game,
     score: final.score,
@@ -166,7 +170,22 @@ async function completeRun(runId: string, run: RunRecord, session: SessionPayloa
     rank: board.rank,
     gamesPlayed: board.gamesPlayed,
   };
-  return { ...final.response, done: true, result };
+  const reply = { ...final.response, done: true, result };
+  // Settling is a transaction. Whichever request settles the run first stores its reply, and any
+  // other request that reaches this point gets that same stored reply back.
+  const kept: { reply?: Record<string, unknown> } = {};
+  await adminDb.ref(`runs/${runId}/final`).transaction((current) => {
+    const stored = current as RunRecord['final'] | null;
+    // A cache miss shows null first. Returning null makes the server send the real value and retry.
+    if (stored === null) return null;
+    if (stored?.settled) {
+      kept.reply = stored.response;
+      return undefined;
+    }
+    kept.reply = reply;
+    return toStorable({ ...final, response: reply, settled: true });
+  });
+  return kept.reply ?? reply;
 }
 
 /** Applies one action to a run inside a single transaction on runs/{runId}. */
@@ -208,6 +227,7 @@ export async function performAction(
   if (t.kind === 'settle') {
     return completeRun(runId, t.run, session, now);
   }
+  if (t.kind === 'replay') return t.response;
   if (!committed) throw new RunError(409, 'Please try again');
   if (!t.finished) return { ...t.response, done: false };
   return completeRun(runId, t.next, session, now);

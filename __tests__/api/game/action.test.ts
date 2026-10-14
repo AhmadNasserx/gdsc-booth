@@ -6,7 +6,7 @@ import { POST as actionPOST } from '@/app/api/game/action/route';
 import { signSession, verifySession } from '@/lib/session';
 import { BUG_POOL, RIDDLE_POOL, TRIVIA_POOL } from '@/lib/questions';
 import { calcRunScore, memoryPerformance, triviaPerformance } from '@/lib/scoring';
-import { clock, installClock, readPath, resetDb, simulateCacheMisses, writePath } from '@/test/support/rtdbMock';
+import { adminDbMock, clock, installClock, readPath, resetDb, simulateCacheMisses, writePath } from '@/test/support/rtdbMock';
 
 jest.mock('@/lib/firebaseAdmin', () => ({
   adminDb: jest.requireActual('@/test/support/rtdbMock').adminDbMock,
@@ -16,11 +16,16 @@ process.env.SESSION_SECRET = 'a'.repeat(64);
 
 const DAY_MS = 48 * 60 * 60 * 1000;
 const UUID_NOT_IN_DB = '00000000-0000-4000-8000-000000000000';
+const NONE5 = { answers: [null, null, null, null, null] };
 
 beforeEach(() => {
   resetDb();
   installClock();
   simulateCacheMisses(false);
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
 });
 
 // Response bodies are checked field by field, so a loose type keeps the assertions readable.
@@ -68,9 +73,44 @@ async function act(t: string, runId: string, body: Json): Promise<{ status: numb
   return call('action', { token: t, runId, ...body });
 }
 
+/** The answers that are right for a riddles or trivia or bugs run, in the order it asks them. */
+function rightRiddles(runId: string, n = 5): string[] {
+  return (run(runId).state.indices as number[]).slice(0, n).map((i) => RIDDLE_POOL[i].answer);
+}
+function rightTrivia(runId: string, n: number): string[] {
+  return (run(runId).state.indices as number[]).slice(0, n).map((i) => TRIVIA_POOL[i].answer);
+}
+function wrongBugs(runId: string): number[] {
+  return (run(runId).state.indices as number[]).map((i) => (BUG_POOL[i].answer + 1) % BUG_POOL[i].lines.length);
+}
+
+/** Records every RTDB call the routes make, by kind and path. */
+function trackOps(): string[] {
+  const ops: string[] = [];
+  const real = adminDbMock.ref;
+  jest.spyOn(adminDbMock, 'ref').mockImplementation((path: string) => {
+    const ref = real(path);
+    return {
+      get: () => {
+        ops.push(`get ${path}`);
+        return ref.get();
+      },
+      set: (value: unknown) => {
+        ops.push(`set ${path}`);
+        return ref.set(value);
+      },
+      transaction: (update: (current: unknown) => unknown) => {
+        ops.push(`transaction ${path}`);
+        return ref.transaction(update);
+      },
+    } as unknown as ReturnType<typeof real>;
+  });
+  return ops;
+}
+
 describe('POST /api/game/action: rejections before any game rule', () => {
   it('401 for an invalid token', async () => {
-    const res = await call('action', { token: 'bad', runId: UUID_NOT_IN_DB, answer: '' });
+    const res = await call('action', { token: 'bad', runId: UUID_NOT_IN_DB, guess: 'REACT' });
     expect(res.status).toBe(401);
     expect(res.data).toEqual({ error: 'Invalid or expired session' });
   });
@@ -87,14 +127,14 @@ describe('POST /api/game/action: rejections before any game rule', () => {
     ['uppercase UUID', 'ABCDEF01-0000-4000-8000-00000000000A'],
   ])('400 for a run id that is %s', async (_label, runId) => {
     const { token } = login();
-    const res = await call('action', { token, runId, answer: '' });
+    const res = await call('action', { token, runId, guess: 'REACT' });
     expect(res.status).toBe(400);
     expect(res.data).toEqual({ error: 'Invalid run id' });
   });
 
   it('404 for a run that does not exist', async () => {
     const { token } = login();
-    const res = await act(token, UUID_NOT_IN_DB, { answer: '' });
+    const res = await act(token, UUID_NOT_IN_DB, { guess: 'REACT' });
     expect(res.status).toBe(404);
     expect(res.data).toEqual({ error: 'Run not found' });
   });
@@ -104,10 +144,10 @@ describe('POST /api/game/action: rejections before any game rule', () => {
     const other = login('Bilal');
     const { runId } = await start('riddles', owner.token);
     tick();
-    const res = await act(other.token, runId, { answer: '' });
+    const res = await act(other.token, runId, NONE5);
     expect(res.status).toBe(404);
     expect(res.data).toEqual({ error: 'Run not found' });
-    expect(run(runId).state.answers ?? []).toEqual([]);
+    expect(run(runId).status).toBe('active');
   });
 
   it('400 when the body does not fit the game (flip sent to riddles)', async () => {
@@ -124,8 +164,10 @@ describe('POST /api/game/action: rejections before any game rule', () => {
       ['wordle', { guess: 12 }],
       ['memory', { flip: 16 }],
       ['password', { password: 99 }],
-      ['bugs', { answer: '2' }],
-      ['trivia', { answer: 4 }],
+      ['bugs', { answers: '2' }],
+      ['trivia', { answers: [4] }],
+      ['riddles', { answers: [null] }],
+      ['riddles', { answer: 'Docker', q: 0 }],
     ];
     for (const [game, body] of cases) {
       resetDb();
@@ -135,6 +177,7 @@ describe('POST /api/game/action: rejections before any game rule', () => {
       tick();
       const res = await act(token, runId, body);
       expect(res.status).toBe(400);
+      expect(run(runId).lastActionAt).toBe(run(runId).startedAt);
     }
   });
 
@@ -154,7 +197,7 @@ describe('POST /api/game/action: rejections before any game rule', () => {
     const first = await start('riddles', token);
     await start('riddles', token);
     tick();
-    const res = await act(token, first.runId, { answer: '' });
+    const res = await act(token, first.runId, NONE5);
     expect(res.status).toBe(409);
     expect(res.data).toEqual({ error: 'This game was replaced by a newer one' });
   });
@@ -164,7 +207,7 @@ describe('POST /api/game/action: rejections before any game rule', () => {
     const { runId } = await start('bugs', token);
     writePath(`runs/${runId}/expiresAt`, clock.now - 1);
     tick();
-    const res = await act(token, runId, { answer: 0 });
+    const res = await act(token, runId, { answers: wrongBugs(runId) });
     expect(res.status).toBe(409);
     expect(res.data).toEqual({ error: 'This game has expired' });
   });
@@ -178,24 +221,24 @@ describe('POST /api/game/action: rejections before any game rule', () => {
 });
 
 describe('POST /api/game/action: throttling', () => {
-  it('429 "Too fast" for an action 299ms after the last one', async () => {
+  it('429 "Too fast" for a guess 299ms after the last one', async () => {
     const { token } = login();
-    const { runId } = await start('riddles', token);
+    const { runId } = await start('wordle', token);
     tick(300);
-    expect((await act(token, runId, { answer: '', q: 0 })).status).toBe(200);
+    expect((await act(token, runId, { guess: 'QZXJV' })).status).toBe(200);
     tick(299);
-    const res = await act(token, runId, { answer: '', q: 0 });
+    const res = await act(token, runId, { guess: 'QZXJV' });
     expect(res.status).toBe(429);
     expect(res.data).toEqual({ error: 'Too fast' });
   });
 
   it('allows the next action exactly 300ms later', async () => {
     const { token } = login();
-    const { runId } = await start('bugs', token);
+    const { runId } = await start('wordle', token);
     tick(300);
-    await act(token, runId, { answer: 0, q: 0 });
+    await act(token, runId, { guess: 'QZXJV' });
     tick(300);
-    expect((await act(token, runId, { answer: 0, q: 1 })).status).toBe(200);
+    expect((await act(token, runId, { guess: 'QZXJV' })).status).toBe(200);
   });
 
   it('uses a 120ms gap for memory flips', async () => {
@@ -211,11 +254,11 @@ describe('POST /api/game/action: throttling', () => {
 
   it('a throttled action leaves the run unchanged', async () => {
     const { token } = login();
-    const { runId } = await start('riddles', token);
+    const { runId } = await start('wordle', token);
     tick(300);
-    await act(token, runId, { answer: '', q: 0 });
+    await act(token, runId, { guess: 'QZXJV' });
     const before = run(runId);
-    await act(token, runId, { answer: '', q: 0 });
+    await act(token, runId, { guess: 'QZXJV' });
     expect(run(runId).state).toEqual(before.state);
   });
 
@@ -225,136 +268,193 @@ describe('POST /api/game/action: throttling', () => {
     tick(100);
     expect((await act(token, runId, { guess: 'REACT' })).status).toBe(429);
   });
+
+  it('a batch sent before half a second per answered question has passed is refused, and can follow', async () => {
+    const { token } = login();
+    const { runId } = await start('riddles', token);
+    tick(2400);
+    const answers = rightRiddles(runId, 5);
+    const early = await act(token, runId, { answers });
+    expect(early.status).toBe(429);
+    expect(early.data).toEqual({ error: 'Too fast' });
+    expect(run(runId).status).toBe('active');
+    tick(100);
+    expect((await act(token, runId, { answers })).status).toBe(200);
+  });
 });
 
-describe('riddles', () => {
-  it('grades five answers in order and finishes with the score for the performance', async () => {
+describe('riddles: one batch per run', () => {
+  it('grades the whole batch in one request, returns a review for every question and finishes the run', async () => {
     const { token } = login();
     const { runId } = await start('riddles', token);
     const startedAt = run(runId).startedAt;
     const indices: number[] = run(runId).state.indices;
+    tick(3000);
+    const answers = [RIDDLE_POOL[indices[0]].answer, RIDDLE_POOL[indices[1]].answer, RIDDLE_POOL[indices[2]].answer, null, null];
 
-    let last: Json = {};
-    for (let i = 0; i < 5; i++) {
-      tick();
-      const answer = i < 3 ? RIDDLE_POOL[indices[i]].answer : '';
-      const res = await act(token, runId, { answer, q: i });
-      expect(res.status).toBe(200);
-      expect(res.data.correct).toBe(i < 3);
-      expect(res.data.correctAnswer).toBe(RIDDLE_POOL[indices[i]].answer);
-      expect(res.data.done).toBe(i === 4);
-      last = res.data;
-    }
-    const durationMs = clock.now - startedAt;
-    expect(last.result).toMatchObject({
+    const res = await act(token, runId, { answers });
+    expect(res.status).toBe(200);
+    expect(res.data.done).toBe(true);
+    expect(res.data.results).toEqual(
+      indices.map((poolIndex, i) => ({
+        answered: i < 3,
+        correct: i < 3,
+        correctAnswer: RIDDLE_POOL[poolIndex].answer,
+      })),
+    );
+    expect(res.data.result).toMatchObject({
       game: 'riddles',
-      score: calcRunScore('riddles', 0.6, durationMs),
-      best: calcRunScore('riddles', 0.6, durationMs),
+      score: calcRunScore('riddles', 0.6, clock.now - startedAt),
+      best: calcRunScore('riddles', 0.6, clock.now - startedAt),
       improved: true,
       gamesPlayed: ['riddles'],
     });
     expect(run(runId)).toMatchObject({ status: 'done' });
   });
 
-  it('a second answer for the same question is out of order (409) and changes nothing', async () => {
+  it('an open riddle counts as wrong and its review still gives the answer', async () => {
     const { token } = login();
     const { runId } = await start('riddles', token);
-    tick();
-    expect((await act(token, runId, { answer: '', q: 0 })).status).toBe(200);
-    tick();
-    expect((await act(token, runId, { answer: '', q: 0 })).status).toBe(409);
-    expect(run(runId).state.answers).toHaveLength(1);
+    tick(3000);
+    const res = await act(token, runId, NONE5);
+    expect(res.status).toBe(200);
+    expect(res.data.results.every((r: Json) => r.answered === false && r.correct === false)).toBe(true);
+    expect(res.data.results.map((r: Json) => r.correctAnswer)).toEqual(
+      (run(runId).state.indices as number[]).map((i) => RIDDLE_POOL[i].answer),
+    );
+    expect(res.data.result.score).toBe(0);
   });
 
-  it('accepts q for the open question', async () => {
+  it('a batch that is not five entries is 400 and leaves the run open', async () => {
     const { token } = login();
     const { runId } = await start('riddles', token);
-    tick();
-    expect((await act(token, runId, { answer: '', q: 0 })).status).toBe(200);
+    tick(3000);
+    expect((await act(token, runId, { answers: [null, null, null, null] })).status).toBe(400);
+    expect((await act(token, runId, { answers: [null, null, null, null, null, null] })).status).toBe(400);
+    expect(run(runId).status).toBe('active');
   });
 
-  it('rejects an answer that is not one of the options shown', async () => {
+  it('an option that was not shown for its riddle is 400', async () => {
     const { token } = login();
     const { runId } = await start('riddles', token);
-    tick();
-    const res = await act(token, runId, { answer: 'Not An Option', q: 0 });
+    tick(3000);
+    const res = await act(token, runId, { answers: ['Not An Option', null, null, null, null] });
     expect(res.status).toBe(400);
+    expect(run(runId).status).toBe('active');
+  });
+
+  it('a second batch returns the first reply unchanged, even with different answers', async () => {
+    const { token } = login();
+    const { runId } = await start('riddles', token);
+    tick(3000);
+    const first = await act(token, runId, { answers: rightRiddles(runId) });
+    const scoreBefore = (readPath('leaderboard/ahmad') as Json).score;
+
+    tick();
+    const same = await act(token, runId, { answers: rightRiddles(runId) });
+    expect(same.status).toBe(200);
+    expect(same.data).toEqual(first.data);
+
+    tick();
+    const different = await act(token, runId, NONE5);
+    expect(different.status).toBe(200);
+    expect(different.data).toEqual(first.data);
+    expect((readPath('leaderboard/ahmad') as Json).score).toBe(scoreBefore);
+  });
+
+  it('other actions on a finished riddles run are 409', async () => {
+    const { token } = login();
+    const { runId } = await start('riddles', token);
+    tick(3000);
+    await act(token, runId, NONE5);
+    tick();
+    const res = await act(token, runId, { guess: 'REACT' });
+    expect(res.status).toBe(409);
+    expect(res.data).toEqual({ error: 'This game is already finished' });
   });
 });
 
-describe('trivia', () => {
-  it('finishes after 15 answers', async () => {
+describe('trivia: one batch per run', () => {
+  it('grades up to fifteen answers in one request and finishes with the run score', async () => {
     const { token } = login();
     const { runId } = await start('trivia', token);
-    const indices: number[] = run(runId).state.indices;
-    let last: Json = {};
-    for (let i = 0; i < 15; i++) {
-      tick();
-      last = (await act(token, runId, { answer: TRIVIA_POOL[indices[i]].answer, q: i })).data;
-    }
-    expect(last.done).toBe(true);
-    expect(last.result.score).toBeGreaterThan(1000);
-    expect(last.result.gamesPlayed).toEqual(['trivia']);
+    tick(8000);
+    const answers = rightTrivia(runId, 15);
+    const res = await act(token, runId, { answers });
+    expect(res.status).toBe(200);
+    expect(res.data.done).toBe(true);
+    expect(res.data.results).toHaveLength(15);
+    expect(res.data.results.every((r: Json) => r.correct === true)).toBe(true);
+    expect(res.data.result.score).toBeGreaterThan(1000);
+    expect(res.data.result.gamesPlayed).toEqual(['trivia']);
   });
 
-  it('{finish:true} ends the run early with the points so far', async () => {
+  it('a short batch leaves the rest open and scores the points the answers gave', async () => {
     const { token } = login();
     const { runId } = await start('trivia', token);
     const startedAt = run(runId).startedAt;
-    const indices: number[] = run(runId).state.indices;
-    for (let i = 0; i < 3; i++) {
-      tick();
-      await act(token, runId, { answer: TRIVIA_POOL[indices[i]].answer, q: i });
-    }
-    tick();
-    const res = await act(token, runId, { finish: true });
+    tick(5000);
+    const res = await act(token, runId, { answers: [...rightTrivia(runId, 3)] });
     expect(res.status).toBe(200);
-    expect(res.data.done).toBe(true);
+    expect(res.data.results).toHaveLength(15);
+    expect(res.data.results.slice(3).every((r: Json) => r.answered === false)).toBe(true);
     expect(res.data.result.score).toBe(calcRunScore('trivia', triviaPerformance(60), clock.now - startedAt));
   });
 
-  it('{finish:true} with no answers scores zero', async () => {
+  it('an empty batch scores zero', async () => {
     const { token } = login();
     const { runId } = await start('trivia', token);
-    tick();
-    const res = await act(token, runId, { finish: true });
+    tick(5000);
+    const res = await act(token, runId, { answers: [] });
+    expect(res.status).toBe(200);
     expect(res.data.result).toMatchObject({ score: 0, best: 0, improved: false });
   });
 
-  it('answering after a finish is refused', async () => {
+  it('a batch of more than fifteen entries is 400', async () => {
     const { token } = login();
     const { runId } = await start('trivia', token);
-    tick();
-    await act(token, runId, { finish: true });
+    tick(5000);
+    expect((await act(token, runId, { answers: Array(16).fill(null) })).status).toBe(400);
+    expect(run(runId).status).toBe('active');
+  });
+
+  it('a finished trivia run refuses the old one-question shape with 409', async () => {
+    const { token } = login();
+    const { runId } = await start('trivia', token);
+    tick(5000);
+    await act(token, runId, { answers: [] });
     tick();
     expect((await act(token, runId, { answer: '', q: 0 })).status).toBe(409);
   });
 });
 
-describe('bug hunter', () => {
-  it('reports the buggy line and explanation for each answer and finishes after five', async () => {
+describe('bug hunter: one batch per run', () => {
+  it('reports the buggy line and explanation for each snippet in one batch and finishes', async () => {
     const { token } = login();
     const { runId } = await start('bugs', token);
     const indices: number[] = run(runId).state.indices;
-    let last: Json = {};
-    for (let i = 0; i < 5; i++) {
-      tick();
-      const bug = BUG_POOL[indices[i]];
-      last = (await act(token, runId, { answer: bug.answer, q: i })).data;
-      expect(last.correct).toBe(true);
-      expect(last.correctAnswer).toBe(bug.answer);
-      expect(last.explanation).toBe(bug.explanation);
-    }
-    expect(last.done).toBe(true);
-    expect(last.result.score).toBeGreaterThanOrEqual(1000);
+    tick(3000);
+    const res = await act(token, runId, { answers: indices.map((i) => BUG_POOL[i].answer) });
+    expect(res.status).toBe(200);
+    expect(res.data.done).toBe(true);
+    res.data.results.forEach((r: Json, i: number) => {
+      expect(r).toEqual({
+        answered: true,
+        correct: true,
+        correctAnswer: BUG_POOL[indices[i]].answer,
+        explanation: BUG_POOL[indices[i]].explanation,
+      });
+    });
+    expect(res.data.result.score).toBeGreaterThanOrEqual(1000);
   });
 
   it('rejects a line index outside the snippet', async () => {
     const { token } = login();
     const { runId } = await start('bugs', token);
-    tick();
-    expect((await act(token, runId, { answer: 99 })).status).toBe(400);
-    expect((await act(token, runId, { answer: -1 })).status).toBe(400);
+    tick(3000);
+    expect((await act(token, runId, { answers: [99, null, null, null, null] })).status).toBe(400);
+    expect((await act(token, runId, { answers: [-1, null, null, null, null] })).status).toBe(400);
+    expect(run(runId).status).toBe('active');
   });
 });
 
@@ -492,15 +592,74 @@ describe('password', () => {
   });
 });
 
-describe('double requests and retries', () => {
-  it('two identical answers at the same moment: only one is applied', async () => {
+describe('round trips per request', () => {
+  it('a wordle guess is one transaction on its run record and nothing else', async () => {
+    const { token } = login();
+    const { runId } = await start('wordle', token);
+    tick();
+    const ops = trackOps();
+    expect((await act(token, runId, { guess: 'QZXJV' })).status).toBe(200);
+    expect(ops).toEqual([`transaction runs/${runId}`]);
+  });
+
+  it('a memory flip is one transaction on its run record and nothing else', async () => {
+    const { token } = login();
+    const { runId } = await start('memory', token);
+    tick(150);
+    const ops = trackOps();
+    expect((await act(token, runId, { flip: 0 })).status).toBe(200);
+    expect(ops).toEqual([`transaction runs/${runId}`]);
+  });
+
+  it('a batch reads the board once, settles once and writes the run record once more', async () => {
     const { token } = login();
     const { runId } = await start('riddles', token);
+    tick(3000);
+    const ops = trackOps();
+    expect((await act(token, runId, { answers: rightRiddles(runId) })).status).toBe(200);
+    expect([...ops].sort()).toEqual(
+      [
+        `transaction runs/${runId}`,
+        'transaction leaderboard/ahmad',
+        'get leaderboard',
+        `transaction runs/${runId}/final`,
+      ].sort(),
+    );
+  });
+
+  it('a repeated batch touches only its run record', async () => {
+    const { token } = login();
+    const { runId } = await start('riddles', token);
+    tick(3000);
+    await act(token, runId, { answers: rightRiddles(runId) });
     tick();
-    const [a, b] = await Promise.all([act(token, runId, { answer: '', q: 0 }), act(token, runId, { answer: '', q: 0 })]);
+    const ops = trackOps();
+    expect((await act(token, runId, NONE5)).status).toBe(200);
+    expect(ops).toEqual([`transaction runs/${runId}`]);
+  });
+});
+
+describe('double requests and retries', () => {
+  it('two identical guesses at the same moment: only one is applied', async () => {
+    const { token } = login();
+    const { runId } = await start('wordle', token);
+    tick();
+    const [a, b] = await Promise.all([act(token, runId, { guess: 'QZXJV' }), act(token, runId, { guess: 'QZXJV' })]);
     const statuses = [a.status, b.status].sort();
     expect(statuses).toEqual([200, 429].sort());
-    expect(run(runId).state.answers).toHaveLength(1);
+    expect(run(runId).state.guesses).toHaveLength(1);
+  });
+
+  it('two identical batches at the same moment: one is graded and both get the same reply', async () => {
+    const { token } = login();
+    const { runId } = await start('riddles', token);
+    tick(3000);
+    const answers = rightRiddles(runId);
+    const [a, b] = await Promise.all([act(token, runId, { answers }), act(token, runId, { answers })]);
+    expect(a.status).toBe(200);
+    expect(b.status).toBe(200);
+    expect(b.data).toEqual(a.data);
+    expect((readPath('leaderboard/ahmad') as Json).games.riddles).toBe(a.data.result.score);
   });
 
   it('a finishing request sent twice is counted once on the leaderboard', async () => {
@@ -546,6 +705,31 @@ describe('double requests and retries', () => {
     expect(again.status).toBe(409);
     expect((readPath('leaderboard/ahmad') as Json).score).toBe(800);
   });
+
+  it('a batch whose leaderboard write failed is settled by the retry, and the retry gets the same reply', async () => {
+    const { token } = login();
+    const { runId } = await start('riddles', token);
+    const indices: number[] = run(runId).state.indices;
+    const results = indices.map((i) => ({ answered: true, correct: true, correctAnswer: RIDDLE_POOL[i].answer }));
+    // A batch that was graded but never reached the leaderboard
+    writePath(`runs/${runId}`, {
+      ...run(runId),
+      status: 'done',
+      final: { score: 800, durationMs: 3000, response: { results }, settled: false },
+    });
+    expect(readPath('leaderboard/ahmad')).toBeNull();
+
+    const first = await act(token, runId, { answers: rightRiddles(runId) });
+    expect(first.status).toBe(200);
+    expect(first.data).toMatchObject({ done: true, results, result: { score: 800, total: 800 } });
+    expect(readPath('leaderboard/ahmad')).toMatchObject({ score: 800, games: { riddles: 800 } });
+
+    tick();
+    const retry = await act(token, runId, NONE5);
+    expect(retry.status).toBe(200);
+    expect(retry.data).toEqual(first.data);
+    expect((readPath('leaderboard/ahmad') as Json).score).toBe(800);
+  });
 });
 
 describe('leaderboard effects', () => {
@@ -568,32 +752,23 @@ describe('leaderboard effects', () => {
   it('keeps the best score per game and sums the bests for the total', async () => {
     const { token } = login();
     const first = await start('riddles', token);
-    tick();
-    for (let i = 0; i < 5; i++) {
-      tick();
-      await act(token, first.runId, { answer: '', q: i });
-    }
+    tick(3000);
+    await act(token, first.runId, { answers: [rightRiddles(first.runId)[0], null, null, null, null] });
     const low = (readPath('leaderboard/ahmad') as Json).games.riddles as number;
 
     const second = await start('riddles', token);
-    const indices: number[] = run(second.runId).state.indices;
-    for (let i = 0; i < 5; i++) {
-      tick();
-      const res = await act(token, second.runId, { answer: i < 4 ? RIDDLE_POOL[indices[i]].answer : '', q: i });
-      if (i === 4) {
-        expect(res.data.result).toMatchObject({ improved: true, best: res.data.result.score });
-        expect(res.data.result.score).toBeGreaterThan(low);
-      }
-    }
+    tick(3000);
+    const high = await act(token, second.runId, { answers: rightRiddles(second.runId) });
+    expect(high.data.result).toMatchObject({ improved: true, best: high.data.result.score });
+    expect(high.data.result.score).toBeGreaterThan(low);
+
     const afterHigh = readPath('leaderboard/ahmad') as Json;
-    expect(afterHigh.games.riddles).toBeGreaterThan(low);
+    expect(afterHigh.games.riddles).toBe(high.data.result.score);
     expect(afterHigh.score).toBe(afterHigh.games.riddles);
 
     const third = await start('riddles', token);
-    for (let i = 0; i < 5; i++) {
-      tick();
-      await act(token, third.runId, { answer: '', q: i });
-    }
+    tick(3000);
+    await act(token, third.runId, NONE5);
     const after = readPath('leaderboard/ahmad') as Json;
     expect(after.games.riddles).toBe(afterHigh.games.riddles);
     expect(after.score).toBe(afterHigh.score);
@@ -602,10 +777,8 @@ describe('leaderboard effects', () => {
   it('a game played with no points is recorded as played (best 0) without moving the total', async () => {
     const { token } = login();
     const { runId } = await start('bugs', token);
-    for (let i = 0; i < 5; i++) {
-      tick();
-      await act(token, runId, { answer: (BUG_POOL[run(runId).state.indices[i]].answer + 1) % 5, q: i });
-    }
+    tick(3000);
+    await act(token, runId, { answers: wrongBugs(runId) });
     const entry = readPath('leaderboard/ahmad') as Json;
     expect(entry.games).toEqual({ bugs: 0 });
     expect(entry.score).toBe(0);
@@ -635,87 +808,31 @@ describe('leaderboard effects', () => {
     writePath('leaderboard/bob', { name: 'Bob', score, games: { memory: score }, timestamp: reachedAt - 1000, expiresAt: clock.now + DAY_MS });
     writePath('leaderboard/carol', { name: 'Carol', score, games: { memory: score }, timestamp: reachedAt + 1000, expiresAt: clock.now + DAY_MS });
 
-    // A zero-point run leaves the total and its timestamp alone, so the tie-break decides the rank
+    // A zero-point batch leaves the total and its timestamp alone, so the tie-break decides the rank
     const { runId: second } = await start('riddles', token);
-    let last: Json = {};
-    for (let i = 0; i < 5; i++) {
-      tick();
-      last = (await act(token, second, { answer: '', q: i })).data;
-    }
-    expect(last.result.total).toBe(score);
-    expect(last.result.rank).toBe(2);
+    tick(3000);
+    const last = await act(token, second, NONE5);
+    expect(last.data.result.total).toBe(score);
+    expect(last.data.result.rank).toBe(2);
     expect((readPath('leaderboard/ahmad') as Json).timestamp).toBe(reachedAt);
   });
 });
 
 describe('transactions that start from a cache miss', () => {
-  it('finishes a riddles run and a password run exactly as with a warm read', async () => {
+  it('finishes a riddles batch and a password run exactly as with a warm read', async () => {
     simulateCacheMisses(true);
     const { token } = login();
     const riddles = await start('riddles', token);
-    const indices: number[] = run(riddles.runId).state.indices;
-    let last: Json = {};
-    for (let i = 0; i < 5; i++) {
-      tick();
-      last = (await act(token, riddles.runId, { answer: i < 2 ? RIDDLE_POOL[indices[i]].answer : '', q: i })).data;
-    }
-    expect(last.done).toBe(true);
-    expect(last.result.score).toBe(calcRunScore('riddles', 0.4, clock.now - run(riddles.runId).startedAt));
+    tick(3000);
+    const last = await act(token, riddles.runId, { answers: [...rightRiddles(riddles.runId, 2), null, null, null] });
+    expect(last.data.done).toBe(true);
+    expect(last.data.result.score).toBe(calcRunScore('riddles', 0.4, clock.now - run(riddles.runId).startedAt));
 
     tick();
     const pw = await start('password', token);
     tick();
     const res = await act(token, pw.runId, { password: 'XkP9#mRv2!LqT7@wNbZcQdEf' });
-    expect(res.data.result.total).toBe(last.result.score + res.data.result.score);
-    expect(readPath('leaderboard/ahmad')).toMatchObject({ games: { riddles: last.result.score, password: res.data.result.score } });
-  });
-});
-
-describe('question index q on sequential answers', () => {
-  it.each([
-    ['riddles', { answer: '' }],
-    ['trivia', { answer: '' }],
-    ['bugs', { answer: 0 }],
-  ] as const)('%s: an answer without q is 400 and changes nothing', async (game, body) => {
-    const { token } = login();
-    const { runId } = await start(game, token);
-    tick();
-    const res = await act(token, runId, body);
-    expect(res.status).toBe(400);
-    expect(res.data.error).toMatch(/q \(question index\) is required/);
-    expect(run(runId).state.answers ?? []).toEqual([]);
-    expect(run(runId).lastActionAt).toBe(run(runId).startedAt);
-  });
-
-  it.each([
-    ['riddles', { answer: '', q: '0' }],
-    ['trivia', { answer: '', q: 0.5 }],
-    ['bugs', { answer: 0, q: -1 }],
-  ] as const)('%s: a non-integer or negative q is 400', async (game, body) => {
-    const { token } = login();
-    const { runId } = await start(game, token);
-    tick();
-    expect((await act(token, runId, body)).status).toBe(400);
-  });
-
-  it.each([
-    ['riddles', (i: number) => ({ answer: '', q: i })],
-    ['trivia', (i: number) => ({ answer: '', q: i })],
-    ['bugs', (i: number) => ({ answer: 0, q: i })],
-  ] as const)('%s: q for a question other than the open one is 409 and changes nothing', async (game, body) => {
-    const { token } = login();
-    const { runId } = await start(game, token);
-    tick();
-    const res = await act(token, runId, body(3));
-    expect(res.status).toBe(409);
-    expect(res.data).toEqual({ error: 'Answer is out of order' });
-    expect(run(runId).state.answers ?? []).toEqual([]);
-  });
-
-  it('trivia {finish:true} needs no q', async () => {
-    const { token } = login();
-    const { runId } = await start('trivia', token);
-    tick();
-    expect((await act(token, runId, { finish: true })).status).toBe(200);
+    expect(res.data.result.total).toBe(last.data.result.score + res.data.result.score);
+    expect(readPath('leaderboard/ahmad')).toMatchObject({ games: { riddles: last.data.result.score, password: res.data.result.score } });
   });
 });
