@@ -1,32 +1,66 @@
 /**
  * @jest-environment node
  */
+import { randomUUID } from 'crypto';
 import { POST } from '@/app/api/score/route';
-import { signSession } from '@/lib/session';
+import { signSession, verifySession } from '@/lib/session';
 import { BUG_POOL, RIDDLE_POOL, TRIVIA_POOL } from '@/lib/questions';
 import { calcPasswordScore, calcWordleScore, normalizeScore } from '@/lib/scoring';
 import type { QuestionsPackage, Tab } from '@/lib/types';
 
 process.env.SESSION_SECRET = 'a'.repeat(64);
 
-// Firebase mocks: controllable per test, reset in beforeEach
-const mockGet = jest.fn();
-const mockPush = jest.fn();
-const mockSet = jest.fn();
-const mockTransaction = jest.fn();
+// In-memory tree standing in for the Realtime Database. transaction() follows the real
+// semantics: the callback receives the current value and returning undefined aborts the write.
+const mockTree: Record<string, unknown> = {};
+let mockPushCount = 0;
+
+function mockRead(path: string): unknown {
+  let node: unknown = mockTree;
+  for (const key of path.split('/')) {
+    if (node === null || typeof node !== 'object') return null;
+    node = (node as Record<string, unknown>)[key];
+  }
+  return node === undefined ? null : node;
+}
+
+function mockWrite(path: string, value: unknown): void {
+  const keys = path.split('/');
+  const last = keys.pop() as string;
+  let node = mockTree;
+  for (const key of keys) {
+    if (typeof node[key] !== 'object' || node[key] === null) node[key] = {};
+    node = node[key] as Record<string, unknown>;
+  }
+  if (value === null) delete node[last];
+  else node[last] = value;
+}
+
+function mockRef(path: string) {
+  return {
+    get: async () => ({ val: () => mockRead(path) }),
+    set: async (value: unknown) => {
+      mockWrite(path, value);
+    },
+    push: async (value: unknown) => {
+      const key = `-push${++mockPushCount}`;
+      mockWrite(`${path}/${key}`, value);
+      return { key };
+    },
+    transaction: async (update: (current: unknown) => unknown) => {
+      const next = update(mockRead(path));
+      if (next === undefined) return { committed: false };
+      mockWrite(path, next);
+      return { committed: true };
+    },
+  };
+}
 
 jest.mock('@/lib/firebaseAdmin', () => ({
   adminDb: {
-    ref: jest.fn(() => ({
-      get: mockGet,
-      push: mockPush,
-      set: mockSet,
-      transaction: mockTransaction,
-    })),
+    ref: (path: string) => mockRef(path),
   },
 }));
-
-const SUBMISSION_ID = '123e4567-e89b-12d3-a456-426614174000';
 
 const testQuestions: QuestionsPackage = {
   riddleIndices: [0, 1, 2, 3, 4],
@@ -35,15 +69,11 @@ const testQuestions: QuestionsPackage = {
   wordleWord: 'REACT',
 };
 
+const FUTURE = Date.now() + 60 * 60 * 1000;
+
 beforeEach(() => {
-  jest.clearAllMocks();
-  mockGet.mockReset().mockResolvedValue({ val: () => null });
-  mockPush.mockReset().mockResolvedValue({ key: 'abc123' });
-  mockSet.mockReset().mockResolvedValue(undefined);
-  mockTransaction.mockReset().mockImplementation((cb: (v: unknown) => unknown) => {
-    const result = cb(null); // simulate unclaimed slot
-    return Promise.resolve({ committed: result !== undefined });
-  });
+  for (const key of Object.keys(mockTree)) delete mockTree[key];
+  mockPushCount = 0;
 });
 
 function makeRequest(body: unknown) {
@@ -68,7 +98,7 @@ function tokenIssuedAgo(agoMs: number, questions: QuestionsPackage = testQuestio
 function body(game: Tab | string, answer: unknown, overrides: Record<string, unknown> = {}) {
   return {
     token: tokenIssuedAgo(30_000),
-    submissionId: SUBMISSION_ID,
+    submissionId: randomUUID(),
     game,
     answer,
     ...overrides,
@@ -78,6 +108,10 @@ function body(game: Tab | string, answer: unknown, overrides: Record<string, unk
 const correctRiddles = RIDDLE_POOL.slice(0, 5).map((r) => r.answer);
 const correctBugs = BUG_POOL.slice(0, 5).map((b) => b.answer);
 const correctTrivia = TRIVIA_POOL.slice(0, 15).map((q) => ({ answer: q.answer }));
+
+/** Total for a single riddle answer, used when a lower-scoring run is needed. */
+const ONE_RIDDLE_TOTAL = normalizeScore('riddles', 40);
+const MEMORY_TOTAL = normalizeScore('memory', 850);
 
 describe('POST /api/score: gates', () => {
   it('returns 401 for an invalid token', async () => {
@@ -107,7 +141,7 @@ describe('POST /api/score: gates', () => {
   it('returns 429 when the session has been playing for under 20 seconds', async () => {
     const res = await POST(makeRequest(body('riddles', correctRiddles, { token: tokenIssuedAgo(10_000) })));
     expect(res.status).toBe(429);
-    expect(mockTransaction).not.toHaveBeenCalled();
+    expect(mockRead('leaderboard')).toBeNull();
   });
 
   it('accepts a submission once 20 seconds of play have passed', async () => {
@@ -115,10 +149,13 @@ describe('POST /api/score: gates', () => {
     expect(res.status).toBe(200);
   });
 
-  it('returns 409 when this session already has a score', async () => {
-    mockTransaction.mockImplementationOnce(() => Promise.resolve({ committed: false }));
-    const res = await POST(makeRequest(body('riddles', correctRiddles)));
-    expect(res.status).toBe(409);
+  it('returns 409 when the same session submits a second score', async () => {
+    const token = tokenIssuedAgo(30_000);
+    const first = await POST(makeRequest(body('riddles', correctRiddles, { token })));
+    expect(first.status).toBe(200);
+    const second = await POST(makeRequest(body('riddles', correctRiddles, { token })));
+    expect(second.status).toBe(409);
+    expect(await second.json()).toEqual({ error: 'Score already submitted for this session' });
   });
 });
 
@@ -183,7 +220,7 @@ describe('POST /api/score: grading only the chosen game', () => {
   it('riddles: all correct scores 1000 on the leaderboard scale', async () => {
     const res = await POST(makeRequest(body('riddles', correctRiddles)));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ rank: 1, total: 1000, game: 'riddles' });
+    expect(await res.json()).toEqual({ rank: 1, total: 1000, game: 'riddles', best: 1000, improved: true });
   });
 
   it('riddles: 40 raw points per correct answer, normalized', async () => {
@@ -223,7 +260,7 @@ describe('POST /api/score: grading only the chosen game', () => {
 
   it('wordle: solving on the first guess gives 1000', async () => {
     const res = await POST(makeRequest(body('wordle', ['REACT'])));
-    expect(await res.json()).toEqual({ rank: 1, total: 1000, game: 'wordle' });
+    expect(await res.json()).toMatchObject({ rank: 1, total: 1000, game: 'wordle' });
   });
 
   it('wordle: solving on the third guess uses the table value', async () => {
@@ -242,12 +279,12 @@ describe('POST /api/score: grading only the chosen game', () => {
   it('memory: 10 moves and 40 seconds gives 850 raw, which is 850 total', async () => {
     const res = await POST(makeRequest(body('memory', { moves: 10, seconds: 40 })));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ rank: 1, total: 850, game: 'memory' });
+    expect(await res.json()).toEqual({ rank: 1, total: 850, game: 'memory', best: 850, improved: true });
   });
 
   it('bugs: all correct scores 1000', async () => {
     const res = await POST(makeRequest(body('bugs', correctBugs)));
-    expect(await res.json()).toEqual({ rank: 1, total: 1000, game: 'bugs' });
+    expect(await res.json()).toMatchObject({ rank: 1, total: 1000, game: 'bugs' });
   });
 
   it('bugs: 40 raw points per correct line, normalized', async () => {
@@ -272,7 +309,6 @@ describe('POST /api/score: grading only the chosen game', () => {
       ['bugs', correctBugs],
     ];
     for (const [game, answer] of cases) {
-      mockPush.mockClear();
       const res = await POST(makeRequest(body(game, answer)));
       const data = await res.json();
       expect(data.total).toBeGreaterThanOrEqual(0);
@@ -281,35 +317,130 @@ describe('POST /api/score: grading only the chosen game', () => {
   });
 });
 
-describe('POST /api/score: persistence and rank', () => {
-  it('pushes a leaderboard entry tagged with the game and normalized score', async () => {
+describe('POST /api/score: best per player on the leaderboard', () => {
+  it('writes the first run as the player entry, keyed by normalized name', async () => {
     await POST(makeRequest(body('memory', { moves: 10, seconds: 40 })));
-    expect(mockPush).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'Ahmad', score: 850, game: 'memory' }),
-    );
+    expect(mockRead('leaderboard/ahmad')).toEqual({
+      name: 'Ahmad',
+      score: 850,
+      game: 'memory',
+      timestamp: expect.any(Number),
+      expiresAt: expect.any(Number),
+    });
   });
 
-  it('records the submission with rank, total and game', async () => {
-    await POST(makeRequest(body('bugs', correctBugs)));
-    expect(mockSet).toHaveBeenCalledWith(
-      expect.objectContaining({ rank: 1, total: 1000, game: 'bugs' }),
-    );
-  });
-
-  it('computes rank from existing leaderboard entries', async () => {
-    mockGet
-      .mockResolvedValueOnce({ val: () => null }) // submissions/<id>
-      .mockResolvedValueOnce({ val: () => ({ a: { score: 900 }, b: { score: 500 } }) }); // leaderboard
+  it('first submission reports best = total and improved = true', async () => {
     const res = await POST(makeRequest(body('memory', { moves: 10, seconds: 40 })));
-    expect(await res.json()).toEqual({ rank: 2, total: 850, game: 'memory' });
+    expect(await res.json()).toEqual({ rank: 1, total: 850, game: 'memory', best: 850, improved: true });
   });
 
-  it('returns the stored result for a repeated submissionId without re-scoring', async () => {
-    mockGet.mockResolvedValueOnce({ val: () => ({ rank: 2, total: 700, game: 'bugs', expiresAt: 1 }) });
-    const res = await POST(makeRequest(body('bugs', correctBugs)));
+  it('a lower run keeps the old best, reports improved = false, and refreshes expiresAt', async () => {
+    const soon = Date.now() + 1000;
+    mockWrite('leaderboard/ahmad', { name: 'Ahmad', score: 850, game: 'memory', timestamp: 1, expiresAt: soon });
+
+    const res = await POST(makeRequest(body('riddles', [RIDDLE_POOL[0].answer, 'x', 'x', 'x', 'x'])));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ rank: 2, total: 700, game: 'bugs' });
-    expect(mockTransaction).not.toHaveBeenCalled();
-    expect(mockPush).not.toHaveBeenCalled();
+    const data = await res.json();
+    expect(data).toEqual({ rank: 1, total: ONE_RIDDLE_TOTAL, game: 'riddles', best: 850, improved: false });
+
+    const entry = mockRead('leaderboard/ahmad') as Record<string, unknown>;
+    expect(entry).toMatchObject({ score: 850, game: 'memory', timestamp: 1 });
+    expect(entry.expiresAt as number).toBeGreaterThan(soon);
+  });
+
+  it('a higher run replaces the entry and reports improved = true', async () => {
+    mockWrite('leaderboard/ahmad', {
+      name: 'Ahmad', score: MEMORY_TOTAL, game: 'memory', timestamp: 1, expiresAt: FUTURE,
+    });
+
+    const res = await POST(makeRequest(body('riddles', correctRiddles)));
+    expect(await res.json()).toEqual({ rank: 1, total: 1000, game: 'riddles', best: 1000, improved: true });
+    expect(mockRead('leaderboard/ahmad')).toMatchObject({ name: 'Ahmad', score: 1000, game: 'riddles' });
+  });
+
+  it('an equal run keeps the old best (improved = false)', async () => {
+    mockWrite('leaderboard/ahmad', { name: 'Ahmad', score: 1000, game: 'bugs', timestamp: 1, expiresAt: FUTURE });
+    const res = await POST(makeRequest(body('riddles', correctRiddles)));
+    expect(await res.json()).toMatchObject({ total: 1000, best: 1000, improved: false, game: 'riddles' });
+    expect(mockRead('leaderboard/ahmad')).toMatchObject({ game: 'bugs', timestamp: 1 });
+  });
+
+  it('an expired entry does not count as a best, so a lower run replaces it', async () => {
+    mockWrite('leaderboard/ahmad', { name: 'Ahmad', score: 900, game: 'bugs', timestamp: 1, expiresAt: 1 });
+    const res = await POST(makeRequest(body('memory', { moves: 10, seconds: 40 })));
+    expect(await res.json()).toMatchObject({ best: 850, improved: true });
+    expect(mockRead('leaderboard/ahmad')).toMatchObject({ score: 850, game: 'memory' });
+  });
+
+  it('leaves legacy push-id entries and other players entries untouched', async () => {
+    const legacy = { name: 'Ahmad', score: 300, timestamp: 1, expiresAt: FUTURE };
+    const other = { name: 'Sara', score: 100, game: 'bugs', timestamp: 1, expiresAt: FUTURE };
+    mockWrite('leaderboard/-Nlegacy', legacy);
+    mockWrite('leaderboard/sara', other);
+
+    await POST(makeRequest(body('memory', { moves: 10, seconds: 40 })));
+    expect(mockRead('leaderboard/-Nlegacy')).toEqual(legacy);
+    expect(mockRead('leaderboard/sara')).toEqual(other);
+  });
+
+  it('records the submission with rank, total, game, best and improved', async () => {
+    const res = await POST(makeRequest(body('bugs', correctBugs, { submissionId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee' })));
+    expect(res.status).toBe(200);
+    expect(mockRead('submissions/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee')).toMatchObject({
+      rank: 1, total: 1000, game: 'bugs', best: 1000, improved: true,
+    });
+  });
+
+  it('ranks against other players using this player best, not the run score', async () => {
+    mockWrite('leaderboard', {
+      ahmad: { name: 'Ahmad', score: 850, game: 'memory', timestamp: 1, expiresAt: FUTURE },
+      other: { name: 'Sara', score: 900, game: 'bugs', timestamp: 1, expiresAt: FUTURE },
+      third: { name: 'Omar', score: 500, game: 'bugs', timestamp: 1, expiresAt: FUTURE },
+    });
+    // The run scores far below everyone, but the player's best (850) is only beaten by Sara
+    const res = await POST(makeRequest(body('riddles', ['x', 'x', 'x', 'x', 'x'])));
+    expect(await res.json()).toEqual({ rank: 2, total: 0, game: 'riddles', best: 850, improved: false });
+  });
+
+  it('ranks a new best against the entries that beat it', async () => {
+    mockWrite('leaderboard', {
+      other: { name: 'Sara', score: 900, game: 'bugs', timestamp: 1, expiresAt: FUTURE },
+      third: { name: 'Omar', score: 500, game: 'bugs', timestamp: 1, expiresAt: FUTURE },
+    });
+    const res = await POST(makeRequest(body('memory', { moves: 10, seconds: 40 })));
+    expect(await res.json()).toEqual({ rank: 2, total: 850, game: 'memory', best: 850, improved: true });
+  });
+
+  it('a repeated submissionId returns the stored response without re-scoring or writing', async () => {
+    const submissionId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+    const first = await POST(makeRequest(body('riddles', correctRiddles, { submissionId })));
+    const firstData = await first.json();
+    expect(firstData).toEqual({ rank: 1, total: 1000, game: 'riddles', best: 1000, improved: true });
+    const entryBefore = mockRead('leaderboard/ahmad');
+
+    // A later session sends the same submissionId while the board has changed
+    mockWrite('leaderboard/omar', { name: 'Omar', score: 5000, timestamp: 1, expiresAt: FUTURE });
+    const replay = await POST(makeRequest(body('memory', { moves: 10, seconds: 40 }, { submissionId })));
+
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toEqual(firstData);
+    expect(mockRead('leaderboard/ahmad')).toEqual(entryBefore);
+  });
+
+  it('replays a record written before best-per-name with best = total and improved = false', async () => {
+    const legacyId = '11111111-2222-4333-8444-555555555555';
+    mockWrite(`submissions/${legacyId}`, { rank: 2, total: 700, game: 'bugs', expiresAt: FUTURE });
+    const res = await POST(makeRequest(body('bugs', correctBugs, { submissionId: legacyId })));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ rank: 2, total: 700, game: 'bugs', best: 700, improved: false });
+  });
+});
+
+describe('POST /api/score: session claim', () => {
+  it('uses the token session id for the one-submission-per-session slot', async () => {
+    const token = tokenIssuedAgo(30_000);
+    const { sessionId } = verifySession(token) ?? { sessionId: '' };
+    await POST(makeRequest(body('riddles', correctRiddles, { token })));
+    expect(mockRead(`submissions/by-session/${sessionId}`)).toMatchObject({ expiresAt: expect.any(Number) });
   });
 });
