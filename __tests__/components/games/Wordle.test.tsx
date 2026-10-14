@@ -1,11 +1,61 @@
 import { render, screen, fireEvent, act, createEvent } from '@testing-library/react';
 import Wordle from '@/components/games/Wordle';
+import type { GuessResponse, LetterState, RunResult } from '@/lib/apiTypes';
 
 const WORD = 'REACT';
 const HINT = 'Component-based UI library by Meta';
 const REVEAL_MS = 1300;   // last tile settles
 const WIN_HOLD_MS = 1500;
 const LOSS_HOLD_MS = 2500;
+
+// Server-side grading is mocked: BYTES against REACT has no duplicate letters,
+// so each colour below is unambiguous.
+const BYTES_STATES: LetterState[] = ['absent', 'absent', 'present', 'present', 'absent'];
+const CORRECT_STATES: LetterState[] = ['correct', 'correct', 'correct', 'correct', 'correct'];
+
+const RESULT: RunResult = {
+  game: 'wordle',
+  score: 640,
+  best: 640,
+  improved: true,
+  total: 640,
+  rank: 1,
+  gamesPlayed: ['wordle'],
+};
+
+type Server = jest.Mock;
+
+function miss(): GuessResponse {
+  return { states: BYTES_STATES, solved: false, done: false };
+}
+
+function win(): GuessResponse {
+  return { states: CORRECT_STATES, solved: true, done: true, result: RESULT };
+}
+
+function loss(): GuessResponse {
+  return { states: BYTES_STATES, solved: false, done: true, word: WORD, result: RESULT };
+}
+
+/** A server that answers each call with the given responses, in order. */
+function serve(...responses: GuessResponse[]): Server {
+  const server: Server = jest.fn();
+  responses.forEach((r) => server.mockResolvedValueOnce(r));
+  return server;
+}
+
+/** A server whose answers the test resolves by hand. */
+function slowServer(): { server: Server; answer: (r: GuessResponse) => void; fail: (e: Error) => void } {
+  let answer!: (r: GuessResponse) => void;
+  let fail!: (e: Error) => void;
+  const server: Server = jest.fn(
+    () => new Promise<GuessResponse>((resolve, reject) => {
+      answer = resolve;
+      fail = reject;
+    }),
+  );
+  return { server, answer: (r) => answer(r), fail: (e) => fail(e) };
+}
 
 beforeEach(() => {
   jest.useFakeTimers();
@@ -15,9 +65,9 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
-function setup(onComplete = jest.fn()) {
-  render(<Wordle word={WORD} hint={HINT} onComplete={onComplete} />);
-  return onComplete;
+function setup(server: Server = jest.fn().mockResolvedValue(miss()), onDone: jest.Mock = jest.fn()) {
+  render(<Wordle act={server} onDone={onDone} />);
+  return { server, onDone };
 }
 
 function advance(ms: number) {
@@ -34,15 +84,22 @@ function pressEnter() {
   fireEvent.keyDown(window, { key: 'Enter' });
 }
 
-/** Type a guess and press Enter, without waiting for the reveal. */
-function submit(text: string) {
-  typeText(text);
-  pressEnter();
+/** Press Enter and let any resolved server answer run. */
+async function pressEnterAndFlush() {
+  await act(async () => {
+    pressEnter();
+  });
 }
 
-/** Type a guess, press Enter and let the flip reveal finish. */
-function submitAndReveal(text: string) {
-  submit(text);
+/** Type a guess and press Enter, then let the server answer (no reveal wait). */
+async function submit(text: string) {
+  typeText(text);
+  await pressEnterAndFlush();
+}
+
+/** Type a guess, let the server answer, then let the flip reveal finish. */
+async function submitAndReveal(text: string) {
+  await submit(text);
   advance(REVEAL_MS);
 }
 
@@ -56,6 +113,15 @@ function tileLabel(row: number, col: number): string {
 
 function rowEl(row: number): HTMLElement {
   return screen.getAllByRole('row')[row];
+}
+
+/** Fails if any rendered text shows a score, a maximum, or a "/6"-style ratio. */
+function expectNoScoreLeaks() {
+  const text = document.body.textContent ?? '';
+  expect(text).not.toContain('/6');
+  expect(text).not.toMatch(/max/i);
+  expect(text).not.toMatch(/\bout of\b/i);
+  expect(text).not.toMatch(/\/\s*\d/);
 }
 
 /** Accessible name of an on-screen letter key (changes once the key is coloured). */
@@ -74,10 +140,38 @@ describe('Wordle', () => {
     expect(screen.getAllByRole('gridcell')).toHaveLength(30);
   });
 
-  it('shows score hints (300 down to 50)', () => {
+  it('never reveals a score, a maximum or a ratio, through a whole game', async () => {
+    setup(serve(miss(), miss(), miss(), miss(), miss(), loss()));
+    expectNoScoreLeaks();
+    for (let i = 0; i < 5; i++) {
+      await submitAndReveal('BYTES');
+      expectNoScoreLeaks();
+    }
+    await submit('BYTES');
+    expectNoScoreLeaks();
+    advance(REVEAL_MS);
+    expectNoScoreLeaks();
+    advance(LOSS_HOLD_MS);
+    expectNoScoreLeaks();
+  });
+
+  it('never reveals a score or maximum on a win either', async () => {
+    const { onDone } = setup(serve(miss(), win()));
+    await submitAndReveal('BYTES');
+    await submit(WORD);
+    advance(REVEAL_MS);
+    expectNoScoreLeaks();
+    advance(WIN_HOLD_MS);
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expectNoScoreLeaks();
+  });
+
+  it('counts attempts without showing a limit', async () => {
     setup();
-    expect(screen.getByText('300')).toBeInTheDocument();
-    expect(screen.getByText('50')).toBeInTheDocument();
+    expect(screen.getByText('0 guesses')).toBeInTheDocument();
+    await submitAndReveal('BYTES');
+    expect(screen.getByText('1 guess')).toBeInTheDocument();
+    expect(screen.queryByText(/\/6/)).not.toBeInTheDocument();
   });
 
   it('typing letters fills the active row (physical keys, case-insensitive)', () => {
@@ -112,37 +206,68 @@ describe('Wordle', () => {
     expect(tileLabel(0, 1)).toBe('row 1 column 2, empty');
   });
 
-  it('calls onComplete with the correct guess array when solved', () => {
-    const onComplete = setup();
-    submit(WORD);
-    advance(REVEAL_MS + WIN_HOLD_MS);
-    expect(onComplete).toHaveBeenCalledTimes(1);
-    expect(onComplete).toHaveBeenCalledWith([WORD]);
+  it('sends the typed guess to the server, and only once per Enter', async () => {
+    const { server } = setup(serve(miss()));
+    await submit('BYTES');
+    expect(server).toHaveBeenCalledTimes(1);
+    expect(server).toHaveBeenCalledWith({ guess: 'BYTES' });
   });
 
-  it('calls onComplete after 6 failed guesses', () => {
-    const onComplete = setup();
-    for (let i = 0; i < 6; i++) submitAndReveal('BYTES');
-    advance(LOSS_HOLD_MS);
-    expect(onComplete).toHaveBeenCalledTimes(1);
-    expect(onComplete.mock.calls[0][0]).toHaveLength(6);
+  it('applies server states to the row after the flip and colours the keys', async () => {
+    setup(serve(miss()));
+    await submit('BYTES');
+    // Still flipping: no colour yet on the first tile.
+    expect(tileLabel(0, 0)).toBe('row 1 column 1, letter B');
+    advance(REVEAL_MS);
+    expect(tileLabel(0, 0)).toBe('row 1 column 1, letter B, absent');
+    expect(tileLabel(0, 2)).toBe('row 1 column 3, letter T, present');
+    expect(tileLabel(0, 3)).toBe('row 1 column 4, letter E, present');
+    expect(tileLabel(0, 4)).toBe('row 1 column 5, letter S, absent');
+    expect(keyLabel('T')).toBe('T, present');
+    expect(keyLabel('E')).toBe('E, present');
+    expect(keyLabel('B')).toBe('B, absent');
   });
 
-  it('on-screen keyboard ENTER submits guess', () => {
-    const onComplete = setup();
-    typeText(WORD);
-    fireEvent.click(screen.getByRole('button', { name: 'Enter' }));
-    advance(REVEAL_MS + WIN_HOLD_MS);
-    expect(onComplete).toHaveBeenCalledTimes(1);
-    expect(onComplete).toHaveBeenCalledWith([WORD]);
+  it('reveals each tile colour at its flip midpoint, staggered', async () => {
+    setup(serve(miss()));
+    await submit('BYTES');
+    // Tile 1 flips first and shows its colour at 150ms.
+    advance(150);
+    expect(tileLabel(0, 0)).toBe('row 1 column 1, letter B, absent');
+    expect(tileLabel(0, 1)).toBe('row 1 column 2, letter Y');
+    // Tile 2 shows its colour 250ms later.
+    advance(250);
+    expect(tileLabel(0, 1)).toBe('row 1 column 2, letter Y, absent');
   });
 
-  it('short guess shakes the row and shows a message', () => {
-    setup();
+  it('keyboard key colours only update after the row finishes flipping', async () => {
+    setup(serve(miss()));
+    await submit('BYTES');
+    expect(keyLabel('B')).toBe('B');
+    advance(REVEAL_MS - 1);
+    expect(keyLabel('B')).toBe('B');
+    advance(1);
+    expect(keyLabel('B')).toBe('B, absent');
+    expect(keyLabel('T')).toBe('T, present');
+    expect(keyLabel('E')).toBe('E, present');
+  });
+
+  it('on-screen keyboard ENTER submits the guess', async () => {
+    const { server } = setup(serve(miss()));
+    typeText('BYTES');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Enter' }));
+    });
+    expect(server).toHaveBeenCalledWith({ guess: 'BYTES' });
+  });
+
+  it('short guess shakes the row, shows a message and never calls the server', () => {
+    const { server } = setup();
     typeText('RE');
     pressEnter();
     expect(rowEl(0)).toHaveClass('anim-shake');
     expect(screen.getByRole('status')).toHaveTextContent('Not enough letters');
+    expect(server).not.toHaveBeenCalled();
     advance(500);
     expect(rowEl(0)).not.toHaveClass('anim-shake');
   });
@@ -157,13 +282,13 @@ describe('Wordle', () => {
   });
 
   it('ignores Enter with a modifier and non-letter keys', () => {
-    setup();
+    const { server } = setup();
     typeText('REACT');
     fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true });
     fireEvent.keyDown(window, { key: 'Shift' });
     fireEvent.keyDown(window, { key: 'Tab' });
     fireEvent.keyDown(window, { key: 'ArrowLeft' });
-    expect(screen.getByText('0/6', { exact: false })).toBeInTheDocument();
+    expect(server).not.toHaveBeenCalled();
     expect(tileLabel(0, 0)).toBe('row 1 column 1, letter R');
   });
 
@@ -177,27 +302,69 @@ describe('Wordle', () => {
   });
 
   it('ignores repeated Enter so holding the key does not resubmit', () => {
-    setup();
+    const { server } = setup();
     typeText(WORD);
     fireEvent.keyDown(window, { key: 'Enter', repeat: true });
-    expect(screen.getByText('0/6', { exact: false })).toBeInTheDocument();
+    expect(server).not.toHaveBeenCalled();
   });
 
-  it('does not double submit on repeated Enter presses during the reveal', () => {
-    const onComplete = setup();
-    typeText(WORD);
+  it('shows the pending state and does not flip until the server answers', async () => {
+    const { server, answer } = slowServer();
+    setup(server);
+    typeText('BYTES');
+    await pressEnterAndFlush();
+
+    expect(screen.getByRole('grid')).toHaveAttribute('aria-busy', 'true');
+    expect(tileLabel(0, 0)).toBe('row 1 column 1, letter B');
+
+    advance(REVEAL_MS + 1000);
+    expect(tileLabel(0, 0)).toBe('row 1 column 1, letter B');
+
+    await act(async () => {
+      answer(miss());
+    });
+    expect(screen.getByRole('grid')).toHaveAttribute('aria-busy', 'false');
+    advance(REVEAL_MS);
+    expect(tileLabel(0, 0)).toBe('row 1 column 1, letter B, absent');
+  });
+
+  it('does not double submit while a guess is pending', async () => {
+    const { server } = slowServer();
+    setup(server);
+    typeText('BYTES');
     pressEnter();
+    pressEnter();
+    await pressEnterAndFlush();
+    fireEvent.click(screen.getByRole('button', { name: 'Enter' }));
+    expect(server).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not double submit on repeated Enter presses during the reveal', async () => {
+    const { onDone } = setup(serve(win()));
+    typeText(WORD);
+    await pressEnterAndFlush();
     pressEnter();
     pressEnter();
     advance(REVEAL_MS + WIN_HOLD_MS + 1000);
-    expect(screen.getByText('1/6', { exact: false })).toBeInTheDocument();
-    expect(onComplete).toHaveBeenCalledTimes(1);
-    expect(onComplete).toHaveBeenCalledWith([WORD]);
+    expect(screen.getByText('1 guess')).toBeInTheDocument();
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onDone).toHaveBeenCalledWith(RESULT);
   });
 
-  it('locks input while the row reveals, then accepts it again', () => {
-    setup();
-    submit('BYTES');
+  it('ignores typing and backspace while a guess is pending', async () => {
+    const { server } = slowServer();
+    setup(server);
+    typeText('BYTES');
+    await pressEnterAndFlush();
+    typeText('Z');
+    fireEvent.keyDown(window, { key: 'Backspace' });
+    expect(tileLabel(0, 4)).toBe('row 1 column 5, letter S');
+    expect(tileLabel(0, 0)).toBe('row 1 column 1, letter B');
+  });
+
+  it('locks input while the row reveals, then accepts it again', async () => {
+    setup(serve(miss()));
+    await submit('BYTES');
     typeText('Z');
     expect(tileLabel(1, 0)).toBe('row 2 column 1, empty');
     advance(REVEAL_MS);
@@ -205,85 +372,112 @@ describe('Wordle', () => {
     expect(tileLabel(1, 0)).toBe('row 2 column 1, letter Z');
   });
 
-  it('reveals each tile colour at its flip midpoint, staggered', () => {
-    setup();
-    submit('BYTES');
-    // Tile 1 flips first and shows its colour at 150ms.
-    advance(150);
-    expect(tileLabel(0, 0)).toBe('row 1 column 1, letter B, absent');
-    expect(tileLabel(0, 1)).toBe('row 1 column 2, letter Y');
-    // Tile 2 shows its colour 250ms later.
-    advance(250);
-    expect(tileLabel(0, 1)).toBe('row 1 column 2, letter Y, absent');
-  });
-
-  it('keyboard key colours only update after the row finishes flipping', () => {
-    setup();
-    submit('BYTES');
-    expect(keyLabel('B')).toBe('B');
-    advance(REVEAL_MS - 1);
-    expect(keyLabel('B')).toBe('B');
-    advance(1);
-    expect(keyLabel('B')).toBe('B, absent');
-    expect(keyLabel('T')).toBe('T, present');
-    expect(keyLabel('E')).toBe('E, present');
-  });
-
-  it('win shows an encouraging toast by guess count', () => {
-    setup();
-    submit(WORD);
+  it('win shows an encouraging toast by guess count', async () => {
+    setup(serve(win()));
+    await submit(WORD);
     advance(REVEAL_MS);
     expect(screen.getByRole('status')).toHaveTextContent('Genius!');
   });
 
-  it('second-guess win shows "Magnificent!"', () => {
-    setup();
-    submitAndReveal('BYTES');
-    submit(WORD);
+  it('second-guess win shows "Magnificent!"', async () => {
+    setup(serve(miss(), win()));
+    await submitAndReveal('BYTES');
+    await submit(WORD);
     advance(REVEAL_MS);
     expect(screen.getByRole('status')).toHaveTextContent('Magnificent!');
   });
 
-  it('calls onComplete only after the win hold, and never twice', () => {
-    const onComplete = setup();
-    submit(WORD);
+  it('win calls onDone once, after the win hold counted from the final flip', async () => {
+    const { onDone } = setup(serve(win()));
+    await submit(WORD);
     advance(REVEAL_MS + WIN_HOLD_MS - 1);
-    expect(onComplete).not.toHaveBeenCalled();
+    expect(onDone).not.toHaveBeenCalled();
     advance(1);
-    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onDone).toHaveBeenCalledWith(RESULT);
     advance(10000);
-    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(onDone).toHaveBeenCalledTimes(1);
   });
 
-  it('loss reveals the word', () => {
-    const onComplete = setup();
-    for (let i = 0; i < 6; i++) submitAndReveal('BYTES');
+  it('loss reveals the word in the toast and calls onDone after the loss hold', async () => {
+    const { onDone } = setup(serve(miss(), miss(), miss(), miss(), miss(), loss()));
+    for (let i = 0; i < 5; i++) await submitAndReveal('BYTES');
+    await submit('BYTES');
+    advance(REVEAL_MS);
     expect(screen.getByRole('status')).toHaveTextContent(`The word was ${WORD}`);
-    expect(onComplete).not.toHaveBeenCalled();
-    advance(LOSS_HOLD_MS);
-    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(onDone).not.toHaveBeenCalled();
+    advance(LOSS_HOLD_MS - 1);
+    expect(onDone).not.toHaveBeenCalled();
+    advance(1);
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onDone).toHaveBeenCalledWith(RESULT);
+    advance(10000);
+    expect(onDone).toHaveBeenCalledTimes(1);
   });
 
-  it('shows the hint chip only after two guesses', () => {
-    setup();
+  it('shows the hint chip only once the server includes a hint', async () => {
+    setup(serve(miss(), { ...miss(), hint: HINT }));
+    await submitAndReveal('BYTES');
     expect(screen.queryByText(new RegExp(HINT))).not.toBeInTheDocument();
-    submitAndReveal('BYTES');
-    expect(screen.queryByText(new RegExp(HINT))).not.toBeInTheDocument();
-    submitAndReveal('BYTES');
+    await submitAndReveal('BYTES');
     expect(screen.getByText(new RegExp(HINT))).toBeInTheDocument();
   });
 
-  it('does not call onComplete after unmount', () => {
-    const onComplete = jest.fn();
-    const { unmount } = render(<Wordle word={WORD} hint={HINT} onComplete={onComplete} />);
-    submit(WORD);
+  it('on rejection shows the message, keeps the letters and lets the player retry', async () => {
+    const server: Server = jest.fn()
+      .mockRejectedValueOnce(new Error('Too fast'))
+      .mockResolvedValueOnce(miss());
+    setup(server);
+
+    await submit('BYTES');
+    expect(screen.getByRole('status')).toHaveTextContent('Too fast');
+    expect(tileLabel(0, 0)).toBe('row 1 column 1, letter B');
+    expect(tileLabel(0, 4)).toBe('row 1 column 5, letter S');
+    expect(screen.getByText('0 guesses')).toBeInTheDocument();
+    expect(screen.getByRole('grid')).toHaveAttribute('aria-busy', 'false');
+
+    // Input is unlocked again: the same guess goes out and no row was consumed.
+    await pressEnterAndFlush();
+    expect(server).toHaveBeenCalledTimes(2);
+    expect(server).toHaveBeenNthCalledWith(2, { guess: 'BYTES' });
+    advance(REVEAL_MS);
+    expect(tileLabel(0, 0)).toBe('row 1 column 1, letter B, absent');
+    expect(screen.getByText('1 guess')).toBeInTheDocument();
+  });
+
+  it('falls back to a generic message when the rejection has no text', async () => {
+    const server: Server = jest.fn().mockRejectedValueOnce('boom');
+    setup(server);
+    await submit('BYTES');
+    expect(screen.getByRole('status')).toHaveTextContent('Something went wrong');
+  });
+
+  it('does not call onDone after unmount, even when the answer arrives late', async () => {
+    const { server, answer } = slowServer();
+    const onDone = jest.fn();
+    const { unmount } = render(<Wordle act={server} onDone={onDone} />);
+    typeText(WORD);
+    await pressEnterAndFlush();
+    unmount();
+    await act(async () => {
+      answer(win());
+    });
+    advance(10000);
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
+  it('does not call onDone after unmount during the win hold', async () => {
+    const onDone = jest.fn();
+    const { unmount } = render(<Wordle act={serve(win())} onDone={onDone} />);
+    typeText(WORD);
+    await pressEnterAndFlush();
     advance(REVEAL_MS);
     unmount();
     advance(10000);
-    expect(onComplete).not.toHaveBeenCalled();
+    expect(onDone).not.toHaveBeenCalled();
   });
 
-  it('skips flip timing and reveals colours at once when reduced motion is preferred', () => {
+  it('skips flip timing and reveals colours at once when reduced motion is preferred', async () => {
     const original = window.matchMedia;
     window.matchMedia = jest.fn().mockImplementation((query: string) => ({
       matches: true,
@@ -297,11 +491,11 @@ describe('Wordle', () => {
     })) as unknown as typeof window.matchMedia;
 
     try {
-      const onComplete = setup();
-      submit(WORD);
+      const { onDone } = setup(serve(win()));
+      await submit(WORD);
       expect(tileLabel(0, 4)).toBe('row 1 column 5, letter T, correct');
       advance(WIN_HOLD_MS);
-      expect(onComplete).toHaveBeenCalledTimes(1);
+      expect(onDone).toHaveBeenCalledTimes(1);
     } finally {
       window.matchMedia = original;
     }

@@ -1,75 +1,92 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import {
+  clearSessionNotice,
+  getPlayerKey,
+  getSavedName,
+  peekSessionNotice,
+  startSession,
+  useIsBrowser,
+} from '@/lib/clientSession';
 
 const NAME_PATTERN = /^[A-Za-z0-9À-ɏ ]{2,30}$/;
 
-type NameStatus = 'idle' | 'invalid' | 'checking' | 'available' | 'taken';
+// 'mine': the name is held by this browser's player key, so the player can reuse it.
+type CheckedStatus = 'idle' | 'available' | 'mine' | 'taken';
+type NameStatus = 'idle' | 'invalid' | 'checking' | CheckedStatus;
 
 export default function NameEntry() {
   const router = useRouter();
-  const [name, setName] = useState('');
-  const [nameStatus, setNameStatus] = useState<NameStatus>('idle');
+  const isBrowser = useIsBrowser();
+  // Until the player types, the field shows the name used last time (empty on the server).
+  const [typedName, setTypedName] = useState<string | null>(null);
+  const name = typedName ?? (isBrowser ? getSavedName() ?? '' : '');
+  // Result of the last availability check, tagged with the name it was for.
+  const [check, setCheck] = useState<{ name: string; status: CheckedStatus } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const trimmedName = name.trim();
+  // A result only applies to the name it was checked for; a stale one shows as "checking".
+  const nameStatus: NameStatus = !trimmedName
+    ? 'idle'
+    : !NAME_PATTERN.test(trimmedName)
+      ? 'invalid'
+      : check?.name === trimmedName
+        ? check.status
+        : 'checking';
 
   useEffect(() => {
     const trimmed = name.trim();
-    if (!trimmed) { setNameStatus('idle'); return; }
-    if (!NAME_PATTERN.test(trimmed)) { setNameStatus('invalid'); return; }
+    if (!trimmed || !NAME_PATTERN.test(trimmed)) return;
 
-    setNameStatus('checking');
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
+    let current = true;
+    const timer = setTimeout(async () => {
+      let status: CheckedStatus = 'idle';
       try {
-        const res = await fetch(`/api/names/check?name=${encodeURIComponent(trimmed)}`);
-        const { available } = await res.json();
-        setNameStatus(available ? 'available' : 'taken');
+        const playerKey = getPlayerKey();
+        const res = await fetch(`/api/names/check?name=${encodeURIComponent(trimmed)}`, {
+          headers: { 'x-player-key': playerKey },
+        });
+        const data = await res.json();
+        status = data.mine ? 'mine' : data.available ? 'available' : 'taken';
       } catch {
-        setNameStatus('idle');
+        // Keep status 'idle' on network errors: Start stays disabled.
       }
+      if (current) setCheck({ name: trimmed, status });
     }, 300);
 
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
   }, [name]);
 
+  const canStart = nameStatus === 'available' || nameStatus === 'mine';
+
   async function handleStart() {
-    if (nameStatus !== 'available' || loading) return;
+    if (!canStart || loading) return;
     setLoading(true);
     setError('');
-    try {
-      const res = await fetch('/api/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim() }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? 'Something went wrong. Please try again.');
-        if (res.status === 409) setNameStatus('taken');
-        return;
-      }
-      const { token, questions } = data;
-      // A new session starts with no pick; drop any game chosen in a previous session.
-      sessionStorage.removeItem('playerGame');
-      sessionStorage.setItem('playerToken', token);
-      sessionStorage.setItem('playerName', name.trim());
-      sessionStorage.setItem('playerQuestions', JSON.stringify(questions));
+    const result = await startSession(trimmedName);
+    if (result.ok) {
       router.push('/play');
-    } catch {
-      setError('Something went wrong. Please try again.');
-    } finally {
-      setLoading(false);
+      return; // Stay in the loading state until the play page replaces this one.
     }
+    setError(result.error);
+    if (result.status === 409) setCheck({ name: trimmedName, status: 'taken' });
+    setLoading(false);
   }
+
 
   const statusIcon: Record<NameStatus, React.ReactNode> = {
     idle: null,
     invalid: null,
     checking: <span className="text-[#5F6368] text-base leading-none">…</span>,
     available: <span className="text-[#34A853] text-lg font-bold leading-none">✓</span>,
+    mine: <span className="text-[#34A853] text-lg font-bold leading-none">✓</span>,
     taken: <span className="text-[#EA4335] text-lg font-bold leading-none">✗</span>,
   };
 
@@ -78,6 +95,7 @@ export default function NameEntry() {
     invalid: 'Use letters, numbers, and spaces only (2–30 characters).',
     checking: '',
     available: 'This name is available!',
+    mine: `Welcome back, ${trimmedName}! Your best scores are kept.`,
     taken: 'This name is already taken — choose another.',
   };
 
@@ -86,6 +104,7 @@ export default function NameEntry() {
     invalid: 'text-[#EA4335]',
     checking: 'text-[#5F6368]',
     available: 'text-[#34A853]',
+    mine: 'text-[#34A853]',
     taken: 'text-[#EA4335]',
   };
 
@@ -96,19 +115,22 @@ export default function NameEntry() {
           <img src="/gdsc-logo.svg" alt="Google Developer Student Clubs" className="w-72 mx-auto mb-3" />
           <h1 className="text-2xl font-extrabold mt-2">Interactive Tech Station</h1>
           <p className="text-sm text-[#5F6368] mt-1">Test your skills and join GDSC!</p>
-          <p className="text-xs text-[#5F6368] mt-2">Six mini-games. Pick one to score; the rest are practice.</p>
+          <p className="text-sm font-semibold text-[#202124] mt-3">
+            Play all six games — your best score in each adds up. Top the leaderboard by the end of the day to win a prize.
+          </p>
         </div>
 
-        <label className="block text-sm font-semibold mb-1 text-[#202124]">
+        <label htmlFor="display-name" className="block text-sm font-semibold mb-1 text-[#202124]">
           Choose a display name
         </label>
         <div className="relative mb-1.5">
           <input
+            id="display-name"
             type="text"
             placeholder="Your display name…"
             maxLength={30}
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => setTypedName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleStart()}
             className="w-full p-3.5 pr-11 border border-[#DADCE0] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#1A73E8] text-sm"
           />
@@ -127,8 +149,11 @@ export default function NameEntry() {
 
         <p className="text-xs text-[#5F6368] mb-4 bg-[#F8F9FA] rounded-xl p-3 border border-[#DADCE0]">
           Letters, numbers, and spaces · 2–30 characters · no duplicates.{' '}
-          Your name and score appear on the public leaderboard and are deleted after 48 hours.
+          Your name and score appear on the public leaderboard and are deleted after 48 hours.{' '}
+          You can play any game again any time, and only your best score in each game counts.
         </p>
+
+        {isBrowser && <SessionNotice />}
 
         {error && (
           <p role="alert" className="text-xs text-[#EA4335] mb-3">{error}</p>
@@ -136,12 +161,27 @@ export default function NameEntry() {
 
         <button
           onClick={handleStart}
-          disabled={nameStatus !== 'available' || loading}
+          disabled={!canStart || loading}
           className="w-full bg-[#1A73E8] hover:bg-[#1557B0] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-full transition-all"
         >
           {loading ? 'Starting…' : 'Start'}
         </button>
       </div>
     </div>
+  );
+}
+
+// Shows the notice left by an ended session, once. It mounts only in the browser,
+// so the server never renders it, and it clears the stored message as it shows.
+function SessionNotice() {
+  const [message] = useState(peekSessionNotice);
+  useEffect(() => {
+    clearSessionNotice();
+  }, []);
+  if (!message) return null;
+  return (
+    <p role="status" className="text-xs text-[#B06000] bg-[#FEF7E0] border border-[#FBBC04] rounded-xl p-3 mb-3">
+      {message}
+    </p>
   );
 }

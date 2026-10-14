@@ -1,36 +1,35 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import type { BugQuestion } from '@/lib/questions';
+import { useRef, useState } from 'react';
+import type { AnswerResponse, BugView, RunResult } from '@/lib/apiTypes';
 
 const POINTS = 40;
 
 interface Props {
-  questions: BugQuestion[];
-  onComplete: (answers: number[]) => void;
+  questions: BugView[];
+  act: (body: { answer: number; q: number }) => Promise<AnswerResponse>;
+  onDone: (result: RunResult) => void;
 }
 
-export default function BugHunter({ questions, onComplete }: Props) {
+function errorMessage(err: unknown): string {
+  return err instanceof Error && err.message ? err.message : 'Something went wrong. Please try again.';
+}
+
+export default function BugHunter({ questions, act, onDone }: Props) {
   const [idx, setIdx] = useState(0);
   const [chosen, setChosen] = useState<number | null>(null);
+  const [correctLine, setCorrectLine] = useState<number | null>(null);
+  const [explanation, setExplanation] = useState('');
   const [score, setScore] = useState(0);
-  // Refs mirror the state so rapid repeat taps are rejected before React re-renders.
-  const idxRef = useRef(0);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [failed, setFailed] = useState<{ line: number; q: number } | null>(null);
+  // Set by the last answer's response; Finish reports it without another request.
+  const [finalResult, setFinalResult] = useState<RunResult | null>(null);
+  // Refs reject rapid repeat taps before React re-renders.
+  const busyRef = useRef(false);
   const chosenRef = useRef<number | null>(null);
-  const answersRef = useRef<number[]>([]);
   const finishedRef = useRef(false);
-  const onCompleteRef = useRef(onComplete);
-
-  useEffect(() => {
-    onCompleteRef.current = onComplete;
-  }, [onComplete]);
-
-  useEffect(() => {
-    if (questions.length === 0 && !finishedRef.current) {
-      finishedRef.current = true;
-      onCompleteRef.current([]);
-    }
-  }, [questions.length]);
 
   if (questions.length === 0) {
     return (
@@ -40,28 +39,50 @@ export default function BugHunter({ questions, onComplete }: Props) {
 
   const q = questions[idx];
   const revealed = chosen !== null;
-  const correct = revealed && chosen === q.answer;
+  const correct = revealed && chosen === correctLine;
   const isLast = idx === questions.length - 1;
 
-  function pick(line: number) {
-    if (chosenRef.current !== null || finishedRef.current) return;
+  async function pick(line: number, q: number) {
+    if (busyRef.current || chosenRef.current !== null || finishedRef.current) return;
+    busyRef.current = true;
+    setSending(true);
+    setError(null);
+    setFailed(null);
+
+    let res: AnswerResponse;
+    try {
+      res = await act({ answer: line, q });
+    } catch (err) {
+      busyRef.current = false;
+      setSending(false);
+      setFailed({ line, q });
+      setError(errorMessage(err));
+      return;
+    }
+
+    busyRef.current = false;
+    setSending(false);
     chosenRef.current = line;
-    answersRef.current.push(line);
     setChosen(line);
-    if (line === questions[idxRef.current].answer) setScore((s) => s + POINTS);
+    setCorrectLine(Number(res.correctAnswer));
+    setExplanation(res.explanation ?? '');
+    if (res.correct) setScore((s) => s + POINTS);
+    if (res.done && res.result) setFinalResult(res.result);
   }
 
   function next() {
     if (chosenRef.current === null || finishedRef.current) return;
-    if (idxRef.current < questions.length - 1) {
-      idxRef.current += 1;
-      chosenRef.current = null;
-      setIdx(idxRef.current);
-      setChosen(null);
-      return;
-    }
+    chosenRef.current = null;
+    setChosen(null);
+    setCorrectLine(null);
+    setExplanation('');
+    setIdx((i) => i + 1);
+  }
+
+  function finish() {
+    if (!finalResult || finishedRef.current) return;
     finishedRef.current = true;
-    onCompleteRef.current([...answersRef.current]);
+    onDone(finalResult);
   }
 
   return (
@@ -100,14 +121,14 @@ export default function BugHunter({ questions, onComplete }: Props) {
       <section key={idx} className="w-full min-w-0 anim-slide-in">
         <h3 className="mb-1 text-sm font-bold text-[#202124]">{q.title}</h3>
         <p className="mb-3 text-xs text-[#5F6368]">
-          {revealed ? 'Here is what went wrong:' : 'Tap the line that contains the bug.'}
+          {revealed ? 'Here is what went wrong:' : sending ? 'Checking…' : 'Tap the line that contains the bug.'}
         </p>
 
         <div className="relative">
           <div className="overflow-x-auto rounded-2xl bg-[#202124] shadow-md">
             <div className="w-max min-w-full py-2 font-mono text-sm">
               {q.lines.map((line, n) => {
-                const isAnswer = n === q.answer;
+                const isAnswer = revealed && n === correctLine;
                 const isPick = n === chosen;
                 let rowClass = 'text-[#E8EAED] hover:bg-white/10 active:bg-white/15';
                 let statusText = '';
@@ -135,8 +156,8 @@ export default function BugHunter({ questions, onComplete }: Props) {
                   <button
                     key={n}
                     type="button"
-                    onClick={() => pick(n)}
-                    disabled={revealed}
+                    onClick={() => pick(n, idx)}
+                    disabled={revealed || sending}
                     aria-label={`Line ${n + 1}: ${line.trim()}${statusLabel ? `, ${statusLabel}` : ''}`}
                     className={`flex min-h-11 w-full items-center gap-3 px-3 py-2 text-left transition-colors disabled:cursor-default ${rowClass}`}
                   >
@@ -165,6 +186,25 @@ export default function BugHunter({ questions, onComplete }: Props) {
           )}
         </div>
 
+        {error && (
+          <div
+            role="alert"
+            className="mt-4 flex flex-col items-center gap-2 rounded-2xl border-2 border-[#EA4335] bg-[#FCE8E6] px-4 py-3 text-center text-sm font-semibold text-[#C5221F]"
+          >
+            <p>{error}</p>
+            <button
+              type="button"
+              onClick={() => {
+                if (failed) pick(failed.line, failed.q);
+              }}
+              disabled={sending}
+              className="rounded-full bg-[#1A73E8] px-5 py-2 text-xs font-bold text-white shadow-md transition-all hover:bg-[#1557B0] active:scale-95 disabled:opacity-60"
+            >
+              Try again
+            </button>
+          </div>
+        )}
+
         {revealed && (
           <div
             role="status"
@@ -175,17 +215,18 @@ export default function BugHunter({ questions, onComplete }: Props) {
             }`}
           >
             <p className="text-sm font-bold">
-              {correct ? `Nice catch! +${POINTS}` : `Not quite. The bug is on line ${q.answer + 1}.`}
+              {correct ? `Nice catch! +${POINTS}` : `Not quite. The bug is on line ${(correctLine ?? 0) + 1}.`}
             </p>
-            <p className="mt-1 text-sm text-[#202124]">{q.explanation}</p>
+            <p className="mt-1 text-sm text-[#202124]">{explanation}</p>
           </div>
         )}
 
         {revealed && (
           <button
             type="button"
-            onClick={next}
-            className="mt-5 w-full rounded-full bg-[#1A73E8] py-3 font-bold text-white shadow-md transition-all hover:bg-[#1557B0] active:scale-95"
+            onClick={isLast ? finish : next}
+            disabled={isLast && !finalResult}
+            className="mt-5 w-full rounded-full bg-[#1A73E8] py-3 font-bold text-white shadow-md transition-all hover:bg-[#1557B0] active:scale-95 disabled:opacity-60"
           >
             {isLast ? 'Finish' : 'Next →'}
           </button>

@@ -1,14 +1,20 @@
 import { BUG_POOL, RIDDLE_POOL, TRIVIA_POOL, WORDLE_POOL } from '@/lib/questions';
 
 describe('BUG_POOL', () => {
-  it('has at least 14 snippets', () => {
-    expect(BUG_POOL.length).toBeGreaterThanOrEqual(14);
+  it('has at least 20 snippets', () => {
+    expect(BUG_POOL.length).toBeGreaterThanOrEqual(20);
   });
 
-  it('has 5-8 lines per snippet', () => {
+  it('has 5-9 lines per snippet', () => {
     for (const q of BUG_POOL) {
       expect(q.lines.length).toBeGreaterThanOrEqual(5);
-      expect(q.lines.length).toBeLessThanOrEqual(8);
+      expect(q.lines.length).toBeLessThanOrEqual(9);
+    }
+  });
+
+  it('is all Java', () => {
+    for (const q of BUG_POOL) {
+      expect(q.language).toBe('Java');
     }
   });
 
