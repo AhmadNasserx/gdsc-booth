@@ -18,8 +18,9 @@ export async function GET(request: Request) {
   const normKey = normalizeName(name);
   if (!normKey) return NextResponse.json({ available: false });
 
-  // playerKey is optional. Without a valid key the caller can never be "mine".
-  const playerKey = searchParams.get('playerKey');
+  // The player key travels in a header, not the query string, so it stays out of access logs.
+  // It is optional: without a valid key the caller can never be "mine".
+  const playerKey = request.headers.get('x-player-key');
 
   const snap = await adminDb.ref(`names/${normKey}`).get();
   const entry = snap.val() as NameEntry | null;

@@ -173,6 +173,9 @@ export async function POST(request: Request) {
   const now = Date.now();
   const expiresAt = now + SUBMISSION_TTL_MS;
   const name = session.name;
+  // The name claim is refreshed when the session starts, so the leaderboard entry must not
+  // outlive that claim: both expire SUBMISSION_TTL_MS after session.issuedAt.
+  const boardExpiresAt = session.issuedAt + SUBMISSION_TTL_MS;
 
   // One leaderboard entry per player (keyed by normalized name), holding their best run.
   // Legacy push-id entries are not touched.
@@ -184,10 +187,10 @@ export async function POST(request: Request) {
     const live = entry !== null && entry.expiresAt > now;
     if (live && entry.score >= total) {
       outcome = { best: entry.score, improved: false };
-      return { ...entry, expiresAt };
+      return { ...entry, expiresAt: boardExpiresAt };
     }
     outcome = { best: total, improved: true };
-    return { name, score: total, game, timestamp: now, expiresAt };
+    return { name, score: total, game, timestamp: now, expiresAt: boardExpiresAt };
   });
   const { best, improved } = outcome;
 
