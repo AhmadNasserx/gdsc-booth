@@ -15,7 +15,7 @@ export const GAMES: Record<Tab, GameMeta> = {
     emoji: '🧩',
     title: 'Emoji Riddles',
     tagline: 'Decode 5 emoji puzzles',
-    howItScores: '40 pts each',
+    howItScores: 'Every correct answer scores',
     maxRaw: 200,
   },
   trivia: {
@@ -23,7 +23,7 @@ export const GAMES: Record<Tab, GameMeta> = {
     emoji: '⚡',
     title: 'Tech Trivia',
     tagline: '15 fast questions',
-    howItScores: '+20 right / −10 wrong',
+    howItScores: 'Right answers add, wrong ones cost you',
     maxRaw: 300,
   },
   password: {
@@ -31,7 +31,7 @@ export const GAMES: Record<Tab, GameMeta> = {
     emoji: '🔐',
     title: 'Password Challenge',
     tagline: 'Craft the strongest password',
-    howItScores: 'Length, variety and no predictable patterns',
+    howItScores: 'Longer, more varied and less predictable scores higher',
     maxRaw: 200,
   },
   wordle: {
@@ -39,7 +39,7 @@ export const GAMES: Record<Tab, GameMeta> = {
     emoji: '🟩',
     title: 'Tech Wordle',
     tagline: 'Guess the 5-letter tech word in 6 tries',
-    howItScores: 'Fewer guesses, more points',
+    howItScores: 'Fewer guesses, bigger score',
     maxRaw: 300,
   },
   memory: {
@@ -47,7 +47,7 @@ export const GAMES: Record<Tab, GameMeta> = {
     emoji: '🧠',
     title: 'Memory Match',
     tagline: 'Flip cards and match 8 tech pairs',
-    howItScores: 'Fewer moves and seconds, more points',
+    howItScores: 'Fewer moves and less time, bigger score',
     maxRaw: 1000,
   },
   bugs: {
@@ -55,7 +55,7 @@ export const GAMES: Record<Tab, GameMeta> = {
     emoji: '🐞',
     title: 'Bug Hunter',
     tagline: 'Spot the bug in Java code',
-    howItScores: '40 pts each',
+    howItScores: 'Every bug you catch scores',
     maxRaw: 200,
   },
 };

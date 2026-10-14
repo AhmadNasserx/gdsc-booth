@@ -15,12 +15,13 @@ beforeEach(() => {
 });
 
 describe('SuccessScreen', () => {
-  it('shows the name, the game, the score out of 1000 and the rank', () => {
+  it('shows the name, the game, the score in points and the rank', () => {
     render(<SuccessScreen {...base} />);
     expect(screen.getByText('Well done, Ahmad!')).toBeInTheDocument();
     expect(screen.getByText('Memory Match')).toBeInTheDocument();
     expect(screen.getByText('640')).toBeInTheDocument();
-    expect(screen.getByText('/ 1000 pts')).toBeInTheDocument();
+    expect(screen.getByText('pts')).toBeInTheDocument();
+    expect(screen.getByText('640').parentElement).toHaveTextContent('640 pts');
     expect(screen.getByText("You're #3 on the leaderboard")).toBeInTheDocument();
   });
 
@@ -30,9 +31,10 @@ describe('SuccessScreen', () => {
     expect(screen.queryByText(/your best is/i)).not.toBeInTheDocument();
   });
 
-  it('shows the existing best when this run did not improve on it', () => {
+  it('shows the existing best with an encouraging prompt when this run did not improve on it', () => {
     render(<SuccessScreen {...base} total={500} best={800} improved={false} />);
-    expect(screen.getByText('Your best is 800 / 1000')).toBeInTheDocument();
+    expect(screen.getByText(/Your best is 800 pts\./)).toBeInTheDocument();
+    expect(screen.getByText('Can you beat it?')).toBeInTheDocument();
     expect(screen.queryByText('🎉 New personal best!')).not.toBeInTheDocument();
     expect(screen.getByText('500')).toBeInTheDocument();
   });
@@ -50,6 +52,20 @@ describe('SuccessScreen', () => {
       'https://forms.gle/N5UBuhErH9wqjpV87',
     );
     expect(screen.getByRole('link', { name: /view live leaderboard/i })).toHaveAttribute('href', '/leaderboard');
+  });
+});
+
+describe('SuccessScreen: no maximum shown', () => {
+  it.each([
+    ['improved run', { total: 640, best: 640, improved: true }],
+    ['run that did not improve', { total: 500, best: 800, improved: false }],
+  ])('never shows a maximum, a "/ 1000" or an "out of" for the %s', (_label, props) => {
+    const { container } = render(<SuccessScreen {...base} {...props} />);
+    const text = container.textContent ?? '';
+    expect(text).not.toContain('1000');
+    expect(text).not.toContain('/ 1000');
+    expect(text).not.toMatch(/max/i);
+    expect(text).not.toMatch(/out of/i);
   });
 });
 

@@ -15,7 +15,6 @@ const TOAST_MS = 1500;
 const WIN_HOLD_MS = 1500;  // onComplete fires this long after the final reveal
 const LOSS_HOLD_MS = 2500; // onComplete fires this long after the final reveal
 
-const SCORE_HINT = ['300', '250', '200', '150', '100', '50'];
 const WIN_MESSAGES = ['Genius!', 'Magnificent!', 'Impressive!', 'Splendid!', 'Great!', 'Phew!'];
 const CONFETTI_COLORS = ['#34A853', '#FBBC04', '#4285F4', '#EA4335', '#A142F4', '#24C1E0'];
 const CONFETTI_COUNT = 30;
@@ -335,21 +334,7 @@ export default function Wordle({ word, hint, onComplete }: Props) {
         <h2 className="text-base font-bold text-[#202124]">Tech Wordle</h2>
         <span className="text-xs text-[#5F6368]">{guesses.length}/{MAX_GUESSES} guesses</span>
       </div>
-      <p className="mb-3 w-full text-xs text-[#5F6368]">Guess the 5-letter word</p>
-
-      {/* Score hint row: one slot per guess; used slots show a dash */}
-      <div className="mb-3 grid w-full grid-cols-6 gap-1">
-        {SCORE_HINT.map((pts, i) => (
-          <div
-            key={pts}
-            className={`rounded py-0.5 text-center text-[10px] font-bold ${
-              i < guesses.length ? 'bg-[#DADCE0] text-[#9AA0A6]' : 'bg-[#E8F0FE] text-[#1A73E8]'
-            }`}
-          >
-            {i < guesses.length ? '—' : pts}
-          </div>
-        ))}
-      </div>
+      <p className="mb-2 w-full text-xs text-[#5F6368]">Guess the 5-letter word</p>
 
       {/* Hint chip: appears after 2 guesses. Fixed height so the layout does not jump. */}
       <div className="mb-2 flex h-7 w-full items-center justify-center">
