@@ -1,7 +1,9 @@
 // Browser-side session helpers shared by the name entry page and the game pages.
 // Every storage access is wrapped in try/catch: localStorage and sessionStorage can be
 // blocked, full, or missing (private windows, embedded frames, disabled site data).
-// Nothing here runs during render, so server and client markup stay identical.
+// Storage is only read during render on the client (see useIsBrowser), so server and
+// client markup stay identical.
+import { useSyncExternalStore } from 'react';
 
 export const PLAYER_KEY_STORAGE = 'gdscPlayerKey';
 export const PLAYER_NAME_STORAGE = 'gdscPlayerName';
@@ -107,15 +109,32 @@ export function setSessionNotice(message: string): void {
   }
 }
 
-/** Returns the pending home page notice and removes it, so it shows only once. */
-export function takeSessionNotice(): string | null {
+/** The pending home page notice, without removing it. */
+export function peekSessionNotice(): string | null {
   try {
-    const message = sessionStorage.getItem(SESSION_NOTICE_KEY);
-    sessionStorage.removeItem(SESSION_NOTICE_KEY);
-    return message;
+    return sessionStorage.getItem(SESSION_NOTICE_KEY);
   } catch {
     return null;
   }
+}
+
+/** Removes the pending home page notice, so it shows only once. */
+export function clearSessionNotice(): void {
+  try {
+    sessionStorage.removeItem(SESSION_NOTICE_KEY);
+  } catch {
+    // Nothing to clear if storage is unavailable.
+  }
+}
+
+const noopSubscribe = () => () => {};
+
+/**
+ * False on the server and during hydration, true once the page runs in the browser.
+ * Components use it to read storage without a hydration mismatch and without setState in an effect.
+ */
+export function useIsBrowser(): boolean {
+  return useSyncExternalStore(noopSubscribe, () => true, () => false);
 }
 
 async function readJson(res: Response): Promise<unknown> {

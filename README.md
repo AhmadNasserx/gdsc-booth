@@ -56,7 +56,7 @@ Each run gets a fresh random set of questions, a new Wordle word and a newly shu
 ## Scoring and the leaderboard
 
 - **Your total** is the sum of your best score in each of the six games. Replaying a game can only raise its best; a weaker run never lowers it.
-- **Fewer games means a lower total.** A player who has tried only two games can't catch someone who has played all six, unless their scores are higher.
+- **Each game adds one score.** A player who has played fewer games has fewer bests adding up, so playing all six is usually what puts someone on top.
 - **Ties** are rare, because every score includes a speed bonus: faster finishes score more. If two totals still match, whoever reached their total first ranks higher.
 - The leaderboard shows the top 20 players, with small emoji chips for the games each player has a score in.
 
@@ -67,7 +67,7 @@ A public leaderboard with a prize at the end of the day is an open invitation to
 - **Answers stay on the server.** Correct answers, the Wordle word and the Memory Match layout are never sent to the browser before the player has acted. The browser learns whether an answer was right only after it has been given.
 - **Every answer is graded as it arrives.** The server checks each answer when it is submitted and keeps the run's state in one transaction, so double taps can't count twice and answers can't be retried or reordered.
 - **The server measures time.** Each run's duration is taken from the server's clock, not the browser's.
-- **One run at a time, in order.** A run can only be played once, and a player can't have two runs of the same game open. Starting a game again ends the previous run for that game.
+- **One run at a time, in order.** A run can be finished only once, and answers are taken one at a time, in order, with no retries. Starting a new run of a game ends any earlier run of that game that is still open.
 - **Sessions expire.** Session tokens are encrypted, carry only the name and an issue time, and last 90 minutes.
 - **Unique names.** A display name is reserved for 48 hours, so nobody can pose as another player.
 - **Locked-down headers.** A Content-Security-Policy limits scripts and connections to the app and Firebase.
@@ -89,7 +89,7 @@ Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS 4 · Firebase 
 | Route | Purpose |
 |---|---|
 | `POST /api/session` | Checks and reserves a display name, and issues a session token (no game content) |
-| `POST /api/names/check` | Name availability for this browser (`GET /api/names/check`) |
+| `GET /api/names/check` | Whether a display name is free, or already held by this browser |
 | `POST /api/game/start` | Starts a fresh run of one game and returns its questions or board, with no answers |
 | `POST /api/game/action` | Submits one action for a run (an answer, a guess, a card flip, or a password) and returns the graded result |
 | `POST /api/me` | The player's name, total, rank and best in each game |

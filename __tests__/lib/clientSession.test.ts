@@ -183,22 +183,25 @@ describe('current session', () => {
 
 describe('session notice', () => {
   it('returns null when there is no notice', () => {
-    expect(loadModule().takeSessionNotice()).toBeNull();
+    expect(loadModule().peekSessionNotice()).toBeNull();
   });
 
-  it('shows the notice once: taking it removes it', () => {
+  it('reads the notice without removing it, until it is cleared', () => {
     const mod = loadModule();
     mod.setSessionNotice('Your session has ended.');
-    expect(sessionStorage.getItem('sessionNotice')).toBe('Your session has ended.');
-    expect(mod.takeSessionNotice()).toBe('Your session has ended.');
-    expect(mod.takeSessionNotice()).toBeNull();
+    expect(mod.peekSessionNotice()).toBe('Your session has ended.');
+    expect(mod.peekSessionNotice()).toBe('Your session has ended.');
+    mod.clearSessionNotice();
+    expect(mod.peekSessionNotice()).toBeNull();
   });
 
   it('does not throw when sessionStorage is blocked', () => {
     jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('blocked'); });
     jest.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('blocked'); });
+    jest.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => { throw new Error('blocked'); });
     const mod = loadModule();
     expect(() => mod.setSessionNotice('x')).not.toThrow();
-    expect(mod.takeSessionNotice()).toBeNull();
+    expect(mod.peekSessionNotice()).toBeNull();
+    expect(() => mod.clearSessionNotice()).not.toThrow();
   });
 });

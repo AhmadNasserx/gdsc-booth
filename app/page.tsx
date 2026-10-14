@@ -1,8 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getPlayerKey, getSavedName, startSession, takeSessionNotice } from '@/lib/clientSession';
+import {
+  clearSessionNotice,
+  getPlayerKey,
+  getSavedName,
+  peekSessionNotice,
+  startSession,
+  useIsBrowser,
+} from '@/lib/clientSession';
 
 const NAME_PATTERN = /^[A-Za-z0-9À-ɏ ]{2,30}$/;
 
@@ -12,21 +19,14 @@ type NameStatus = 'idle' | 'invalid' | 'checking' | CheckedStatus;
 
 export default function NameEntry() {
   const router = useRouter();
-  const [name, setName] = useState('');
+  const isBrowser = useIsBrowser();
+  // Until the player types, the field shows the name used last time (empty on the server).
+  const [typedName, setTypedName] = useState<string | null>(null);
+  const name = typedName ?? (isBrowser ? getSavedName() ?? '' : '');
   // Result of the last availability check, tagged with the name it was for.
   const [check, setCheck] = useState<{ name: string; status: CheckedStatus } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  // Set when the player was sent here because their session ended. Shown once.
-  const [notice, setNotice] = useState('');
-
-  // Prefill with the name used last time. Read after mount so server and client markup match.
-  useEffect(() => {
-    const saved = getSavedName();
-    if (saved) setName(saved);
-    const pending = takeSessionNotice();
-    if (pending) setNotice(pending);
-  }, []);
 
   const trimmedName = name.trim();
   // A result only applies to the name it was checked for; a stale one shows as "checking".
@@ -130,7 +130,7 @@ export default function NameEntry() {
             placeholder="Your display name…"
             maxLength={30}
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => setTypedName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleStart()}
             className="w-full p-3.5 pr-11 border border-[#DADCE0] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#1A73E8] text-sm"
           />
@@ -153,11 +153,7 @@ export default function NameEntry() {
           You can play any game again any time, and only your best score in each game counts.
         </p>
 
-        {notice && (
-          <p role="status" className="text-xs text-[#B06000] bg-[#FEF7E0] border border-[#FBBC04] rounded-xl p-3 mb-3">
-            {notice}
-          </p>
-        )}
+        {isBrowser && <SessionNotice />}
 
         {error && (
           <p role="alert" className="text-xs text-[#EA4335] mb-3">{error}</p>
@@ -172,5 +168,20 @@ export default function NameEntry() {
         </button>
       </div>
     </div>
+  );
+}
+
+// Shows the notice left by an ended session, once. It mounts only in the browser,
+// so the server never renders it, and it clears the stored message as it shows.
+function SessionNotice() {
+  const [message] = useState(peekSessionNotice);
+  useEffect(() => {
+    clearSessionNotice();
+  }, []);
+  if (!message) return null;
+  return (
+    <p role="status" className="text-xs text-[#B06000] bg-[#FEF7E0] border border-[#FBBC04] rounded-xl p-3 mb-3">
+      {message}
+    </p>
   );
 }

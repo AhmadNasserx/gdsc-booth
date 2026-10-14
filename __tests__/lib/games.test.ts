@@ -16,13 +16,11 @@ describe('game metadata', () => {
     expect(GAME_LIST.map((g) => g.id)).toEqual(TABS);
   });
 
-  it('has the expected max raw scores', () => {
-    expect(GAMES.riddles.maxRaw).toBe(200);
-    expect(GAMES.trivia.maxRaw).toBe(300);
-    expect(GAMES.password.maxRaw).toBe(200);
-    expect(GAMES.wordle.maxRaw).toBe(300);
-    expect(GAMES.memory.maxRaw).toBe(1000);
-    expect(GAMES.bugs.maxRaw).toBe(200);
+  it('exposes no maximum score anywhere in the game metadata', () => {
+    for (const game of GAME_LIST) {
+      expect(Object.keys(game)).not.toContain('maxRaw');
+      expect(JSON.stringify(game)).not.toMatch(/max|out of|\/\s*\d/i);
+    }
   });
 
   it('describes scoring without revealing per-item values, caps or totals', () => {
