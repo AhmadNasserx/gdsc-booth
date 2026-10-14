@@ -63,7 +63,7 @@ describe('startWordle', () => {
   });
 
   it('picks a word from the pool with its hint', () => {
-    const { state } = startWordle(() => 0);
+    const { state } = startWordle(undefined, () => 0);
     expect(WORDLE_POOL[0]).toEqual({ word: state.word, hint: state.hint });
     expect(state.guesses).toEqual([]);
   });

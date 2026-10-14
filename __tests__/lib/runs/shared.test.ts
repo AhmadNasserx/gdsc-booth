@@ -1,7 +1,7 @@
 /**
  * @jest-environment node
  */
-import { expectQuestion, listOf, minIntervalMs, numberOf, optionalQuestionIndex, pickIndices, RunError, shuffle, toStorable } from '@/lib/runs/shared';
+import { expectQuestion, listOf, minIntervalMs, numberOf, pickIndices, requiredQuestionIndex, RunError, shuffle, toStorable } from '@/lib/runs/shared';
 
 describe('shuffle and pickIndices', () => {
   it('keeps every element', () => {
@@ -68,15 +68,17 @@ describe('listOf and numberOf', () => {
 });
 
 describe('question order', () => {
-  it('accepts a missing index and the expected one', () => {
-    expect(optionalQuestionIndex({})).toBeUndefined();
-    expect(optionalQuestionIndex({ q: 3 })).toBe(3);
-    expect(() => expectQuestion(undefined, 4)).not.toThrow();
-    expect(() => expectQuestion(4, 4)).not.toThrow();
+  it('requires a non-negative integer q', () => {
+    expect(requiredQuestionIndex({ q: 3 })).toBe(3);
+    expect(requiredQuestionIndex({ q: 0 })).toBe(0);
+    expect(() => requiredQuestionIndex({})).toThrow(RunError);
+    expect(() => requiredQuestionIndex({ q: '1' })).toThrow(RunError);
+    expect(() => requiredQuestionIndex({ q: -1 })).toThrow(RunError);
+    expect(() => requiredQuestionIndex({ q: 1.5 })).toThrow(RunError);
   });
 
-  it('rejects a bad index or an out-of-order answer', () => {
-    expect(() => optionalQuestionIndex({ q: '1' })).toThrow(RunError);
-    expect(() => expectQuestion(3, 4)).toThrow(expect.any(RunError));
+  it('accepts the expected question and refuses any other', () => {
+    expect(() => expectQuestion(4, 4)).not.toThrow();
+    expect(() => expectQuestion(3, 4)).toThrow(RunError);
   });
 });

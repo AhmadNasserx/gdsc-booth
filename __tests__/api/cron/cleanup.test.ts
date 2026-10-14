@@ -33,6 +33,9 @@ function seed() {
   writePath('runs-active/s1_riddles', 'expired');
   writePath('runs-active/s2_riddles', 'live');
   writePath('runs-active/s3_bugs', 'gone');
+  writePath('seen/old/riddles', { served: [1, 2], expiresAt: past });
+  writePath('seen/old/bugs', { served: [3], expiresAt: future });
+  writePath('seen/new/riddles', { served: [4], expiresAt: future });
 }
 
 describe('GET /api/cron/cleanup', () => {
@@ -50,7 +53,7 @@ describe('GET /api/cron/cleanup', () => {
     seed();
     const res = await GET(makeRequest('test-cron-secret'));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ deleted: 5 }) // 3 expired records and 2 pointers left dangling;
+    expect(await res.json()).toEqual({ deleted: 6 }); // 3 expired records, 1 expired seen record, 2 pointers left dangling
 
     expect(readPath('leaderboard/old')).toBeNull();
     expect(readPath('leaderboard/new')).not.toBeNull();
@@ -58,6 +61,14 @@ describe('GET /api/cron/cleanup', () => {
     expect(readPath('names/new')).not.toBeNull();
     expect(readPath('runs/expired')).toBeNull();
     expect(readPath('runs/live')).not.toBeNull();
+  });
+
+  it('removes expired seen records per game and keeps live ones', async () => {
+    seed();
+    await GET(makeRequest('test-cron-secret'));
+    expect(readPath('seen/old/riddles')).toBeNull();
+    expect(readPath('seen/old/bugs')).toMatchObject({ served: [3] });
+    expect(readPath('seen/new/riddles')).toMatchObject({ served: [4] });
   });
 
   it('removes active pointers whose run is gone, and keeps the ones that still point at a run', async () => {
