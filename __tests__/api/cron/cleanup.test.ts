@@ -2,31 +2,18 @@
  * @jest-environment node
  */
 import { GET } from '@/app/api/cron/cleanup/route';
+import { clock, installClock, readPath, resetDb, writePath } from '@/test/support/rtdbMock';
+
+jest.mock('@/lib/firebaseAdmin', () => ({
+  adminDb: jest.requireActual('@/test/support/rtdbMock').adminDbMock,
+}));
 
 process.env.CRON_SECRET = 'test-cron-secret';
 
-const mockExpired = {
-  entry1: { name: 'Old', score: 100, expiresAt: Date.now() - 1000 },
-};
-const mockFresh = {
-  entry2: { name: 'New', score: 200, expiresAt: Date.now() + 86400000 },
-};
-
-const mockRemove = jest.fn().mockResolvedValue(undefined);
-jest.mock('@/lib/firebaseAdmin', () => ({
-  adminDb: {
-    ref: jest.fn((path: string) => ({
-      get: jest.fn().mockResolvedValue({
-        val: () => (path === 'leaderboard' ? { ...mockExpired, ...mockFresh } : {}),
-        forEach: (cb: (snap: { key: string; val: () => unknown }) => void) => {
-          const data = path === 'leaderboard' ? { ...mockExpired, ...mockFresh } : {};
-          Object.entries(data).forEach(([key, val]) => cb({ key, val: () => val }));
-        },
-      }),
-      child: jest.fn(() => ({ remove: mockRemove })),
-    })),
-  },
-}));
+beforeEach(() => {
+  resetDb();
+  installClock();
+});
 
 function makeRequest(auth?: string) {
   return new Request('http://localhost/api/cron/cleanup', {
@@ -34,21 +21,56 @@ function makeRequest(auth?: string) {
   });
 }
 
+function seed() {
+  const past = clock.now - 1;
+  const future = clock.now + 60_000;
+  writePath('leaderboard/old', { name: 'Old', score: 100, games: { riddles: 100 }, timestamp: 1, expiresAt: past });
+  writePath('leaderboard/new', { name: 'New', score: 200, games: { riddles: 200 }, timestamp: 1, expiresAt: future });
+  writePath('names/old', { keyHash: 'x', claimedAt: 1, expiresAt: past });
+  writePath('names/new', { keyHash: 'y', claimedAt: 1, expiresAt: future });
+  writePath('runs/expired', { sessionId: 's1', game: 'riddles', status: 'done', startedAt: 1, expiresAt: past, state: { indices: [0] } });
+  writePath('runs/live', { sessionId: 's2', game: 'riddles', status: 'active', startedAt: 1, expiresAt: future, state: { indices: [0] } });
+  writePath('runs-active/s1_riddles', 'expired');
+  writePath('runs-active/s2_riddles', 'live');
+  writePath('runs-active/s3_bugs', 'gone');
+}
+
 describe('GET /api/cron/cleanup', () => {
   it('returns 401 without authorization', async () => {
     const res = await GET(makeRequest());
     expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({ error: 'Unauthorized' });
   });
 
-  it('returns 401 for wrong secret', async () => {
-    const res = await GET(makeRequest('wrong-secret'));
-    expect(res.status).toBe(401);
+  it('returns 401 for the wrong secret', async () => {
+    expect((await GET(makeRequest('wrong-secret'))).status).toBe(401);
   });
 
-  it('deletes expired entries and returns count', async () => {
+  it('removes expired leaderboard entries, names and runs, and keeps the live ones', async () => {
+    seed();
     const res = await GET(makeRequest('test-cron-secret'));
     expect(res.status).toBe(200);
-    const data = await res.json();
-    expect(data.deleted).toBeGreaterThanOrEqual(1);
+    expect(await res.json()).toEqual({ deleted: 5 }) // 3 expired records and 2 pointers left dangling;
+
+    expect(readPath('leaderboard/old')).toBeNull();
+    expect(readPath('leaderboard/new')).not.toBeNull();
+    expect(readPath('names/old')).toBeNull();
+    expect(readPath('names/new')).not.toBeNull();
+    expect(readPath('runs/expired')).toBeNull();
+    expect(readPath('runs/live')).not.toBeNull();
+  });
+
+  it('removes active pointers whose run is gone, and keeps the ones that still point at a run', async () => {
+    seed();
+    await GET(makeRequest('test-cron-secret'));
+    expect(readPath('runs-active/s1_riddles')).toBeNull();
+    expect(readPath('runs-active/s2_riddles')).toBe('live');
+    expect(readPath('runs-active/s3_bugs')).toBeNull();
+  });
+
+  it('no longer touches submissions', async () => {
+    writePath('submissions/abc', { expiresAt: clock.now - 1 });
+    await GET(makeRequest('test-cron-secret'));
+    expect(readPath('submissions/abc')).not.toBeNull();
   });
 });

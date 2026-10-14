@@ -55,7 +55,7 @@ describe('applyTriviaAction', () => {
   it('takes 10 points for a wrong answer, never below zero', () => {
     const step = applyTriviaAction(FRESH, { kind: 'answer', answer: '' });
     expect(step.state.points).toBe(0);
-    expect(step.response.correct).toBe(false);
+    expect(step.response).toMatchObject({ correct: false });
   });
 
   it('rejects text that is not one of the options', () => {
