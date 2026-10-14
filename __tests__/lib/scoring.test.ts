@@ -1,46 +1,136 @@
 import {
-  validateScores,
-  calcTotal,
+  calcMemoryScore,
   calcPasswordScore,
-  VALID_RIDDLE_SCORES,
-  VALID_BINARY_SCORES,
+  calcWordleScore,
+  isPlausibleMemory,
+  normalizeScore,
+  LEADERBOARD_MAX,
 } from '@/lib/scoring';
-import type { Tab } from '@/lib/types';
+import { GAMES } from '@/lib/games';
+import { TABS } from '@/lib/types';
 
-const valid = { riddles: 120, trivia: 60, binary: 150, password: 150, wordle: 200 };
-
-describe('validateScores', () => {
-  it('accepts valid score set', () => {
-    expect(validateScores(valid)).toBe(true);
-  });
-
-  it('rejects riddle score not in valid set', () => {
-    expect(validateScores({ ...valid, riddles: 25 })).toBe(false);
-    expect(validateScores({ ...valid, riddles: 201 })).toBe(false);
-    expect(validateScores({ ...valid, riddles: 50.5 })).toBe(false);
-  });
-
-  it('rejects trivia score out of [0,300]', () => {
-    expect(validateScores({ ...valid, trivia: 301 })).toBe(false);
-    expect(validateScores({ ...valid, trivia: -1 })).toBe(false);
-    expect(validateScores({ ...valid, trivia: 1.5 })).toBe(false);
-  });
-
-  it('rejects binary score not 0 or 150', () => {
-    expect(validateScores({ ...valid, binary: 100 })).toBe(false);
-    expect(validateScores({ ...valid, binary: 1 })).toBe(false);
-  });
-
-  it('rejects password score out of [0,200]', () => {
-    expect(validateScores({ ...valid, password: 201 })).toBe(false);
-    expect(validateScores({ ...valid, password: -1 })).toBe(false);
+describe('LEADERBOARD_MAX', () => {
+  it('is 1000', () => {
+    expect(LEADERBOARD_MAX).toBe(1000);
   });
 });
 
-describe('calcTotal', () => {
-  it('sums all five scores', () => {
-    expect(calcTotal({ riddles: 200, trivia: 300, binary: 150, password: 200, wordle: 300 })).toBe(1150);
-    expect(calcTotal({ riddles: 0, trivia: 0, binary: 0, password: 0, wordle: 0 })).toBe(0);
+describe('normalizeScore', () => {
+  it('maps each game max raw score to LEADERBOARD_MAX', () => {
+    for (const tab of TABS) {
+      expect(normalizeScore(tab, GAMES[tab].maxRaw)).toBe(1000);
+    }
+  });
+
+  it('maps zero to zero', () => {
+    for (const tab of TABS) {
+      expect(normalizeScore(tab, 0)).toBe(0);
+    }
+  });
+
+  it('scales proportionally and rounds', () => {
+    expect(normalizeScore('riddles', 100)).toBe(500); // 100 / 200
+    expect(normalizeScore('trivia', 100)).toBe(333);  // 100 / 300 = 333.3
+    expect(normalizeScore('trivia', 200)).toBe(667);  // 200 / 300 = 666.7
+  });
+
+  it('clamps raw scores above the game max', () => {
+    expect(normalizeScore('bugs', 9999)).toBe(1000);
+  });
+
+  it('clamps negative raw scores to zero', () => {
+    expect(normalizeScore('trivia', -50)).toBe(0);
+  });
+
+  it('treats NaN as zero', () => {
+    expect(normalizeScore('wordle', NaN)).toBe(0);
+  });
+
+  it('always stays within 0..1000 for every game', () => {
+    for (const tab of TABS) {
+      for (const raw of [-1, 0, 1, 37, GAMES[tab].maxRaw / 2, GAMES[tab].maxRaw, GAMES[tab].maxRaw * 3]) {
+        const v = normalizeScore(tab, raw);
+        expect(v).toBeGreaterThanOrEqual(0);
+        expect(v).toBeLessThanOrEqual(1000);
+        expect(Number.isInteger(v)).toBe(true);
+      }
+    }
+  });
+});
+
+describe('calcWordleScore', () => {
+  it('scores 0 when unsolved', () => {
+    expect(calcWordleScore(6, false)).toBe(0);
+  });
+
+  it('gives 300 for a first-guess solve and 50 for a sixth-guess solve', () => {
+    expect(calcWordleScore(1, true)).toBe(300);
+    expect(calcWordleScore(6, true)).toBe(50);
+  });
+});
+
+describe('calcMemoryScore', () => {
+  it('gives the full 1000 for 8 moves in 20 seconds or less', () => {
+    expect(calcMemoryScore(8, 20)).toBe(1000);
+    expect(calcMemoryScore(8, 6)).toBe(1000);
+  });
+
+  it('deducts 25 per extra move', () => {
+    expect(calcMemoryScore(9, 15)).toBe(975);
+    expect(calcMemoryScore(12, 15)).toBe(900);
+  });
+
+  it('deducts 5 per second beyond 20', () => {
+    expect(calcMemoryScore(8, 30)).toBe(950);
+    expect(calcMemoryScore(8, 21)).toBe(995);
+  });
+
+  it('combines move and time penalties', () => {
+    expect(calcMemoryScore(10, 40)).toBe(1000 - 50 - 100);
+  });
+
+  it('clamps to 0 for very slow, inefficient games', () => {
+    expect(calcMemoryScore(200, 3600)).toBe(0);
+  });
+
+  it('returns integers', () => {
+    expect(Number.isInteger(calcMemoryScore(9, 33))).toBe(true);
+  });
+});
+
+describe('isPlausibleMemory', () => {
+  it('accepts realistic results', () => {
+    expect(isPlausibleMemory(8, 6)).toBe(true);
+    expect(isPlausibleMemory(200, 3600)).toBe(true);
+    expect(isPlausibleMemory(14, 90)).toBe(true);
+  });
+
+  it('rejects moves below the 8 needed for 8 pairs', () => {
+    expect(isPlausibleMemory(7, 30)).toBe(false);
+    expect(isPlausibleMemory(0, 30)).toBe(false);
+  });
+
+  it('rejects moves above 200', () => {
+    expect(isPlausibleMemory(201, 30)).toBe(false);
+  });
+
+  it('rejects implausibly fast times', () => {
+    expect(isPlausibleMemory(8, 5)).toBe(false);
+    expect(isPlausibleMemory(8, 0)).toBe(false);
+  });
+
+  it('rejects times above one hour', () => {
+    expect(isPlausibleMemory(8, 3601)).toBe(false);
+  });
+
+  it('rejects non-integers and non-numbers', () => {
+    expect(isPlausibleMemory(8.5, 30)).toBe(false);
+    expect(isPlausibleMemory(8, 30.2)).toBe(false);
+    expect(isPlausibleMemory('8', 30)).toBe(false);
+    expect(isPlausibleMemory(8, '30')).toBe(false);
+    expect(isPlausibleMemory(undefined, 30)).toBe(false);
+    expect(isPlausibleMemory(8, null)).toBe(false);
+    expect(isPlausibleMemory(NaN, 30)).toBe(false);
   });
 });
 
