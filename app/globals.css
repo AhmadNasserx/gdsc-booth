@@ -40,3 +40,78 @@ body {
 .anim-pop      { animation: pop 0.28s ease-out; }
 .anim-shake    { animation: shake 0.38s ease-out; }
 .anim-slide-in { animation: fadeSlideIn 0.3s ease-out both; }
+
+/* Wordle: tile flip, win bounce, confetti, key tap feedback */
+@keyframes wordle-flip {
+  0%   { transform: rotateX(0deg); }
+  50%  { transform: rotateX(90deg); }
+  100% { transform: rotateX(0deg); }
+}
+
+@keyframes wordle-bounce {
+  0%, 100% { transform: translateY(0); }
+  35%      { transform: translateY(-14px); }
+  60%      { transform: translateY(0); }
+  80%      { transform: translateY(-4px); }
+}
+
+@keyframes wordle-confetti {
+  0%   { opacity: 0; transform: translate(0, 0) rotate(0deg); }
+  10%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(var(--rot)); }
+}
+
+.wordle-flip    { animation: wordle-flip 300ms ease-in-out both; backface-visibility: visible; }
+.wordle-bounce  { animation: wordle-bounce 600ms ease-out both; }
+.wordle-confetti {
+  position: absolute;
+  opacity: 0;
+  animation: wordle-confetti 1600ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+.wordle-key {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wordle-flip,
+  .wordle-bounce { animation: none !important; }
+  .wordle-confetti { display: none; }
+}
+
+@keyframes memoMatchPop {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.3); }
+  100% { transform: scale(1); }
+}
+
+@keyframes memoConfetti {
+  0%   { transform: translateY(-16px) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(420px) rotate(720deg); opacity: 0; }
+}
+
+.memo-match-pop { animation: memoMatchPop 0.5s ease-out; }
+.memo-confetti  { animation: memoConfetti 1.6s ease-in forwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .memo-match-pop,
+  .memo-confetti { animation: none; }
+}
+
+@keyframes staggerIn {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes confettiFall {
+  from { opacity: 1; transform: translateY(-12px) rotate(0deg); }
+  to   { opacity: 0; transform: translateY(360px) rotate(600deg); }
+}
+
+.anim-stagger  { animation: staggerIn 0.45s ease-out both; }
+.anim-confetti { animation-name: confettiFall; animation-timing-function: linear; animation-fill-mode: both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-stagger  { animation: none; }
+  .anim-confetti { display: none; }
+}

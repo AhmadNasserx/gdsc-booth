@@ -1,6 +1,12 @@
-import type { LeaderboardEntry } from '@/lib/types';
+import type { LeaderboardEntry, Tab } from '@/lib/types';
+import { GAMES } from '@/lib/games';
 
-const MAX_SCORE = 1150;
+const MAX_SCORE = 1000;
+
+// Score colour bands as shares of the 1000-point scale: 92%, 69% and 46%.
+const HIGH_SCORE = Math.round(MAX_SCORE * 0.92); // 920
+const MID_SCORE = Math.round(MAX_SCORE * 0.69);  // 690
+const LOW_SCORE = Math.round(MAX_SCORE * 0.46);  // 460
 
 const PODIUM = [
   {
@@ -34,17 +40,28 @@ const PODIUM = [
 ];
 
 function scoreColor(score: number): string {
-  if (score >= 920) return 'text-[#4285F4]';
-  if (score >= 690) return 'text-[#34A853]';
-  if (score >= 460) return 'text-[#FBBC04]';
+  if (score >= HIGH_SCORE) return 'text-[#4285F4]';
+  if (score >= MID_SCORE) return 'text-[#34A853]';
+  if (score >= LOW_SCORE) return 'text-[#FBBC04]';
   return 'text-[#EA4335]';
 }
 
 function scoreBarColor(score: number): string {
-  if (score >= 920) return 'bg-[#4285F4]';
-  if (score >= 690) return 'bg-[#34A853]';
-  if (score >= 460) return 'bg-[#FBBC04]';
+  if (score >= HIGH_SCORE) return 'bg-[#4285F4]';
+  if (score >= MID_SCORE) return 'bg-[#34A853]';
+  if (score >= LOW_SCORE) return 'bg-[#FBBC04]';
   return 'bg-[#EA4335]';
+}
+
+// Small emoji for the game an entry was scored in. Older entries have no game.
+function GameBadge({ game }: { game?: Tab }) {
+  const meta = game ? GAMES[game] : undefined;
+  if (!meta) return null;
+  return (
+    <span role="img" aria-label={meta.title} title={meta.title} className="shrink-0 leading-none">
+      {meta.emoji}
+    </span>
+  );
 }
 
 interface Props { entries: LeaderboardEntry[]; }
@@ -83,8 +100,9 @@ export default function LeaderboardTable({ entries }: Props) {
               <span className="text-[10px] font-bold text-[#5F6368] uppercase tracking-widest mb-1.5">
                 {p.label}
               </span>
-              <span className={`${p.nameSize} font-extrabold text-[#202124] mb-2 w-full truncate`}>
-                {entry.name}
+              <span className={`${p.nameSize} font-extrabold text-[#202124] mb-2 w-full flex items-center justify-center gap-2 min-w-0`}>
+                <GameBadge game={entry.game} />
+                <span className="truncate min-w-0">{entry.name}</span>
               </span>
               <span className={`${p.scoreSize} font-black ${scoreColor(entry.score)} leading-none`}>
                 {entry.score}
@@ -107,8 +125,9 @@ export default function LeaderboardTable({ entries }: Props) {
                 <span className="w-7 md:w-8 text-sm md:text-lg font-black text-[#9AA0A6] text-center shrink-0">
                   #{rank}
                 </span>
-                <span className="flex-1 text-sm md:text-lg font-semibold text-[#202124] truncate">
-                  {entry.name}
+                <span className="flex-1 min-w-0 flex items-center gap-2 text-sm md:text-lg font-semibold text-[#202124]">
+                  <GameBadge game={entry.game} />
+                  <span className="truncate min-w-0">{entry.name}</span>
                 </span>
                 <div className="flex-1 max-w-[80px] sm:max-w-[140px] md:max-w-[160px] bg-[#E8EAED] rounded-full h-1.5 md:h-2">
                   <div
