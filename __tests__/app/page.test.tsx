@@ -16,12 +16,41 @@ describe('Name Entry Page', () => {
   it('renders name input and consent notice', () => {
     render(<Page />);
     expect(screen.getByPlaceholderText(/display name/i)).toBeInTheDocument();
-    expect(screen.getByText(/deleted after 24 hours/i)).toBeInTheDocument();
+    expect(screen.getByText(/deleted after 48 hours/i)).toBeInTheDocument();
+  });
+
+  it('explains that one game is scored and the rest are practice', () => {
+    render(<Page />);
+    expect(screen.getByText(/six mini-games/i)).toBeInTheDocument();
+    expect(screen.getByText(/pick one to score/i)).toBeInTheDocument();
   });
 
   it('Start button is disabled when name is empty', () => {
     render(<Page />);
     expect(screen.getByRole('button', { name: /start/i })).toBeDisabled();
+  });
+
+  it('clears a game picked in a previous session when a new session starts', async () => {
+    sessionStorage.setItem('playerGame', 'bugs');
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ available: true }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ token: 'new-token', questions: {} }),
+      });
+
+    render(<Page />);
+    await userEvent.type(screen.getByPlaceholderText(/display name/i), 'Ahmad');
+    const startBtn = await waitFor(() => {
+      const btn = screen.getByRole('button', { name: /start/i });
+      expect(btn).not.toBeDisabled();
+      return btn;
+    });
+    fireEvent.click(startBtn);
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/play'));
+    expect(sessionStorage.getItem('playerGame')).toBeNull();
+    expect(sessionStorage.getItem('playerToken')).toBe('new-token');
   });
 
   it('navigates to /play on successful session creation', async () => {
