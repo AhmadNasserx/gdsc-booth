@@ -2,14 +2,14 @@
 
 The booth app for **Google Developer Groups on Campus, Beirut Arab University, Tripoli Campus** at the Fall 2026 club fair. Students walk up to a device, enter a display name, pick one of six short tech mini-games to score, and land on a live leaderboard. The other games stay playable as practice. A second screen at the booth shows the leaderboard updating in real time, and the finish screen links to the chapter sign-up form.
 
-**50 students played it at the club fair.** It was designed, built and deployed in three days.
+**50 students played it at the club fair.** It was designed, built and deployed in three days. Since then it has been reworked so each player picks one game to score, with two new games and a rebuilt Wordle keyboard.
 
-> **Status:** ran live at the club fair in September 2026 and is now offline. The screenshots and video below come from a local run of the same code, with sample names on the leaderboard.
+> **Status:** ran live at the club fair in September 2026 and is now offline. The screenshots and video below come from a local run with sample names on the leaderboard. They were recorded before the pick-one-game redesign (an earlier five-game version that included a Binary Decoder), so the game picker, Memory Match and Bug Hunter aren't pictured yet.
 
 <p align="center">
-  <img src="docs/screenshots/playthrough.gif" width="300" alt="A full playthrough: entering a name, picking a game, submitting and landing on the leaderboard (sped up 2x)">
+  <img src="docs/screenshots/playthrough.gif" width="300" alt="A playthrough of the earlier five-game version: entering a name, playing, submitting and landing on the leaderboard (sped up 2x)">
 </p>
-<p align="center"><sub>Full playthrough, sped up 2×. <a href="docs/screenshots/playthrough.mp4">Watch it at normal speed (MP4, 1:25)</a>.</sub></p>
+<p align="center"><sub>Earlier version, sped up 2×. <a href="docs/screenshots/playthrough.mp4">Watch it at normal speed (MP4, 1:25)</a>.</sub></p>
 
 ## Screenshots
 
@@ -43,6 +43,8 @@ Players pick **one** game to score. Only that game's score goes on the leaderboa
 | Bug Hunter | Spot the buggy line in 5 short code snippets | 40 pts per snippet (200 max) |
 
 Every chosen score is normalised to a 0–1000 scale, so the leaderboard compares like with like no matter which game someone picked.
+
+**Tech Wordle** has an on-screen keyboard that spans the full card width with large touch targets, a staggered tile-flip reveal and keyboard colours that only update once the row has flipped. Physical keyboards work too.
 
 Each player gets a fresh random set of questions, with answer options shuffled (Fisher–Yates) so the right answer isn't always in the same spot.
 
