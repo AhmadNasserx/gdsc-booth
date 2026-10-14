@@ -58,21 +58,21 @@ describe('sendAction', () => {
   it('sends the token and run id together with the action body', async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse(200, { correct: true, done: false }));
 
-    const response = await sendAction<{ correct: boolean }>('tok', 'run-9', { answer: 'Docker' });
+    const response = await sendAction<{ correct: boolean }>('tok', 'run-9', { answers: ['Docker'] });
 
     expect(response).toEqual({ correct: true, done: false });
     const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
     expect(url).toBe('/api/game/action');
-    expect(JSON.parse(init.body)).toEqual({ token: 'tok', runId: 'run-9', answer: 'Docker' });
+    expect(JSON.parse(init.body)).toEqual({ token: 'tok', runId: 'run-9', answers: ['Docker'] });
   });
 
-  it('sends numeric and flip bodies unchanged', async () => {
+  it('sends batch and flip bodies unchanged', async () => {
     (global.fetch as jest.Mock).mockResolvedValue(jsonResponse(200, {}));
 
-    await sendAction('tok', 'run-9', { answer: 2 });
+    await sendAction('tok', 'run-9', { answers: [2, null] });
     await sendAction('tok', 'run-9', { flip: 7 });
 
-    expect(JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body)).toEqual({ token: 'tok', runId: 'run-9', answer: 2 });
+    expect(JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body)).toEqual({ token: 'tok', runId: 'run-9', answers: [2, null] });
     expect(JSON.parse((global.fetch as jest.Mock).mock.calls[1][1].body)).toEqual({ token: 'tok', runId: 'run-9', flip: 7 });
   });
 
@@ -88,7 +88,7 @@ describe('sendAction', () => {
   it('rejects when a successful response has no JSON body', async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, status: 200, json: async () => null });
 
-    await expect(sendAction('tok', 'run-9', { finish: true })).rejects.toThrow(/something went wrong/i);
+    await expect(sendAction('tok', 'run-9', { answers: [null] })).rejects.toThrow(/something went wrong/i);
   });
 });
 

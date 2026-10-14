@@ -1,4 +1,5 @@
 import { randomInt } from 'crypto';
+import type { ReviewItem } from '../apiTypes';
 import type { Tab } from '../types';
 
 /** A run cannot be played for longer than this, whatever the session says. */
@@ -11,6 +12,12 @@ export const LEADERBOARD_TTL_MS = 48 * 60 * 60 * 1000;
 export function minIntervalMs(game: Tab): number {
   return game === 'memory' ? 120 : 300;
 }
+
+/**
+ * A batch cannot be submitted faster than this per answered question. A person needs about this
+ * long to read and answer a question, so a faster batch was not really played.
+ */
+export const BATCH_MS_PER_ANSWER = 500;
 
 export type RandomInt = (max: number) => number;
 
@@ -66,7 +73,11 @@ export interface RunRecord<S = unknown> {
   status: RunStatus;
   expiresAt: number;
   state: S;
-  /** Set when the run finishes. `settled` turns true once the leaderboard has the score. */
+  /**
+   * Set when the run finishes. `response` is the reply to the finishing action (without `done` and
+   * `result`) until the run is settled. Once settled it holds the full reply, which is returned as
+   * is when a batch is retried. `settled` turns true once the leaderboard has the score.
+   */
   final?: {
     score: number;
     durationMs: number;
@@ -94,15 +105,40 @@ export function numberOf(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
-/** Required `q` (question index) on riddles, trivia and bug answers. A retried request is then recognised. */
-export function requiredQuestionIndex(body: Record<string, unknown>): number {
-  if (!Number.isInteger(body.q) || (body.q as number) < 0) {
-    throw new RunError(400, 'q (question index) is required and must be a non-negative integer');
-  }
-  return body.q as number;
+/** One entry per question of a batch: the chosen value, or null when the question was left open. */
+export interface BatchAction<T> {
+  answers: Array<T | null>;
 }
 
-/** Sequential answering: an answer must be for the question that is currently open. */
-export function expectQuestion(q: number, expected: number): void {
-  if (q !== expected) throw new RunError(409, 'Answer is out of order');
+/** Reply to a batch before the run's result is known: the review for every question. */
+export type BatchReply = { results: ReviewItem[] };
+
+/**
+ * Reads `answers` from a batch body. Each entry is null or a value that `accepts` allows.
+ * `size.exact` for a fixed question count, `size.max` when the player may leave questions out.
+ * Throws RunError(400) on any other shape.
+ */
+export function readAnswers<T extends string | number>(
+  body: Record<string, unknown>,
+  accepts: (value: unknown) => value is T,
+  describe: string,
+  size: { exact: number } | { max: number },
+): Array<T | null> {
+  const answers: unknown = body.answers;
+  if (!Array.isArray(answers)) throw new RunError(400, 'answers must be an array');
+  if ('exact' in size) {
+    if (answers.length !== size.exact) throw new RunError(400, `answers must have exactly ${size.exact} entries`);
+  } else if (answers.length > size.max) {
+    throw new RunError(400, `answers must have at most ${size.max} entries`);
+  }
+  return answers.map((value: unknown, i: number): T | null => {
+    if (value === null) return null;
+    if (!accepts(value)) throw new RunError(400, `answers[${i}] must be null or ${describe}`);
+    return value;
+  });
+}
+
+/** How many questions of a batch were answered (nulls are not answers). */
+export function answeredOf(answers: ReadonlyArray<unknown>): number {
+  return answers.filter((value) => value !== null).length;
 }
