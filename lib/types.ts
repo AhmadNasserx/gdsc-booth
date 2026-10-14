@@ -1,9 +1,11 @@
-export type Tab = 'riddles' | 'trivia' | 'binary' | 'password' | 'wordle';
+export type Tab = 'riddles' | 'trivia' | 'password' | 'wordle' | 'memory' | 'bugs';
+
+export const TABS: Tab[] = ['riddles', 'trivia', 'password', 'wordle', 'memory', 'bugs'];
 
 export interface QuestionsPackage {
   riddleIndices: number[];
   triviaIndices: number[];
-  binaryChar: string;
+  bugIndices: number[];
   wordleWord: string;
 }
 
@@ -17,6 +19,7 @@ export interface SessionPayload {
 export interface LeaderboardEntry {
   name: string;
   score: number;
+  game?: Tab;
   timestamp: number;
   expiresAt: number;
 }
