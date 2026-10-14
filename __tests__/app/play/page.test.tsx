@@ -3,7 +3,9 @@ import { render, screen, waitFor, fireEvent, within } from '@testing-library/rea
 import PlayPage from '@/app/play/page';
 
 const mockPush = jest.fn();
-jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
+// Stable router object, as Next.js provides; a fresh object each render would re-run the mount effect.
+const mockRouter = { push: mockPush };
+jest.mock('next/navigation', () => ({ useRouter: () => mockRouter }));
 
 // Stand-in games: each renders one button that completes with a fixed answer,
 // so these tests cover the page's flow rather than the games themselves.
