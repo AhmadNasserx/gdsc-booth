@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { adminDb } from '../firebaseAdmin';
 import { normalizeName } from '../names';
-import type { LeaderboardEntry, SessionPayload, Tab } from '../types';
+import { TABS, type LeaderboardEntry, type SessionPayload, type Tab } from '../types';
 import type { MeResponse, RunResult, StartResponse } from '../apiTypes';
 import { startGame } from './index';
 import { CONTENT_COUNT, contentKeys, isContentGame, pickFresh, SEEN_TTL_MS, servedFrom, type ContentGame, type SeenRecord } from './content';
@@ -11,7 +11,6 @@ import { transition, type Transition } from './transition';
 
 type Json = Record<string, unknown>;
 
-/** Starts a fresh run of one game. The previous run of the same game in this session is abandoned. */
 /**
  * Picks content this player has not been served yet. The seen record is read and written in one
  * transaction, so two starts at the same moment cannot be given the same questions.
@@ -29,9 +28,29 @@ async function pickContent(normKey: string, game: ContentGame, now: number): Pro
   return box.picked;
 }
 
+/**
+ * Each game is played once, in TABS order. A game counts as played once its score is on the
+ * leaderboard, so a run that was abandoned part-way can be started again.
+ */
+async function assertPlayable(session: SessionPayload, normKey: string, game: Tab, now: number): Promise<void> {
+  // A finished run whose score never reached the leaderboard is settled first, so it counts as played.
+  const pointer = await adminDb.ref(`runs-active/${session.sessionId}_${game}`).get();
+  const lastRunId = pointer.val();
+  if (typeof lastRunId === 'string') await abandonOrSettle(lastRunId, session, now);
+
+  const snap = await adminDb.ref(`leaderboard/${normKey}`).get();
+  const entry = snap.val() as LeaderboardEntry | null;
+  const played = isLive(entry, now) ? gamesPlayedOf(entry.games ?? {}) : [];
+  if (played.includes(game)) throw new RunError(409, 'You have already played this game');
+  const missing = TABS.slice(0, TABS.indexOf(game)).find((earlier) => !played.includes(earlier));
+  if (missing) throw new RunError(409, 'Play the games in order');
+}
+
+/** Starts a fresh run of one game. The previous run of the same game in this session is abandoned. */
 export async function startRun(session: SessionPayload, game: Tab, now: number): Promise<StartResponse> {
   const runId = randomUUID();
   const normKey = normalizeName(session.name);
+  await assertPlayable(session, normKey, game, now);
   const picked = isContentGame(game) ? await pickContent(normKey, game, now) : undefined;
   const { state, view } = startGame(game, picked);
   const run: RunRecord = {

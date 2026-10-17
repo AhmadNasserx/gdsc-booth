@@ -34,9 +34,9 @@ describe('Name Entry Page', () => {
     expect(screen.getByText(/deleted after 48 hours/i)).toBeInTheDocument();
   });
 
-  it('invites players to play all six games and win the end-of-day prize', () => {
+  it('invites players to play three games and win the end-of-day prize', () => {
     render(<Page />);
-    expect(screen.getByText(/play all six games — your best score in each adds up/i)).toBeInTheDocument();
+    expect(screen.getByText(/play three games, once each, in order — your scores add up/i)).toBeInTheDocument();
     expect(screen.getByText(/top the leaderboard by the end of the day to win a prize/i)).toBeInTheDocument();
   });
 

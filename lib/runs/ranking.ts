@@ -13,7 +13,7 @@ export function liveEntries(all: Iterable<LeaderboardEntry | null | undefined>, 
 
 /** A player's total is the sum of their best score in each game. */
 export function sumBests(games: Partial<Record<Tab, number>>): number {
-  return Object.values(games).reduce<number>((sum, score) => sum + (score ?? 0), 0);
+  return TABS.reduce<number>((sum, tab) => sum + (games[tab] ?? 0), 0);
 }
 
 /** Games with a recorded best, in TABS order. A best of 0 still counts as played. */
@@ -23,16 +23,16 @@ export function gamesPlayedOf(games: Partial<Record<Tab, number>>): Tab[] {
 
 export interface RunOutcome {
   entry: LeaderboardEntry;
-  /** This player's best for the game after the run. */
+  /** This player's score for the game after the run. */
   best: number;
-  /** The run beat the previous best for the game (a first game counts only if it scored). */
+  /** The run scored something (a first game counts only if it scored). */
   improved: boolean;
 }
 
 /**
  * Folds one finished run into the player's leaderboard entry. Pure.
  * - An expired entry counts as no entry, so the player starts again from zero.
- * - The game's best only goes up. The total is the sum of the bests.
+ * - A game that already has a score is left as it is. The total is the sum of the game scores.
  * - `timestamp` moves to `now` only when the total goes up, so earlier totals win ties.
  * - `expiresAt` never moves back: the later of the old value and issuedAt + 48h.
  */
@@ -43,7 +43,11 @@ export function applyRunToEntry(
   const base = isLive(current, input.now) ? current : null;
   const games: Partial<Record<Tab, number>> = { ...(base?.games ?? {}) };
   const previous = games[input.game];
-  const best = Math.max(previous ?? 0, input.score);
+  // Each game is played once, so a second score for the same game is ignored.
+  if (base !== null && previous !== undefined) {
+    return { entry: base, best: previous, improved: false };
+  }
+  const best = input.score;
   games[input.game] = best;
 
   const total = sumBests(games);
@@ -54,7 +58,7 @@ export function applyRunToEntry(
   return {
     entry: { name: input.name, score: total, games, timestamp, expiresAt },
     best,
-    improved: input.score > (previous ?? 0),
+    improved: input.score > 0,
   };
 }
 

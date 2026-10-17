@@ -1,4 +1,4 @@
-import { BUG_POOL, RIDDLE_POOL, TRIVIA_POOL, WORDLE_POOL } from '@/lib/questions';
+import { BUG_POOL, RIDDLE_POOL } from '@/lib/questions';
 
 describe('BUG_POOL', () => {
   it('has at least 20 snippets', () => {
@@ -45,10 +45,8 @@ describe('BUG_POOL', () => {
   });
 });
 
-describe('other question pools', () => {
-  it('keeps the riddle, trivia and wordle pools populated', () => {
+describe('RIDDLE_POOL', () => {
+  it('stays populated', () => {
     expect(RIDDLE_POOL.length).toBeGreaterThanOrEqual(5);
-    expect(TRIVIA_POOL.length).toBeGreaterThanOrEqual(15);
-    expect(WORDLE_POOL.length).toBeGreaterThan(0);
   });
 });

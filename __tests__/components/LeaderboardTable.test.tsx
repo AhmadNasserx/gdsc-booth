@@ -57,8 +57,8 @@ describe('LeaderboardTable', () => {
         entries={[
           {
             name: 'Sara',
-            score: 900,
-            games: { memory: 500, wordle: 0, bugs: 400 },
+            score: 500,
+            games: { memory: 500, riddles: 0 },
             timestamp: 1,
             expiresAt: FAR_FUTURE,
           },
@@ -66,9 +66,8 @@ describe('LeaderboardTable', () => {
       />,
     );
     expect(screen.getByTitle('Memory Match')).toHaveTextContent('🧠');
-    expect(screen.getByTitle('Tech Wordle')).toHaveTextContent('🟩');
-    expect(screen.getByTitle('Bug Hunter')).toHaveTextContent('🐞');
-    expect(screen.queryByTitle('Emoji Riddles')).not.toBeInTheDocument();
+    expect(screen.getByTitle('Emoji Riddles')).toHaveTextContent('🧩');
+    expect(screen.queryByTitle('Bug Hunter')).not.toBeInTheDocument();
   });
 
   it('shows no chips for an older entry without games', () => {

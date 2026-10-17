@@ -2,8 +2,8 @@ import { GAMES, GAME_LIST } from '@/lib/games';
 import { TABS } from '@/lib/types';
 
 describe('game metadata', () => {
-  it('defines exactly the six TABS', () => {
-    expect(TABS).toEqual(['riddles', 'trivia', 'password', 'wordle', 'memory', 'bugs']);
+  it('defines exactly the three TABS, in play order', () => {
+    expect(TABS).toEqual(['riddles', 'memory', 'bugs']);
   });
 
   it('has an entry for every tab with matching id', () => {
