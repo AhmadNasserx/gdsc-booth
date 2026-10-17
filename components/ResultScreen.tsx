@@ -68,12 +68,6 @@ export default function ResultScreen({ game, result, nextGame, onNextGame }: Pro
           {nextGame ? `Next: ${GAMES[nextGame].title} →` : 'See my results →'}
         </button>
 
-        <a
-          href="/leaderboard"
-          className="min-h-11 inline-flex items-center px-4 text-sm font-semibold text-[#1A73E8] underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A73E8] rounded"
-        >
-          View leaderboard
-        </a>
       </div>
     </div>
   );

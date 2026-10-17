@@ -1,6 +1,6 @@
 # GDSC Booth: Interactive Tech Station
 
-The booth app for **Google Developer Groups on Campus, Beirut Arab University, Tripoli Campus**. Students walk up to a device, enter a display name, play three short tech mini-games, once each, in order, and land on a live leaderboard. The player at the top of the leaderboard at the end of the day wins a prize. A second screen at the booth shows the leaderboard updating in real time, and the finish screen links to the chapter sign-up form.
+The booth app for **Google Developer Groups on Campus, Beirut Arab University, Tripoli Campus**. Students walk up to a device, enter a display name, play three short tech mini-games, once each, in order, and land on a live leaderboard. The player at the top of the leaderboard at the end of the day wins a prize. A second screen at the booth shows the leaderboard updating in real time once it is revealed with a PIN, and the finish screen links to the chapter sign-up form.
 
 **50 students played the first version at the club fair.** It was designed, built and deployed in three days. It has since been reworked into a prize edition in which every game counts toward one leaderboard total.
 
@@ -30,7 +30,7 @@ The booth app for **Google Developer Groups on Campus, Beirut Arab University, T
 1. **Name.** Players choose a display name. It is reserved for 48 hours, and returning players on the same browser get their name back.
 2. **Play.** The three games start one after another, in a fixed order: Emoji Riddles, Memory Match, Tech Trivia. Each is played once.
 3. **Result.** After each game the player sees the points they earned, their total and rank, and a button for the next game.
-4. **Finish.** After the last game the player sees their final total and rank, a link to the leaderboard and the sign-up form. Reloading the page picks up at the next unplayed game.
+4. **Finish.** After the last game the player sees their final total and rank, and the sign-up form (the leaderboard is hidden). Reloading the page picks up at the next unplayed game.
 
 ## The games
 
@@ -49,7 +49,8 @@ Each run gets a fresh random set of questions and a newly shuffled Memory Match 
 - **Your total** is the sum of your score in each of the three games. There are no replays, so every player gets one attempt at each game.
 - **Each game adds one score.** A player who has not finished all three has fewer scores adding up.
 - **Ties** are rare, because every score includes a speed bonus: faster finishes score more. If two totals still match, whoever reached their total first ranks higher.
-- The leaderboard shows the top 20 players, with small emoji chips for the games each player has a score in.
+- **The leaderboard is hidden.** `/leaderboard` shows a PIN screen, and the scores are only sent by the server (`POST /api/leaderboard`) for the right `LEADERBOARD_PIN`. Players see their own rank after each game, but not the board. Use a PIN of 6+ digits; wrong guesses are slowed down but not locked out.
+- Once revealed, the leaderboard shows the top 20 players, with small emoji chips for the games each player has a score in.
 
 ## Keeping the leaderboard honest
 
@@ -84,7 +85,7 @@ Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS 4 · Firebase 
 | `POST /api/game/start` | Starts a fresh run of one game and returns its questions or board, with no answers |
 | `POST /api/game/action` | Submits one action for a run (a batch of answers or a card flip) and returns the graded result |
 | `POST /api/me` | The player's name, total, rank and score in each game |
-| `GET /api/leaderboard` | Leaderboard entries |
+| `POST /api/leaderboard` | Leaderboard entries, only for the right PIN |
 | `GET /api/cron/cleanup` | Daily cleanup of expired names, leaderboard entries and game runs |
 
 ### Project structure
@@ -122,6 +123,7 @@ npm run dev
 | `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` | Firebase Admin SDK service account |
 | `NEXT_PUBLIC_FIREBASE_API_KEY`, `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`, `NEXT_PUBLIC_FIREBASE_DATABASE_URL`, `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | Firebase client config |
 | `CRON_SECRET` | Bearer token Vercel sends to the cleanup cron |
+| `LEADERBOARD_PIN` | PIN that reveals the hidden leaderboard. If it is not set, the leaderboard stays hidden for everyone |
 
 ```bash
 npm test        # Jest
