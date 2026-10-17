@@ -32,9 +32,9 @@ function seed() {
   writePath('runs/live', { sessionId: 's2', game: 'riddles', status: 'active', startedAt: 1, expiresAt: future, state: { indices: [0] } });
   writePath('runs-active/s1_riddles', 'expired');
   writePath('runs-active/s2_riddles', 'live');
-  writePath('runs-active/s3_bugs', 'gone');
+  writePath('runs-active/s3_trivia', 'gone');
   writePath('seen/old/riddles', { served: [1, 2], expiresAt: past });
-  writePath('seen/old/bugs', { served: [3], expiresAt: future });
+  writePath('seen/old/trivia', { served: [3], expiresAt: future });
   writePath('seen/new/riddles', { served: [4], expiresAt: future });
 }
 
@@ -67,7 +67,7 @@ describe('GET /api/cron/cleanup', () => {
     seed();
     await GET(makeRequest('test-cron-secret'));
     expect(readPath('seen/old/riddles')).toBeNull();
-    expect(readPath('seen/old/bugs')).toMatchObject({ served: [3] });
+    expect(readPath('seen/old/trivia')).toMatchObject({ served: [3] });
     expect(readPath('seen/new/riddles')).toMatchObject({ served: [4] });
   });
 
@@ -76,7 +76,7 @@ describe('GET /api/cron/cleanup', () => {
     await GET(makeRequest('test-cron-secret'));
     expect(readPath('runs-active/s1_riddles')).toBeNull();
     expect(readPath('runs-active/s2_riddles')).toBe('live');
-    expect(readPath('runs-active/s3_bugs')).toBeNull();
+    expect(readPath('runs-active/s3_trivia')).toBeNull();
   });
 
   it('no longer touches submissions', async () => {

@@ -40,13 +40,13 @@ describe('startGame', () => {
       json: async () => { throw new SyntaxError('Unexpected token <'); },
     });
 
-    await expect(startGame('tok', 'bugs')).rejects.toThrow(/something went wrong/i);
+    await expect(startGame('tok', 'trivia')).rejects.toThrow(/something went wrong/i);
   });
 
   it('throws a friendly network message when the request never arrives', async () => {
     (global.fetch as jest.Mock).mockRejectedValueOnce(new TypeError('Failed to fetch'));
 
-    const error = await startGame('tok', 'bugs').catch((e: unknown) => e);
+    const error = await startGame('tok', 'trivia').catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(GameApiError);
     expect((error as GameApiError).status).toBe(0);

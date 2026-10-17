@@ -1,4 +1,4 @@
-import { BUG_POOL, RIDDLE_POOL } from '../questions';
+import { RIDDLE_POOL, TRIVIA_POOL } from '../questions';
 import type { Tab } from '../types';
 import { listOf, secureRandomInt, shuffle, type RandomInt } from './shared';
 
@@ -6,7 +6,7 @@ import { listOf, secureRandomInt, shuffle, type RandomInt } from './shared';
 export const SEEN_TTL_MS = 48 * 60 * 60 * 1000;
 
 /** Games whose content is drawn from a pool and never repeated for the same player. */
-export const CONTENT_COUNT = { riddles: 5, bugs: 5 } as const;
+export const CONTENT_COUNT = { riddles: 5, trivia: 15 } as const;
 export type ContentGame = keyof typeof CONTENT_COUNT;
 
 export function isContentGame(game: Tab): game is ContentGame {
@@ -17,7 +17,7 @@ export function isContentGame(game: Tab): game is ContentGame {
 export function contentKeys(game: ContentGame): Array<number | string> {
   switch (game) {
     case 'riddles': return RIDDLE_POOL.map((_, i) => i);
-    case 'bugs': return BUG_POOL.map((_, i) => i);
+    case 'trivia': return TRIVIA_POOL.map((_, i) => i);
   }
 }
 

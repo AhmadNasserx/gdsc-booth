@@ -28,7 +28,7 @@ The booth app for **Google Developer Groups on Campus, Beirut Arab University, T
 ## How a visit works
 
 1. **Name.** Players choose a display name. It is reserved for 48 hours, and returning players on the same browser get their name back.
-2. **Play.** The three games start one after another, in a fixed order: Emoji Riddles, Memory Match, Bug Hunter. Each is played once.
+2. **Play.** The three games start one after another, in a fixed order: Emoji Riddles, Memory Match, Tech Trivia. Each is played once.
 3. **Result.** After each game the player sees the points they earned, their total and rank, and a button for the next game.
 4. **Finish.** After the last game the player sees their final total and rank, a link to the leaderboard and the sign-up form. Reloading the page picks up at the next unplayed game.
 
@@ -40,7 +40,7 @@ Every player plays **three games**, in order, **once each**. The server refuses 
 |---|---|---|
 | Emoji Riddles | Work out the tech term or everyday word hidden in a row of emoji | Every correct answer scores. Faster finishes score more. |
 | Memory Match | Flip cards and match 8 tech pairs | Fewer moves score more. Faster finishes score more. |
-| Bug Hunter | Spot the bug in short Java snippets | Every bug you catch scores. Faster finishes score more. |
+| Tech Trivia | Fast round of tech and general trivia | Right answers add, wrong ones cost you. Faster finishes score more. |
 
 Each run gets a fresh random set of questions and a newly shuffled Memory Match layout, with answer options shuffled so the right answer isn't always in the same spot.
 
@@ -55,8 +55,8 @@ Each run gets a fresh random set of questions and a newly shuffled Memory Match 
 
 A public leaderboard with a prize at the end of the day is an open invitation to cheat, so the browser is never trusted with a score.
 
-- **Answers stay on the server.** Correct answers and the Memory Match layout are never sent to the browser before the player has acted. Answers to Emoji Riddles and Bug Hunter never reach the browser before the player submits them, and the browser learns which were right only from the server's reply to that submission.
-- **Graded on the server.** Emoji Riddles and Bug Hunter are graded in one batch when the round ends: the browser sends all of its answers together, and the server grades them then. Memory Match is graded step by step, one card flip at a time. The server keeps each run's state in one transaction, so double taps can't count twice.
+- **Answers stay on the server.** Correct answers and the Memory Match layout are never sent to the browser before the player has acted. Answers to Emoji Riddles and Tech Trivia never reach the browser before the player submits them, and the browser learns which were right only from the server's reply to that submission.
+- **Graded on the server.** Emoji Riddles and Tech Trivia are graded in one batch when the round ends: the browser sends all of its answers together, and the server grades them then. Memory Match is graded step by step, one card flip at a time. The server keeps each run's state in one transaction, so double taps can't count twice.
 - **The server measures time.** Each run's duration is taken from the server's clock, not the browser's.
 - **One run at a time.** A run can be finished only once. Memory Match takes its flips one at a time, in order, with no retries. Each game can be played once and only in order, which the server checks against the leaderboard. Starting a new run of a game ends any earlier run of that game that is still open.
 - **Sessions expire.** Session tokens are encrypted, carry only the name and an issue time, and last 90 minutes.

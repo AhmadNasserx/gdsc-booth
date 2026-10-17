@@ -27,7 +27,7 @@ function mockGame(name: string) {
 }
 
 jest.mock('@/components/games/EmojiRiddles', () => mockGame('riddles'));
-jest.mock('@/components/games/BugHunter', () => mockGame('bugs'));
+jest.mock('@/components/games/TechTrivia', () => mockGame('trivia'));
 jest.mock('@/components/games/MemoryMatch', () => mockGame('memory'));
 
 interface FetchReply { status?: number; body: unknown }
@@ -42,7 +42,7 @@ function viewFor(game: string) {
   switch (game) {
     case 'riddles':
       return { game, questions: Array.from({ length: 5 }, (_, i) => ({ emojis: `🧩${i}`, hint: 'h', options: ['a', 'b'] })) };
-    case 'bugs':
+    case 'trivia':
       return { game, questions: [{ title: 'Off by one', language: 'java', lines: ['a', 'b'] }] };
     case 'memory':
       return { game, cards: 16 };
@@ -159,13 +159,13 @@ describe('Play page: the order of play', () => {
     startSession();
     handler = (url, body) => (url === '/api/me' ? { body: meWith({ riddles: 0, memory: 0 }, 0, 4) } : defaultHandler(url, body));
     render(<PlayPage />);
-    await waitForGame('bugs');
+    await waitForGame('trivia');
   });
 
   it('shows the finish screen, and starts nothing, once all three are played', async () => {
     startSession();
     handler = (url, body) =>
-      url === '/api/me' ? { body: meWith({ riddles: 500, memory: 400, bugs: 300 }, 1200, 3) } : defaultHandler(url, body);
+      url === '/api/me' ? { body: meWith({ riddles: 500, memory: 400, trivia: 300 }, 1200, 3) } : defaultHandler(url, body);
     render(<PlayPage />);
 
     expect(await screen.findByText(/that's all three games, ahmad/i)).toBeInTheDocument();
@@ -179,7 +179,7 @@ describe('Play page: the order of play', () => {
   it('shows no maximum, "out of" or 1000 on the finish screen', async () => {
     startSession();
     handler = (url, body) =>
-      url === '/api/me' ? { body: meWith({ riddles: 500, memory: 400, bugs: 300 }, 900, 3) } : defaultHandler(url, body);
+      url === '/api/me' ? { body: meWith({ riddles: 500, memory: 400, trivia: 300 }, 900, 3) } : defaultHandler(url, body);
     render(<PlayPage />);
     await screen.findByText(/that's all three games/i);
     expect(document.body.textContent ?? '').not.toMatch(/\bmax\b|out of|1000/i);
@@ -328,10 +328,10 @@ describe('Play page: result screen', () => {
     await waitForGame('memory');
 
     finish('memory', runResult({ game: 'memory', gamesPlayed: ['riddles', 'memory'] }));
-    fireEvent.click(await screen.findByRole('button', { name: /next: bug hunter/i }));
-    await waitForGame('bugs');
+    fireEvent.click(await screen.findByRole('button', { name: /next: tech trivia/i }));
+    await waitForGame('trivia');
 
-    expect(fetchCalls('/api/game/start').map((b) => b.game)).toEqual(['riddles', 'memory', 'bugs']);
+    expect(fetchCalls('/api/game/start').map((b) => b.game)).toEqual(['riddles', 'memory', 'trivia']);
   });
 
   it('shows the finish screen after the last game', async () => {
@@ -339,8 +339,8 @@ describe('Play page: result screen', () => {
     handler = (url, body) =>
       url === '/api/me' ? { body: meWith({ riddles: 500, memory: 400 }) } : defaultHandler(url, body);
     render(<PlayPage />);
-    await waitForGame('bugs');
-    finish('bugs', runResult({ game: 'bugs', total: 1500, rank: 1, gamesPlayed: ['riddles', 'memory', 'bugs'] }));
+    await waitForGame('trivia');
+    finish('trivia', runResult({ game: 'trivia', total: 1500, rank: 1, gamesPlayed: ['riddles', 'memory', 'trivia'] }));
 
     fireEvent.click(await screen.findByRole('button', { name: /see my results/i }));
 

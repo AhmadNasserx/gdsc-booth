@@ -6,7 +6,7 @@ import type { Tab } from './types';
  */
 export const GAME_TIME_LIMIT: Record<Tab, number> = {
   riddles: 90,
-  bugs: 120,
+  trivia: 240,
   memory: 90,
 };
 
@@ -35,6 +35,20 @@ export function calcRunScore(game: Tab, performance: number, durationMs: number)
     ? Math.max(0, 1 - Math.max(0, durationMs) / 1000 / GAME_TIME_LIMIT[game])
     : 0;
   return Math.round(BASE_POINTS * p) + Math.round(SPEED_POINTS * p * speed);
+}
+
+/** Trivia points evolve one answer at a time: +20 for a right answer, -10 for a wrong one, never below 0. */
+export const TRIVIA_CORRECT_POINTS = 20;
+export const TRIVIA_WRONG_PENALTY = 10;
+const TRIVIA_POINTS_CAP = 300;
+
+export function triviaStep(points: number, correct: boolean): number {
+  return Math.max(0, points + (correct ? TRIVIA_CORRECT_POINTS : -TRIVIA_WRONG_PENALTY));
+}
+
+/** Trivia performance from the running points total. */
+export function triviaPerformance(points: number): number {
+  return unit(clamp(points, 0, TRIVIA_POINTS_CAP) / TRIVIA_POINTS_CAP);
 }
 
 /** Memory performance: 8 moves (every pair found first time) is full marks, 32 moves or more is zero. */

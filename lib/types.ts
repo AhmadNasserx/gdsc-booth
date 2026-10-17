@@ -1,7 +1,7 @@
-export type Tab = 'riddles' | 'memory' | 'bugs';
+export type Tab = 'riddles' | 'memory' | 'trivia';
 
 /** The games in the order they are played. Each is played once. */
-export const TABS: Tab[] = ['riddles', 'memory', 'bugs'];
+export const TABS: Tab[] = ['riddles', 'memory', 'trivia'];
 
 /** Contents of the signed session token. Nothing about the questions travels in it. */
 export interface SessionPayload {

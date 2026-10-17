@@ -1,4 +1,4 @@
-import { calcRunScore, GAME_TIME_LIMIT, memoryPerformance } from '@/lib/scoring';
+import { calcRunScore, GAME_TIME_LIMIT, memoryPerformance, triviaPerformance, triviaStep } from '@/lib/scoring';
 import { TABS } from '@/lib/types';
 
 const SEC = 1000;
@@ -27,17 +27,17 @@ describe('calcRunScore', () => {
   });
 
   it('gives half the speed bonus at half the time limit', () => {
-    expect(calcRunScore('bugs', 1, (GAME_TIME_LIMIT.bugs / 2) * SEC)).toBe(1000 + 125);
+    expect(calcRunScore('trivia', 1, (GAME_TIME_LIMIT.trivia / 2) * SEC)).toBe(1000 + 125);
   });
 
   it('uses the per-game time limits', () => {
     expect(GAME_TIME_LIMIT).toEqual({
       riddles: 90,
-      bugs: 120,
+      trivia: 240,
       memory: 90,
     });
-    // Bug Hunter's clock is 120s, so at 60s it still has half its bonus
-    expect(calcRunScore('bugs', 1, 60 * SEC)).toBe(1000 + 125);
+    // Tech Trivia's clock is 240s, so at 120s it still has half its bonus
+    expect(calcRunScore('trivia', 1, 120 * SEC)).toBe(1000 + 125);
   });
 
   it('treats a negative duration as an instant finish', () => {
@@ -82,6 +82,37 @@ describe('calcRunScore', () => {
     for (const game of TABS) {
       expect(calcRunScore(game, 0.6, 1000 * SEC)).toBe(600);
     }
+  });
+});
+
+describe('trivia points', () => {
+  it('adds 20 for a right answer and takes 10 for a wrong one', () => {
+    expect(triviaStep(0, true)).toBe(20);
+    expect(triviaStep(100, true)).toBe(120);
+    expect(triviaStep(100, false)).toBe(90);
+  });
+
+  it('never goes below zero', () => {
+    expect(triviaStep(0, false)).toBe(0);
+    expect(triviaStep(5, false)).toBe(0);
+  });
+
+  it('maps points to performance, clamped to [0, 1]', () => {
+    expect(triviaPerformance(0)).toBe(0);
+    expect(triviaPerformance(150)).toBe(0.5);
+    expect(triviaPerformance(300)).toBe(1);
+    expect(triviaPerformance(420)).toBe(1);
+  });
+
+  it('a run of 15 right answers reaches full performance, and wrong answers in between cost points', () => {
+    let points = 0;
+    for (let i = 0; i < 15; i++) points = triviaStep(points, true);
+    expect(triviaPerformance(points)).toBe(1);
+
+    let mixed = 0;
+    const answers = [true, false, true, true, false];
+    for (const correct of answers) mixed = triviaStep(mixed, correct);
+    expect(mixed).toBe(20 - 10 + 20 + 20 - 10);
   });
 });
 

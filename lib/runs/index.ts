@@ -1,17 +1,17 @@
 import type { GameView } from '../apiTypes';
 import type { Tab } from '../types';
 import type { BatchAction, BatchReply, RandomInt, Step } from './shared';
-import { gradeBugs, hydrateBugs, parseBugBatch, startBugs, type BugState } from './bugs';
 import { gradeRiddles, hydrateRiddles, parseRiddleBatch, startRiddles, type RiddleState } from './riddles';
+import { gradeTrivia, hydrateTrivia, parseTriviaBatch, startTrivia, type TriviaState } from './trivia';
 import { applyMemoryFlip, hydrateMemory, parseMemoryAction, startMemory, type MemoryState } from './memory';
 
-export type GameState = RiddleState | BugState | MemoryState;
+export type GameState = RiddleState | TriviaState | MemoryState;
 
 /** Games graded in one batch submission. Their questions are answered locally and sent together. */
-export type BatchGame = 'riddles' | 'bugs';
+export type BatchGame = 'riddles' | 'trivia';
 
 export function isBatchGame(game: Tab): game is BatchGame {
-  return game === 'riddles' || game === 'bugs';
+  return game === 'riddles' || game === 'trivia';
 }
 
 /**
@@ -21,7 +21,7 @@ export function isBatchGame(game: Tab): game is BatchGame {
 export function startGame(game: Tab, picked?: Array<number | string>, rand?: RandomInt): { state: GameState; view: GameView } {
   switch (game) {
     case 'riddles': return startRiddles(picked as number[] | undefined, rand);
-    case 'bugs': return startBugs(picked as number[] | undefined, rand);
+    case 'trivia': return startTrivia(picked as number[] | undefined, rand);
     case 'memory': return startMemory(rand);
   }
 }
@@ -31,21 +31,21 @@ export function hydrateState(game: Tab, raw: unknown): GameState {
   const value = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   switch (game) {
     case 'riddles': return hydrateRiddles(value);
-    case 'bugs': return hydrateBugs(value);
+    case 'trivia': return hydrateTrivia(value);
     case 'memory': return hydrateMemory(value);
   }
 }
 
 export type ParsedAction =
   | { game: 'riddles'; action: BatchAction<string> }
-  | { game: 'bugs'; action: BatchAction<number> }
+  | { game: 'trivia'; action: BatchAction<string> }
   | { game: 'memory'; action: ReturnType<typeof parseMemoryAction> };
 
 /** Checks the body against the shape this game accepts. Throws RunError(400) otherwise. */
 export function parseAction(game: Tab, body: Record<string, unknown>): ParsedAction {
   switch (game) {
     case 'riddles': return { game, action: { answers: parseRiddleBatch(body) } };
-    case 'bugs': return { game, action: { answers: parseBugBatch(body) } };
+    case 'trivia': return { game, action: { answers: parseTriviaBatch(body) } };
     case 'memory': return { game, action: parseMemoryAction(body) };
   }
 }
@@ -55,8 +55,8 @@ export function applyAction(state: GameState, parsed: ParsedAction): Step<GameSt
   switch (parsed.game) {
     case 'riddles':
       return gradeRiddles(state as RiddleState, parsed.action.answers) as Step<GameState, BatchReply>;
-    case 'bugs':
-      return gradeBugs(state as BugState, parsed.action.answers) as Step<GameState, BatchReply>;
+    case 'trivia':
+      return gradeTrivia(state as TriviaState, parsed.action.answers) as Step<GameState, BatchReply>;
     case 'memory':
       return applyMemoryFlip(state as MemoryState, parsed.action) as Step<GameState, Record<string, unknown>>;
   }
