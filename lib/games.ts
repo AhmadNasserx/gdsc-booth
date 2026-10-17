@@ -23,12 +23,12 @@ export const GAMES: Record<Tab, GameMeta> = {
     tagline: 'Flip cards and match 8 tech pairs',
     howItScores: 'Fewer moves and less time, bigger score',
   },
-  bugs: {
-    id: 'bugs',
-    emoji: '🐞',
-    title: 'Bug Hunter',
-    tagline: 'Spot the bug in Java code',
-    howItScores: 'Every bug you catch scores',
+  trivia: {
+    id: 'trivia',
+    emoji: '⚡',
+    title: 'Tech Trivia',
+    tagline: '15 fast questions',
+    howItScores: 'Right answers add, wrong ones cost you',
   },
 };
 

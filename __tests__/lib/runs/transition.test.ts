@@ -5,13 +5,13 @@ import { transition } from '@/lib/runs/transition';
 import { RunError, type RunRecord } from '@/lib/runs/shared';
 import { startGame } from '@/lib/runs';
 import { calcRunScore } from '@/lib/scoring';
-import { RIDDLE_POOL } from '@/lib/questions';
+import { RIDDLE_POOL, TRIVIA_POOL } from '@/lib/questions';
 
 const T0 = 1_700_000_000_000;
 const SESSION = 'session-1';
 const NONE = { answers: [null, null, null, null, null] };
 
-function runFor(game: 'riddles' | 'memory' | 'bugs', overrides: Partial<RunRecord> = {}): RunRecord {
+function runFor(game: 'riddles' | 'memory' | 'trivia', overrides: Partial<RunRecord> = {}): RunRecord {
   const { state } = startGame(game);
   return {
     sessionId: SESSION,
@@ -161,8 +161,8 @@ describe('transition: batch games', () => {
   });
 
   it('the plausibility check uses the time since the start, not since the last action', () => {
-    const run = runFor('bugs', { lastActionAt: T0 + 2000 });
-    const answers = [0, 0, 0, 0, 0];
+    const run = runFor('trivia', { lastActionAt: T0 + 2000 });
+    const answers = (run.state as { indices: number[] }).indices.slice(0, 5).map((i) => TRIVIA_POOL[i].answer);
     expect(statusOf(() => transition(run, SESSION, { answers }, T0 + 2400))).toBe(429);
     expect(statusOf(() => transition(run, SESSION, { answers }, T0 + 2500))).toBeUndefined();
   });

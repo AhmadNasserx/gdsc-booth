@@ -46,14 +46,14 @@ describe('applyRunToEntry', () => {
 
   it('adds a new game to the total and moves the timestamp', () => {
     const current = entry({ score: 700, games: { riddles: 700 }, timestamp: 5 });
-    const out = applyRunToEntry(current, { name: 'X', game: 'bugs', score: 400, now: NOW, issuedAt: ISSUED });
+    const out = applyRunToEntry(current, { name: 'X', game: 'trivia', score: 400, now: NOW, issuedAt: ISSUED });
     expect(out.entry.score).toBe(1100);
-    expect(out.entry.games).toEqual({ riddles: 700, bugs: 400 });
+    expect(out.entry.games).toEqual({ riddles: 700, trivia: 400 });
     expect(out.entry.timestamp).toBe(NOW);
   });
 
   it('an expired entry is treated as absent, so the player starts from zero', () => {
-    const stale = entry({ score: 5000, games: { riddles: 1000, bugs: 4000 }, timestamp: 2, expiresAt: NOW - 1 });
+    const stale = entry({ score: 5000, games: { riddles: 1000, trivia: 4000 }, timestamp: 2, expiresAt: NOW - 1 });
     const out = applyRunToEntry(stale, { name: 'X', game: 'memory', score: 300, now: NOW, issuedAt: ISSUED });
     expect(out.entry.games).toEqual({ memory: 300 });
     expect(out.entry.score).toBe(300);
@@ -118,11 +118,11 @@ describe('helpers', () => {
   });
 
   it('sumBests adds the bests', () => {
-    expect(sumBests({ riddles: 100, bugs: 0, memory: 250 })).toBe(350);
+    expect(sumBests({ riddles: 100, trivia: 0, memory: 250 })).toBe(350);
     expect(sumBests({})).toBe(0);
   });
 
   it('gamesPlayedOf lists games in tab order and counts zero bests', () => {
-    expect(gamesPlayedOf({ bugs: 0, riddles: 10 })).toEqual(['riddles', 'bugs']);
+    expect(gamesPlayedOf({ trivia: 0, riddles: 10 })).toEqual(['riddles', 'trivia']);
   });
 });

@@ -67,7 +67,7 @@ describe('LeaderboardTable', () => {
     );
     expect(screen.getByTitle('Memory Match')).toHaveTextContent('🧠');
     expect(screen.getByTitle('Emoji Riddles')).toHaveTextContent('🧩');
-    expect(screen.queryByTitle('Bug Hunter')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Tech Trivia')).not.toBeInTheDocument();
   });
 
   it('shows no chips for an older entry without games', () => {

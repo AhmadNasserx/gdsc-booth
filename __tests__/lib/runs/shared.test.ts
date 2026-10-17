@@ -39,7 +39,7 @@ describe('RunError', () => {
 describe('minIntervalMs', () => {
   it('is 120ms for memory and 300ms for the rest', () => {
     expect(minIntervalMs('memory')).toBe(120);
-    for (const game of ['riddles', 'bugs'] as const) {
+    for (const game of ['riddles', 'trivia'] as const) {
       expect(minIntervalMs(game)).toBe(300);
     }
   });

@@ -3,7 +3,7 @@ import { TABS } from '@/lib/types';
 
 describe('game metadata', () => {
   it('defines exactly the three TABS, in play order', () => {
-    expect(TABS).toEqual(['riddles', 'memory', 'bugs']);
+    expect(TABS).toEqual(['riddles', 'memory', 'trivia']);
   });
 
   it('has an entry for every tab with matching id', () => {

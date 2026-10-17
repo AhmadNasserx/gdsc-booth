@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import FinishScreen from '@/components/FinishScreen';
 import ResultScreen from '@/components/ResultScreen';
 import EmojiRiddles from '@/components/games/EmojiRiddles';
-import BugHunter from '@/components/games/BugHunter';
+import TechTrivia from '@/components/games/TechTrivia';
 import MemoryMatch from '@/components/games/MemoryMatch';
 import type { ActionBody, BatchResponse, FlipResponse, GameView, MeResponse, RunResult, StartResponse } from '@/lib/apiTypes';
 import { clearSession, getSession, setSessionNotice, useIsBrowser, type PlayerSession } from '@/lib/clientSession';
@@ -268,7 +268,7 @@ function renderGame(
       return <EmojiRiddles questions={view.questions} act={(body) => act<BatchResponse>(body)} onDone={onDone} />;
     case 'memory':
       return <MemoryMatch cards={view.cards} act={(body) => act<FlipResponse>(body)} onDone={onDone} />;
-    case 'bugs':
-      return <BugHunter questions={view.questions} act={(body) => act<BatchResponse>(body)} onDone={onDone} />;
+    case 'trivia':
+      return <TechTrivia questions={view.questions} act={(body) => act<BatchResponse>(body)} onDone={onDone} />;
   }
 }
