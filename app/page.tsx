@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { GAME_PAUSED, PAUSED_MESSAGE } from '@/lib/config';
 import { useRouter } from 'next/navigation';
 import {
   clearSessionNotice,
@@ -64,7 +65,7 @@ export default function NameEntry() {
     };
   }, [name]);
 
-  const canStart = nameStatus === 'available' || nameStatus === 'mine';
+  const canStart = !GAME_PAUSED && (nameStatus === 'available' || nameStatus === 'mine');
 
   async function handleStart() {
     if (!canStart || loading) return;
@@ -150,8 +151,14 @@ export default function NameEntry() {
         <p className="text-xs text-[#5F6368] mb-4 bg-[#F8F9FA] rounded-xl p-3 border border-[#DADCE0]">
           Letters, numbers, and spaces · 2–30 characters · no duplicates.{' '}
           Your name and score appear on the public leaderboard and are deleted after 48 hours.{' '}
-          You can play any game again any time, and only your best score in each game counts.
+          Each game can be played once.
         </p>
+
+        {GAME_PAUSED && (
+          <p role="status" className="text-sm font-semibold text-[#B06000] bg-[#FEF7E0] border border-[#FBBC04] rounded-xl p-3 mb-3 text-center">
+            {PAUSED_MESSAGE}
+          </p>
+        )}
 
         {isBrowser && <SessionNotice />}
 

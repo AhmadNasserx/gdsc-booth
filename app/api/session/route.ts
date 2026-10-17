@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { signSession } from '@/lib/session';
 import { adminDb } from '@/lib/firebaseAdmin';
+import { GAME_PAUSED, PAUSED_MESSAGE } from '@/lib/config';
 import { NAME_PATTERN, normalizeName, hashPlayerKey, isValidPlayerKey } from '@/lib/names';
 
 const NAME_TTL_MS = 172800000;
@@ -12,6 +13,7 @@ interface NameEntry {
 }
 
 export async function POST(request: Request) {
+  if (GAME_PAUSED) return NextResponse.json({ error: PAUSED_MESSAGE }, { status: 503 });
   let body: unknown;
   try {
     body = await request.json();
