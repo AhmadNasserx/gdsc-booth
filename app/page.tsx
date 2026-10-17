@@ -116,7 +116,7 @@ export default function NameEntry() {
           <h1 className="text-2xl font-extrabold mt-2">Interactive Tech Station</h1>
           <p className="text-sm text-[#5F6368] mt-1">Test your skills and join GDSC!</p>
           <p className="text-sm font-semibold text-[#202124] mt-3">
-            Play all six games — your best score in each adds up. Top the leaderboard by the end of the day to win a prize.
+            Play three games, once each, in order — your scores add up. Top the leaderboard by the end of the day to win a prize.
           </p>
         </div>
 

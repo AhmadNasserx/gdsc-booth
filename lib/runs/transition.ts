@@ -29,7 +29,7 @@ export function transition(run: RunRecord, sessionId: string, body: Record<strin
 
   const state: GameState = hydrateState(run.game, run.state);
   const parsed = parseAction(run.game, body);
-  if (parsed.game === 'riddles' || parsed.game === 'trivia' || parsed.game === 'bugs') {
+  if (parsed.game === 'riddles' || parsed.game === 'bugs') {
     // Each answered question needs a little time to be read and answered. A faster batch was not played.
     if (now - run.startedAt < answeredOf(parsed.action.answers) * BATCH_MS_PER_ANSWER) {
       throw new RunError(429, 'Too fast');

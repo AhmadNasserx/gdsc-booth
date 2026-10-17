@@ -16,27 +16,6 @@ export const GAMES: Record<Tab, GameMeta> = {
     tagline: 'Decode 5 emoji puzzles',
     howItScores: 'Every correct answer scores',
   },
-  trivia: {
-    id: 'trivia',
-    emoji: '⚡',
-    title: 'Tech Trivia',
-    tagline: '15 fast questions',
-    howItScores: 'Right answers add, wrong ones cost you',
-  },
-  password: {
-    id: 'password',
-    emoji: '🔐',
-    title: 'Password Challenge',
-    tagline: 'Craft the strongest password',
-    howItScores: 'Longer, more varied and less predictable scores higher',
-  },
-  wordle: {
-    id: 'wordle',
-    emoji: '🟩',
-    title: 'Tech Wordle',
-    tagline: 'Guess the 5-letter tech word in 6 tries',
-    howItScores: 'Fewer guesses, bigger score',
-  },
   memory: {
     id: 'memory',
     emoji: '🧠',

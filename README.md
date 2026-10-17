@@ -1,6 +1,6 @@
 # GDSC Booth: Interactive Tech Station
 
-The booth app for **Google Developer Groups on Campus, Beirut Arab University, Tripoli Campus**. Students walk up to a device, enter a display name, play six short tech mini-games, and land on a live leaderboard. The player at the top of the leaderboard at the end of the day wins a prize. A second screen at the booth shows the leaderboard updating in real time, and the finish screen links to the chapter sign-up form.
+The booth app for **Google Developer Groups on Campus, Beirut Arab University, Tripoli Campus**. Students walk up to a device, enter a display name, play three short tech mini-games, once each, in order, and land on a live leaderboard. The player at the top of the leaderboard at the end of the day wins a prize. A second screen at the booth shows the leaderboard updating in real time, and the finish screen links to the chapter sign-up form.
 
 **50 students played the first version at the club fair.** It was designed, built and deployed in three days. It has since been reworked into a prize edition in which every game counts toward one leaderboard total.
 
@@ -13,13 +13,9 @@ The booth app for **Google Developer Groups on Campus, Beirut Arab University, T
 
 ## Screenshots
 
-| Name entry | Emoji Riddles | Tech Trivia |
-|---|---|---|
-| <img src="docs/screenshots/name-entry.webp" width="260" alt="Name entry screen with consent notice"> | <img src="docs/screenshots/emoji-riddles.webp" width="260" alt="Emoji Riddles question"> | <img src="docs/screenshots/tech-trivia.webp" width="260" alt="Timed Tech Trivia question"> |
-
-| Password Challenge | Wordle |
+| Name entry | Emoji Riddles |
 |---|---|
-| <img src="docs/screenshots/password-challenge.webp" width="260" alt="Password Challenge with live strength meter"> | <img src="docs/screenshots/wordle.webp" width="260" alt="Tech Wordle with the hint unlocked after two guesses"> |
+| <img src="docs/screenshots/name-entry.webp" width="260" alt="Name entry screen with consent notice"> | <img src="docs/screenshots/emoji-riddles.webp" width="260" alt="Emoji Riddles question"> |
 
 | Finish | Leaderboard (phone) |
 |---|---|
@@ -32,31 +28,26 @@ The booth app for **Google Developer Groups on Campus, Beirut Arab University, T
 ## How a visit works
 
 1. **Name.** Players choose a display name. It is reserved for 48 hours, and returning players on the same browser get their name back.
-2. **Hub.** The games screen shows all six games, the player's best in each one, their total, and their rank.
-3. **Play.** Any game can be started, and any game can be replayed as many times as the player likes.
-4. **Result.** After each run the player sees the points they earned, whether it was a new best, their total and rank, and buttons to play again, move to the next game they haven't played, or return to the hub.
+2. **Play.** The three games start one after another, in a fixed order: Emoji Riddles, Memory Match, Bug Hunter. Each is played once.
+3. **Result.** After each game the player sees the points they earned, their total and rank, and a button for the next game.
+4. **Finish.** After the last game the player sees their final total and rank, a link to the leaderboard and the sign-up form. Reloading the page picks up at the next unplayed game.
 
 ## The games
 
-Every player plays **all six games**, in any order, and as often as they like. Each game is graded on the server.
+Every player plays **three games**, in order, **once each**. The server refuses to start a game that was already played or that is out of order. A game abandoned part-way (for example by closing the tab) can be started again, because it only counts once its score is recorded. Each game is graded on the server.
 
 | Game | What you do | How it scores |
 |---|---|---|
 | Emoji Riddles | Work out the tech term or everyday word hidden in a row of emoji | Every correct answer scores. Faster finishes score more. |
-| Tech Trivia | Fast round of tech and general trivia | Right answers add, wrong ones cost you. Faster finishes score more. |
-| Password Challenge | Build the strongest password you can | Length, character variety and no predictable patterns score higher |
-| Tech Wordle | Guess a five-letter tech word in six tries, with a hint after two guesses | Fewer guesses score more. Faster finishes score more. |
 | Memory Match | Flip cards and match 8 tech pairs | Fewer moves score more. Faster finishes score more. |
 | Bug Hunter | Spot the bug in short Java snippets | Every bug you catch scores. Faster finishes score more. |
 
-**Tech Wordle** has an on-screen keyboard that spans the full card width with large touch targets, a staggered tile-flip reveal and keyboard colours that only update once the row has flipped. Physical keyboards work too.
-
-Each run gets a fresh random set of questions, a new Wordle word and a newly shuffled Memory Match layout, with answer options shuffled so the right answer isn't always in the same spot.
+Each run gets a fresh random set of questions and a newly shuffled Memory Match layout, with answer options shuffled so the right answer isn't always in the same spot.
 
 ## Scoring and the leaderboard
 
-- **Your total** is the sum of your best score in each of the six games. Replaying a game can only raise its best; a weaker run never lowers it.
-- **Each game adds one score.** A player who has played fewer games has fewer bests adding up, so playing all six is usually what puts someone on top.
+- **Your total** is the sum of your score in each of the three games. There are no replays, so every player gets one attempt at each game.
+- **Each game adds one score.** A player who has not finished all three has fewer scores adding up.
 - **Ties** are rare, because every score includes a speed bonus: faster finishes score more. If two totals still match, whoever reached their total first ranks higher.
 - The leaderboard shows the top 20 players, with small emoji chips for the games each player has a score in.
 
@@ -64,10 +55,10 @@ Each run gets a fresh random set of questions, a new Wordle word and a newly shu
 
 A public leaderboard with a prize at the end of the day is an open invitation to cheat, so the browser is never trusted with a score.
 
-- **Answers stay on the server.** Correct answers, the Wordle word and the Memory Match layout are never sent to the browser before the player has acted. Answers to Emoji Riddles, Tech Trivia and Bug Hunter never reach the browser before the player submits them, and the browser learns which were right only from the server's reply to that submission.
-- **Graded on the server.** Emoji Riddles, Tech Trivia and Bug Hunter are graded in one batch when the round ends: the browser sends all of its answers together, and the server grades them then. Wordle and Memory Match are graded step by step, one guess or card flip at a time. The server keeps each run's state in one transaction, so double taps can't count twice.
+- **Answers stay on the server.** Correct answers and the Memory Match layout are never sent to the browser before the player has acted. Answers to Emoji Riddles and Bug Hunter never reach the browser before the player submits them, and the browser learns which were right only from the server's reply to that submission.
+- **Graded on the server.** Emoji Riddles and Bug Hunter are graded in one batch when the round ends: the browser sends all of its answers together, and the server grades them then. Memory Match is graded step by step, one card flip at a time. The server keeps each run's state in one transaction, so double taps can't count twice.
 - **The server measures time.** Each run's duration is taken from the server's clock, not the browser's.
-- **One run at a time.** A run can be finished only once. Wordle and Memory Match take their moves one at a time, in order, with no retries. Starting a new run of a game ends any earlier run of that game that is still open.
+- **One run at a time.** A run can be finished only once. Memory Match takes its flips one at a time, in order, with no retries. Each game can be played once and only in order, which the server checks against the leaderboard. Starting a new run of a game ends any earlier run of that game that is still open.
 - **Sessions expire.** Session tokens are encrypted, carry only the name and an issue time, and last 90 minutes.
 - **Unique names.** A display name is reserved for 48 hours, so nobody can pose as another player.
 - **Locked-down headers.** A Content-Security-Policy limits scripts and connections to the app and Firebase.
@@ -91,8 +82,8 @@ Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS 4 · Firebase 
 | `POST /api/session` | Checks and reserves a display name, and issues a session token (no game content) |
 | `GET /api/names/check` | Whether a display name is free, or already held by this browser |
 | `POST /api/game/start` | Starts a fresh run of one game and returns its questions or board, with no answers |
-| `POST /api/game/action` | Submits one action for a run (an answer, a guess, a card flip, or a password) and returns the graded result |
-| `POST /api/me` | The player's name, total, rank and best in each game |
+| `POST /api/game/action` | Submits one action for a run (a batch of answers or a card flip) and returns the graded result |
+| `POST /api/me` | The player's name, total, rank and score in each game |
 | `GET /api/leaderboard` | Leaderboard entries |
 | `GET /api/cron/cleanup` | Daily cleanup of expired names, leaderboard entries and game runs |
 
@@ -110,7 +101,7 @@ app/
   api/leaderboard        leaderboard read via the Admin SDK
   api/names/check        display-name availability
   api/cron/cleanup       deletes expired records
-components/games/        the six mini-games
+components/games/        the three mini-games
 components/              game hub, result screen, leaderboard table
 lib/                     shared API types, client API wrappers, session helpers,
                          server scoring, game metadata, question pools, Firebase

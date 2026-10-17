@@ -29,28 +29,19 @@ describe('applyRunToEntry', () => {
   });
 
   it('a first run that scores nothing is recorded as played but is not an improvement', () => {
-    const out = applyRunToEntry(null, { name: 'Ahmad', game: 'wordle', score: 0, now: NOW, issuedAt: ISSUED });
-    expect(out.entry.games).toEqual({ wordle: 0 });
+    const out = applyRunToEntry(null, { name: 'Ahmad', game: 'riddles', score: 0, now: NOW, issuedAt: ISSUED });
+    expect(out.entry.games).toEqual({ riddles: 0 });
     expect(out.entry.score).toBe(0);
     expect(out.improved).toBe(false);
     expect(out.best).toBe(0);
   });
 
-  it('keeps the best per game: a worse run changes nothing but the record of play', () => {
+  it('ignores a second score for a game that already has one', () => {
     const current = entry({ score: 700, games: { riddles: 700 }, timestamp: 5, expiresAt: NOW + 10_000 });
-    const out = applyRunToEntry(current, { name: 'X', game: 'riddles', score: 300, now: NOW, issuedAt: ISSUED });
+    const out = applyRunToEntry(current, { name: 'X', game: 'riddles', score: 900, now: NOW, issuedAt: ISSUED });
     expect(out.best).toBe(700);
     expect(out.improved).toBe(false);
-    expect(out.entry.score).toBe(700);
-    expect(out.entry.timestamp).toBe(5);
-  });
-
-  it('a better run replaces the game best and moves the timestamp to now', () => {
-    const current = entry({ score: 700, games: { riddles: 700 }, timestamp: 5 });
-    const out = applyRunToEntry(current, { name: 'X', game: 'riddles', score: 900, now: NOW, issuedAt: ISSUED });
-    expect(out.best).toBe(900);
-    expect(out.improved).toBe(true);
-    expect(out.entry).toMatchObject({ score: 900, games: { riddles: 900 }, timestamp: NOW });
+    expect(out.entry).toEqual(current);
   });
 
   it('adds a new game to the total and moves the timestamp', () => {
@@ -59,12 +50,6 @@ describe('applyRunToEntry', () => {
     expect(out.entry.score).toBe(1100);
     expect(out.entry.games).toEqual({ riddles: 700, bugs: 400 });
     expect(out.entry.timestamp).toBe(NOW);
-  });
-
-  it('a zero-point replay of a game with a best does not move the timestamp', () => {
-    const current = entry({ score: 700, games: { riddles: 700 }, timestamp: 5 });
-    const out = applyRunToEntry(current, { name: 'X', game: 'riddles', score: 0, now: NOW, issuedAt: ISSUED });
-    expect(out.entry.timestamp).toBe(5);
   });
 
   it('an expired entry is treated as absent, so the player starts from zero', () => {
@@ -78,13 +63,13 @@ describe('applyRunToEntry', () => {
   it('never moves expiresAt backwards', () => {
     const later = ISSUED + LEADERBOARD_TTL_MS + 5000;
     const current = entry({ score: 100, games: { riddles: 100 }, expiresAt: later });
-    const out = applyRunToEntry(current, { name: 'X', game: 'riddles', score: 200, now: NOW, issuedAt: ISSUED });
+    const out = applyRunToEntry(current, { name: 'X', game: 'memory', score: 200, now: NOW, issuedAt: ISSUED });
     expect(out.entry.expiresAt).toBe(later);
   });
 
   it('extends expiresAt to issuedAt + 48h when that is later', () => {
     const current = entry({ score: 100, games: { riddles: 100 }, expiresAt: NOW + 1000 });
-    const out = applyRunToEntry(current, { name: 'X', game: 'riddles', score: 200, now: NOW, issuedAt: NOW });
+    const out = applyRunToEntry(current, { name: 'X', game: 'memory', score: 200, now: NOW, issuedAt: NOW });
     expect(out.entry.expiresAt).toBe(NOW + LEADERBOARD_TTL_MS);
   });
 });

@@ -2,22 +2,19 @@
  * @jest-environment node
  */
 import { contentKeys, CONTENT_COUNT, pickFresh, servedFrom, SEEN_TTL_MS } from '@/lib/runs/content';
-import { BUG_POOL, RIDDLE_POOL, TRIVIA_POOL, WORDLE_POOL } from '@/lib/questions';
+import { BUG_POOL, RIDDLE_POOL } from '@/lib/questions';
 
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 const randomInt = (max: number) => Math.floor(Math.random() * max);
 
 describe('contentKeys', () => {
-  it('covers every entry of each pool, with words for wordle', () => {
+  it('covers every entry of each pool', () => {
     expect(contentKeys('riddles')).toEqual(range(RIDDLE_POOL.length));
-    expect(contentKeys('trivia')).toEqual(range(TRIVIA_POOL.length));
     expect(contentKeys('bugs')).toEqual(range(BUG_POOL.length));
-    expect(contentKeys('wordle')).toEqual(WORDLE_POOL.map((w) => w.word));
   });
 
   it('has pools large enough for the counts per start', () => {
     expect(RIDDLE_POOL.length).toBeGreaterThanOrEqual(CONTENT_COUNT.riddles);
-    expect(TRIVIA_POOL.length).toBeGreaterThanOrEqual(CONTENT_COUNT.trivia);
     expect(BUG_POOL.length).toBeGreaterThanOrEqual(CONTENT_COUNT.bugs);
   });
 });

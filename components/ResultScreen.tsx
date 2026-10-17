@@ -17,17 +17,15 @@ interface Props {
   /** The game that was just finished. */
   game: Tab;
   result: RunResult;
-  /** The next game the player has not played yet, or null when all six are played. */
+  /** The next game in order, or null when this was the last one. */
   nextGame: Tab | null;
-  onPlayAgain: () => void;
   onNextGame: () => void;
-  onBackToGames: () => void;
 }
 
 const buttonBase =
   'min-h-12 w-full max-w-xs px-6 py-3.5 rounded-full text-base font-extrabold transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#1A73E8]/40 disabled:opacity-60';
 
-export default function ResultScreen({ game, result, nextGame, onPlayAgain, onNextGame, onBackToGames }: Props) {
+export default function ResultScreen({ game, result, nextGame, onNextGame }: Props) {
   const meta = GAMES[game];
 
   return (
@@ -50,21 +48,12 @@ export default function ResultScreen({ game, result, nextGame, onPlayAgain, onNe
       )}
 
       <div className="relative text-5xl" aria-hidden="true">{result.improved ? '🏆' : '✅'}</div>
-      <h2 className="relative text-2xl font-extrabold text-[#202124]">Nice run!</h2>
+      <h2 className="relative text-2xl font-extrabold text-[#202124]">Game done!</h2>
       <p className="relative text-sm font-semibold text-[#5F6368]">
         <span aria-hidden="true">{meta.emoji}</span> {meta.title}
       </p>
 
       <p className="relative text-4xl font-black text-[#1A73E8]">{`+${result.score} pts`}</p>
-
-      {result.improved ? (
-        <p className="relative text-sm font-bold text-[#B06000]">🎉 New best!</p>
-      ) : (
-        <p className="relative text-sm text-[#5F6368]">
-          {`Your best is ${result.best} pts. `}
-          <span className="font-semibold text-[#202124]">Can you beat it?</span>
-        </p>
-      )}
 
       <p className="relative text-sm font-bold text-[#137333]">
         {`Your total: ${result.total} pts · You're #${result.rank}`}
@@ -73,32 +62,10 @@ export default function ResultScreen({ game, result, nextGame, onPlayAgain, onNe
       <div className="relative flex flex-col items-center gap-3 pt-3 w-full">
         <button
           type="button"
-          onClick={onPlayAgain}
+          onClick={onNextGame}
           className={`${buttonBase} bg-[#1A73E8] hover:bg-[#1557B0] text-white shadow`}
         >
-          Play again <span aria-hidden="true">🔁</span>
-        </button>
-
-        {nextGame ? (
-          <button
-            type="button"
-            onClick={onNextGame}
-            className={`${buttonBase} border-2 border-[#1A73E8] text-[#1A73E8] bg-white hover:bg-[#E8F0FE]`}
-          >
-            Next game →
-          </button>
-        ) : (
-          <p className="text-sm font-semibold text-[#202124]">
-            <span aria-hidden="true">🏁</span> You&apos;ve played all six games. Replay any of them to raise your bests.
-          </p>
-        )}
-
-        <button
-          type="button"
-          onClick={onBackToGames}
-          className={`${buttonBase} border border-[#DADCE0] text-[#202124] bg-white hover:bg-[#F1F3F4]`}
-        >
-          Back to games
+          {nextGame ? `Next: ${GAMES[nextGame].title} →` : 'See my results →'}
         </button>
 
         <a

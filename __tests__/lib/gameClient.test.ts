@@ -10,16 +10,16 @@ beforeEach(() => {
 
 describe('startGame', () => {
   it('posts the token and game to /api/game/start and returns the start response', async () => {
-    const start = { runId: 'run-1', view: { game: 'wordle' } };
+    const start = { runId: 'run-1', view: { game: 'riddles' } };
     (global.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse(200, start));
 
-    await expect(startGame('tok', 'wordle')).resolves.toEqual(start);
+    await expect(startGame('tok', 'riddles')).resolves.toEqual(start);
 
     const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
     expect(url).toBe('/api/game/start');
     expect(init.method).toBe('POST');
     expect(init.headers).toEqual({ 'Content-Type': 'application/json' });
-    expect(JSON.parse(init.body)).toEqual({ token: 'tok', game: 'wordle' });
+    expect(JSON.parse(init.body)).toEqual({ token: 'tok', game: 'riddles' });
   });
 
   it('throws the server error message with its status', async () => {
@@ -79,7 +79,7 @@ describe('sendAction', () => {
   it('rejects with the status and message when the server refuses the action', async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse(429, { error: 'Too fast' }));
 
-    const error = await sendAction('tok', 'run-9', { guess: 'CRANE' }).catch((e: unknown) => e);
+    const error = await sendAction('tok', 'run-9', { flip: 3 }).catch((e: unknown) => e);
 
     expect((error as GameApiError).status).toBe(429);
     expect((error as Error).message).toBe('Too fast');
