@@ -170,8 +170,9 @@ describe('Play page: the order of play', () => {
 
     expect(await screen.findByText(/that's all three games, ahmad/i)).toBeInTheDocument();
     expect(screen.getByText('1200 pts')).toBeInTheDocument();
-    expect(screen.getByText("You're #3 on the leaderboard")).toBeInTheDocument();
+    expect(screen.getByText("You're #3 so far")).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /join gdsc/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /leaderboard/i })).not.toBeInTheDocument();
     expect(fetchCalls('/api/game/start')).toHaveLength(0);
     expect(screen.queryByRole('button', { name: /play again/i })).not.toBeInTheDocument();
   });
@@ -346,7 +347,7 @@ describe('Play page: result screen', () => {
 
     expect(await screen.findByText(/that's all three games/i)).toBeInTheDocument();
     expect(screen.getByText('1500 pts')).toBeInTheDocument();
-    expect(screen.getByText("You're #1 on the leaderboard")).toBeInTheDocument();
+    expect(screen.getByText("You're #1 so far")).toBeInTheDocument();
     expect(fetchCalls('/api/game/start')).toHaveLength(1);
   });
 

@@ -149,7 +149,7 @@ export default function NameEntry() {
 
         <p className="text-xs text-[#5F6368] mb-4 bg-[#F8F9FA] rounded-xl p-3 border border-[#DADCE0]">
           Letters, numbers, and spaces · 2–30 characters · no duplicates.{' '}
-          Your name and score appear on the public leaderboard and are deleted after 48 hours.{' '}
+          Your name and score are kept for the leaderboard and are deleted after 48 hours.{' '}
           You can play any game again any time, and only your best score in each game counts.
         </p>
 
