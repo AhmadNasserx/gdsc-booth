@@ -44,6 +44,10 @@ Every player plays **three games**, in order, **once each**. The server refuses 
 
 Each run gets a fresh random set of questions and a newly shuffled Memory Match layout, with answer options shuffled so the right answer isn't always in the same spot.
 
+## Pausing the game
+
+`GAME_PAUSED` in `lib/config.ts` pauses play. While it is `true`, creating a session, starting a game and sending answers all answer 503, the home page shows a paused notice with Start disabled, and the leaderboard keeps working. Set it to `false` and redeploy to resume.
+
 ## Scoring and the leaderboard
 
 - **Your total** is the sum of your score in each of the three games. There are no replays, so every player gets one attempt at each game.

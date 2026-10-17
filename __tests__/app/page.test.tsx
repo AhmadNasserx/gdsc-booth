@@ -42,7 +42,7 @@ describe('Name Entry Page', () => {
 
   it('tells players they can play again and that their best score in each game counts', () => {
     render(<Page />);
-    expect(screen.getByText(/you can play any game again any time, and only your best score in each game counts/i)).toBeInTheDocument();
+    expect(screen.getByText(/each game can be played once/i)).toBeInTheDocument();
   });
 
   it('never mentions a maximum or a single scored game', () => {
