@@ -65,9 +65,9 @@ describe('ResultScreen', () => {
     expect(handlers.onNextGame).toHaveBeenCalledTimes(1);
   });
 
-  it('does not link to the hidden leaderboard', () => {
+  it('links to the leaderboard', () => {
     renderScreen();
-    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /view leaderboard/i })).toHaveAttribute('href', '/leaderboard');
   });
 
   it('gives the button a visible focus ring and a touch-sized height', () => {

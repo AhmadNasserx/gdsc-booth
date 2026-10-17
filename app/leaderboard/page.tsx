@@ -1,147 +1,29 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import LeaderboardTable from '@/components/LeaderboardTable';
-import { useIsBrowser } from '@/lib/clientSession';
 import type { LeaderboardEntry } from '@/lib/types';
 
-const PIN_KEY = 'leaderboardPin';
-
-function savedPin(): string {
-  try {
-    return sessionStorage.getItem(PIN_KEY) ?? '';
-  } catch {
-    return '';
-  }
-}
-
-function savePin(pin: string) {
-  try {
-    if (pin) sessionStorage.setItem(PIN_KEY, pin);
-    else sessionStorage.removeItem(PIN_KEY);
-  } catch {
-    // Without storage the PIN is asked for again after a reload.
-  }
-}
-
-/** The leaderboard is hidden until the right PIN is entered. */
 export default function LeaderboardPage() {
-  const isBrowser = useIsBrowser();
-  const [pin, setPin] = useState<string | null>(null);
-  // Until the player types or unlocks, the PIN saved for this tab (if any) is used.
-  const activePin = pin ?? (isBrowser ? savedPin() : '');
-  const lock = useCallback(() => {
-    savePin('');
-    setPin('');
-  }, []);
-  if (!isBrowser) return null;
-  if (!activePin) {
-    return (
-      <PinGate
-        onUnlock={(value) => {
-          savePin(value);
-          setPin(value);
-        }}
-      />
-    );
-  }
-  return (
-    <Board pin={activePin} onLocked={lock} />
-  );
-}
-
-async function fetchBoard(pin: string): Promise<{ ok: true; entries: LeaderboardEntry[] } | { ok: false; wrongPin: boolean }> {
-  try {
-    const res = await fetch('/api/leaderboard', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin }),
-    });
-    if (res.status === 403) return { ok: false, wrongPin: true };
-    if (!res.ok) return { ok: false, wrongPin: false };
-    return { ok: true, entries: (await res.json()) as LeaderboardEntry[] };
-  } catch {
-    return { ok: false, wrongPin: false };
-  }
-}
-
-function PinGate({ onUnlock }: { onUnlock: (pin: string) => void }) {
-  const [value, setValue] = useState('');
-  const [checking, setChecking] = useState(false);
-  const [error, setError] = useState('');
-
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
-    const pin = value.trim();
-    if (!pin || checking) return;
-    setChecking(true);
-    setError('');
-    const result = await fetchBoard(pin);
-    if (result.ok) {
-      onUnlock(pin);
-      return;
-    }
-    setError(result.wrongPin ? 'Wrong PIN. Try again.' : "Couldn't reach the server. Try again.");
-    setChecking(false);
-  }
-
-  return (
-    <div className="min-h-screen bg-[#F8F9FA] flex flex-col items-center justify-center p-4">
-      <form onSubmit={submit} className="w-full max-w-sm bg-white border border-[#DADCE0] rounded-3xl p-8 shadow-sm text-center space-y-4">
-        <p className="text-5xl" aria-hidden="true">🔒</p>
-        <h1 className="text-2xl font-extrabold text-[#202124]">Leaderboard is hidden</h1>
-        <p className="text-sm text-[#5F6368]">Enter the PIN to reveal it.</p>
-        <label className="block">
-          <span className="sr-only">PIN</span>
-          <input
-            type="password"
-            inputMode="numeric"
-            autoComplete="off"
-            autoFocus
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            className="w-full min-h-12 text-center text-xl tracking-widest border border-[#DADCE0] rounded-xl px-4 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#1A73E8]/40"
-          />
-        </label>
-        {error && <p role="alert" className="text-sm text-[#EA4335]">{error}</p>}
-        <button
-          type="submit"
-          disabled={!value.trim() || checking}
-          className="min-h-12 w-full rounded-full bg-[#1A73E8] hover:bg-[#1557B0] text-white font-bold disabled:opacity-60 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#1A73E8]/40"
-        >
-          {checking ? 'Checking…' : 'Reveal'}
-        </button>
-      </form>
-    </div>
-  );
-}
-
-function Board({ pin, onLocked }: { pin: string; onLocked: () => void }) {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [secondsAgo, setSecondsAgo] = useState(0);
 
   useEffect(() => {
-    let current = true;
     const load = () =>
-      fetchBoard(pin).then((result) => {
-        if (!current) return;
-        if (result.ok) {
-          setEntries(result.entries);
+      fetch('/api/leaderboard')
+        .then((r) => r.json())
+        .then((data: LeaderboardEntry[]) => {
+          setEntries(data);
           setLastUpdated(new Date());
           setSecondsAgo(0);
-        } else if (result.wrongPin) {
-          onLocked();
-        }
-      });
+        })
+        .catch(() => {});
 
-    void load();
+    load();
     const pollId = setInterval(load, 5000);
-    return () => {
-      current = false;
-      clearInterval(pollId);
-    };
-  }, [pin, onLocked]);
+    return () => clearInterval(pollId);
+  }, []);
 
   useEffect(() => {
     if (!lastUpdated) return;
