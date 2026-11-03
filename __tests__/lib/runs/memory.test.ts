@@ -2,6 +2,7 @@
  * @jest-environment node
  */
 import { applyMemoryFlip, hydrateMemory, MEMORY_CARDS, parseMemoryAction, startMemory, type MemoryState } from '@/lib/runs/memory';
+import { MEMORY_EMOJIS } from '@/lib/memoryEmojis';
 import { memoryPerformance } from '@/lib/scoring';
 import { RunError } from '@/lib/runs/shared';
 
@@ -20,6 +21,14 @@ describe('startMemory', () => {
     expect([...counts.values()].every((n) => n === 2)).toBe(true);
     expect(state.open).toBe(-1);
     expect(state.moves).toBe(0);
+  });
+
+  it('draws every face from the shared MEMORY_EMOJIS list', () => {
+    expect(new Set(MEMORY_EMOJIS).size).toBe(8);
+    const { state } = startMemory();
+    for (const face of state.layout) {
+      expect(MEMORY_EMOJIS).toContain(face);
+    }
   });
 
   it('never puts the layout in the view', () => {

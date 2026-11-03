@@ -1,9 +1,9 @@
 import type { FlipResponse } from '../apiTypes';
+import { MEMORY_EMOJIS } from '../memoryEmojis';
 import { memoryPerformance } from '../scoring';
 import { listOf, numberOf, RunError, secureRandomInt, shuffle, type RandomInt, type Step } from './shared';
 
-const EMOJIS = ['🐍', '⚛️', '🔥', '🐳', '🦀', '☁️', '🤖', '🔐'];
-export const MEMORY_CARDS = EMOJIS.length * 2;
+export const MEMORY_CARDS = MEMORY_EMOJIS.length * 2;
 
 export interface MemoryState {
   /** Face of every card, in board order. Never sent to the client before it is flipped. */
@@ -22,7 +22,7 @@ export interface MemoryAction {
 export type MemoryResponse = Omit<FlipResponse, 'done' | 'result'>;
 
 export function startMemory(rand: RandomInt = secureRandomInt): { state: MemoryState; view: { game: 'memory'; cards: number } } {
-  const layout = shuffle([...EMOJIS, ...EMOJIS], rand);
+  const layout = shuffle([...MEMORY_EMOJIS, ...MEMORY_EMOJIS], rand);
   return {
     state: { layout, matched: layout.map(() => false), open: -1, moves: 0 },
     view: { game: 'memory', cards: MEMORY_CARDS },

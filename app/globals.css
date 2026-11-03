@@ -98,6 +98,22 @@ body {
   .memo-confetti { animation: none; }
 }
 
+@keyframes memoShimmer {
+  from { background-position: 100% 0; }
+  to   { background-position: -100% 0; }
+}
+
+/* Placeholder face for a card whose emoji is still on its way from the server. */
+.memo-shimmer {
+  background: linear-gradient(100deg, #F1F3F4 30%, #FFFFFF 50%, #F1F3F4 70%);
+  background-size: 200% 100%;
+  animation: memoShimmer 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .memo-shimmer { animation: none; background: #F1F3F4; }
+}
+
 @keyframes staggerIn {
   from { opacity: 0; transform: translateY(16px); }
   to   { opacity: 1; transform: translateY(0); }
