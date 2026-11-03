@@ -53,7 +53,7 @@ Each run gets a fresh random set of questions and a newly shuffled Memory Match 
 - **Your total** is the sum of your score in each of the three games. There are no replays, so every player gets one attempt at each game.
 - **Each game adds one score.** A player who has not finished all three has fewer scores adding up.
 - **Ties** are rare, because every score includes a speed bonus: faster finishes score more. If two totals still match, whoever reached their total first ranks higher.
-- The leaderboard shows the top 20 players, with small emoji chips for the games each player has a score in.
+- The leaderboard shows every player, with small emoji chips for the games each player has a score in.
 
 ## Keeping the leaderboard honest
 

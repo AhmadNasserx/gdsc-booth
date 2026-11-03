@@ -37,13 +37,14 @@ describe('LeaderboardTable', () => {
     expect(screen.getByText('400')).toBeInTheDocument();
   });
 
-  it('shows at most 20 entries, ranked from the top', () => {
+  it('shows every entry, ranked from the top', () => {
     const many: LeaderboardEntry[] = Array.from({ length: 25 }, (_, i) => ({
       name: `Player${i}`, score: i * 10, timestamp: i, expiresAt: FAR_FUTURE,
     }));
     render(<LeaderboardTable entries={many} />);
     expect(screen.getByText('Player24')).toBeInTheDocument();
-    expect(screen.queryByText('Player4')).not.toBeInTheDocument();
+    expect(screen.getByText('Player4')).toBeInTheDocument();
+    expect(screen.getByText('Player0')).toBeInTheDocument();
   });
 
   it('shows the empty state when there are no entries', () => {

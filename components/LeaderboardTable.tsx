@@ -62,7 +62,7 @@ function GameChips({ games }: { games?: LeaderboardEntry['games'] }) {
 interface Props { entries: LeaderboardEntry[]; }
 
 export default function LeaderboardTable({ entries }: Props) {
-  const sorted = sortEntries(entries).slice(0, 20);
+  const sorted = sortEntries(entries);
 
   if (sorted.length === 0) {
     return (
