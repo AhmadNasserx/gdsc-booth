@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 
 /** Top-level paths whose entries carry an `expiresAt` timestamp. Expired entries are removed. */
-const EXPIRING_PATHS = ['leaderboard', 'names', 'runs'];
+const EXPIRING_PATHS = ['leaderboard', 'names', 'phones', 'contacts', 'runs'];
 
 export async function GET(request: Request) {
   const auth = request.headers.get('authorization') ?? '';

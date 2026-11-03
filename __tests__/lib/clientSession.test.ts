@@ -2,6 +2,7 @@
 import type * as ClientSession from '@/lib/clientSession';
 
 const HEX_KEY = /^[0-9a-f]{64}$/;
+const PHONE = '+961 70 123 456';
 
 // The module keeps an in-memory fallback key, so each test loads a fresh copy.
 function loadModule(): typeof ClientSession {
@@ -78,22 +79,31 @@ describe('saved name', () => {
 describe('startSession', () => {
   it('posts the trimmed name and a valid player key to /api/session', async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse(200, { token: 'tok' }));
-    await loadModule().startSession('  Ahmad  ');
+    await loadModule().startSession('  Ahmad  ', PHONE, true);
 
     const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
     expect(url).toBe('/api/session');
     expect(init.method).toBe('POST');
     const body = JSON.parse(init.body);
     expect(body.name).toBe('Ahmad');
+    expect(body.phone).toBe(PHONE);
+    expect(body.consent).toBe(true);
     expect(body.playerKey).toMatch(HEX_KEY);
     expect(body.playerKey).toBe(localStorage.getItem('gdscPlayerKey'));
+  });
+
+  it('sends consent as given, so an unticked box is sent as false', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse(400, { error: 'Agree', field: 'consent' }));
+    const result = await loadModule().startSession('Ahmad', PHONE, false);
+    expect(JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body).consent).toBe(false);
+    expect(result).toEqual({ ok: false, status: 400, error: 'Agree', field: 'consent' });
   });
 
   it('stores only the token and name in sessionStorage, and saves the name', async () => {
     sessionStorage.setItem('playerQuestions', '{"old":true}');
     (global.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse(200, { token: 'new-token' }));
 
-    const result = await loadModule().startSession('Ahmad');
+    const result = await loadModule().startSession('Ahmad', PHONE, true);
 
     expect(result).toEqual({ ok: true });
     expect(sessionStorage.getItem('playerToken')).toBe('new-token');
@@ -108,38 +118,86 @@ describe('startSession', () => {
       jsonResponse(409, { error: 'Display name already taken. Choose another.' }),
     );
 
-    const result = await loadModule().startSession('Ahmad');
+    const result = await loadModule().startSession('Ahmad', PHONE, true);
 
     expect(result).toEqual({ ok: false, status: 409, error: 'Display name already taken. Choose another.' });
     expect(sessionStorage.getItem('playerToken')).toBeNull();
     expect(localStorage.getItem('gdscPlayerName')).toBeNull();
+    expect(localStorage.getItem('gdscPlayerPhone')).toBeNull();
+  });
+
+  it('passes on the field the server names, so the page can show the error in the right place', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce(
+      jsonResponse(409, { error: 'This phone number is already registered.', field: 'phone' }),
+    );
+    const result = await loadModule().startSession('Ahmad', PHONE, true);
+    expect(result).toEqual({
+      ok: false,
+      status: 409,
+      error: 'This phone number is already registered.',
+      field: 'phone',
+    });
+  });
+
+  it('ignores a field name the client does not know', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse(400, { error: 'Nope', field: 'email' }));
+    const result = await loadModule().startSession('Ahmad', PHONE, true);
+    expect(result).toEqual({ ok: false, status: 400, error: 'Nope' });
+  });
+
+  it('remembers the phone number after a successful start, and never the consent', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse(200, { token: 'tok' }));
+    await loadModule().startSession('Ahmad', ' +961 70 123 456 ', true);
+    expect(localStorage.getItem('gdscPlayerPhone')).toBe('+961 70 123 456');
+    const stored = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i));
+    expect(stored.sort()).toEqual(['gdscPlayerKey', 'gdscPlayerName', 'gdscPlayerPhone']); // no consent flag
   });
 
   it('uses a generic error when the server error has no message', async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse(500, {}));
-    const result = await loadModule().startSession('Ahmad');
+    const result = await loadModule().startSession('Ahmad', PHONE, true);
     expect(result).toMatchObject({ ok: false, status: 500 });
     expect(result.ok === false && result.error).toMatch(/something went wrong/i);
   });
 
   it('returns an error when a success response has no token', async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse(200, {}));
-    const result = await loadModule().startSession('Ahmad');
+    const result = await loadModule().startSession('Ahmad', PHONE, true);
     expect(result.ok).toBe(false);
     expect(sessionStorage.getItem('playerToken')).toBeNull();
   });
 
   it('returns an error instead of throwing when the network request fails', async () => {
     (global.fetch as jest.Mock).mockRejectedValueOnce(new TypeError('Failed to fetch'));
-    const result = await loadModule().startSession('Ahmad');
+    const result = await loadModule().startSession('Ahmad', PHONE, true);
     expect(result.ok).toBe(false);
   });
 
   it('returns an error when sessionStorage is unavailable', async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse(200, { token: 'tok' }));
     jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('quota'); });
-    const result = await loadModule().startSession('Ahmad');
+    const result = await loadModule().startSession('Ahmad', PHONE, true);
     expect(result.ok).toBe(false);
+  });
+});
+
+describe('saved phone', () => {
+  it('returns null when nothing is saved', () => {
+    expect(loadModule().getSavedPhone()).toBeNull();
+  });
+
+  it('saves and reads back the phone number', () => {
+    const { savePhone, getSavedPhone } = loadModule();
+    savePhone(PHONE);
+    expect(getSavedPhone()).toBe(PHONE);
+  });
+
+  it('does not throw when localStorage is unavailable', () => {
+    jest.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('blocked'); });
+    jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('blocked'); });
+    const { savePhone, getSavedPhone } = loadModule();
+    expect(() => savePhone(PHONE)).not.toThrow();
+    expect(getSavedPhone()).toBeNull();
   });
 });
 
@@ -151,7 +209,7 @@ describe('current session', () => {
   it('returns the token and name once a session has started', async () => {
     const mod = loadModule();
     (global.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse(200, { token: 'tok' }));
-    await mod.startSession('Ahmad');
+    await mod.startSession('Ahmad', PHONE, true);
     expect(mod.getSession()).toEqual({ token: 'tok', name: 'Ahmad' });
   });
 

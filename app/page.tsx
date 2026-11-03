@@ -7,16 +7,20 @@ import {
   clearSessionNotice,
   getPlayerKey,
   getSavedName,
+  getSavedPhone,
   peekSessionNotice,
   startSession,
   useIsBrowser,
 } from '@/lib/clientSession';
+import { normalizePhone } from '@/lib/phone';
 
 const NAME_PATTERN = /^[A-Za-z0-9À-ɏ ]{2,30}$/;
 
 // 'mine': the name is held by this browser's player key, so the player can reuse it.
 type CheckedStatus = 'idle' | 'available' | 'mine' | 'taken';
 type NameStatus = 'idle' | 'invalid' | 'checking' | CheckedStatus;
+// 'taken': the server refused this number as registered to another player.
+type PhoneStatus = 'idle' | 'invalid' | 'taken' | 'valid';
 
 export default function NameEntry() {
   const router = useRouter();
@@ -26,6 +30,12 @@ export default function NameEntry() {
   const name = typedName ?? (isBrowser ? getSavedName() ?? '' : '');
   // Result of the last availability check, tagged with the name it was for.
   const [check, setCheck] = useState<{ name: string; status: CheckedStatus } | null>(null);
+  // Like the name, the phone number is prefilled from the last visit. Consent is never prefilled.
+  const [typedPhone, setTypedPhone] = useState<string | null>(null);
+  const phone = typedPhone ?? (isBrowser ? getSavedPhone() ?? '' : '');
+  const [consent, setConsent] = useState(false);
+  // Key of the phone number the server refused as registered; it applies only while the field still holds it.
+  const [takenPhone, setTakenPhone] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -38,6 +48,16 @@ export default function NameEntry() {
       : check?.name === trimmedName
         ? check.status
         : 'checking';
+
+  const trimmedPhone = phone.trim();
+  const phoneCheck = normalizePhone(trimmedPhone);
+  const phoneStatus: PhoneStatus = !trimmedPhone
+    ? 'idle'
+    : !phoneCheck.ok
+      ? 'invalid'
+      : phoneCheck.key === takenPhone
+        ? 'taken'
+        : 'valid';
 
   useEffect(() => {
     const trimmed = name.trim();
@@ -65,19 +85,27 @@ export default function NameEntry() {
     };
   }, [name]);
 
-  const canStart = !GAME_PAUSED && (nameStatus === 'available' || nameStatus === 'mine');
+  const canStart =
+    !GAME_PAUSED &&
+    (nameStatus === 'available' || nameStatus === 'mine') &&
+    phoneStatus === 'valid' &&
+    consent;
 
   async function handleStart() {
     if (!canStart || loading) return;
     setLoading(true);
     setError('');
-    const result = await startSession(trimmedName);
+    const result = await startSession(trimmedName, trimmedPhone, consent);
     if (result.ok) {
       router.push('/play');
       return; // Stay in the loading state until the play page replaces this one.
     }
-    setError(result.error);
-    if (result.status === 409) setCheck({ name: trimmedName, status: 'taken' });
+    if (result.field === 'phone' && result.status === 409 && phoneCheck.ok) {
+      setTakenPhone(phoneCheck.key);
+    } else {
+      setError(result.error);
+    }
+    if (result.field === 'name' && result.status === 409) setCheck({ name: trimmedName, status: 'taken' });
     setLoading(false);
   }
 
@@ -98,6 +126,13 @@ export default function NameEntry() {
     available: 'This name is available!',
     mine: `Welcome back, ${trimmedName}! Your best scores are kept.`,
     taken: 'This name is already taken — choose another.',
+  };
+
+  const phoneMsg: Record<PhoneStatus, string> = {
+    idle: '',
+    invalid: 'Enter 8 to 15 digits. Spaces, dashes and brackets are fine.',
+    taken: 'This phone number is already registered.',
+    valid: '',
   };
 
   const msgColor: Record<NameStatus, string> = {
@@ -148,9 +183,47 @@ export default function NameEntry() {
           </p>
         )}
 
+        <label htmlFor="phone-number" className="block text-sm font-semibold mb-1 text-[#202124]">
+          Phone number
+        </label>
+        <input
+          id="phone-number"
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel"
+          placeholder="+961 70 123 456"
+          required
+          aria-describedby="phone-help"
+          aria-invalid={phoneStatus === 'invalid' || phoneStatus === 'taken'}
+          value={phone}
+          onChange={(e) => setTypedPhone(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleStart()}
+          className="w-full p-3.5 border border-[#DADCE0] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#1A73E8] text-sm mb-1.5"
+        />
+        <p id="phone-help" className="text-xs text-[#5F6368] mb-1.5">
+          Only used to contact the winner. Never shown on the leaderboard.
+        </p>
+        {phoneMsg[phoneStatus] && (
+          <p className="text-xs mb-2 text-[#EA4335]">{phoneMsg[phoneStatus]}</p>
+        )}
+
+        <label className="flex items-start gap-3 text-xs text-[#202124] mb-4 cursor-pointer">
+          <input
+            type="checkbox"
+            required
+            checked={consent}
+            onChange={(e) => setConsent(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-[#1A73E8]"
+          />
+          <span>
+            I agree to be contacted on this number if I win. My number is stored privately and deleted after 48 hours.
+          </span>
+        </label>
+
         <p className="text-xs text-[#5F6368] mb-4 bg-[#F8F9FA] rounded-xl p-3 border border-[#DADCE0]">
           Letters, numbers, and spaces · 2–30 characters · no duplicates.{' '}
-          Your name and score appear on the public leaderboard and are deleted after 48 hours.{' '}
+          Your name and score appear on the public leaderboard. Your phone number is used only to contact
+          the winner and is never shown publicly. Both are deleted after 48 hours.{' '}
           Each game can be played once.
         </p>
 

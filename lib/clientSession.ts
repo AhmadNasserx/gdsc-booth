@@ -7,6 +7,7 @@ import { useSyncExternalStore } from 'react';
 
 export const PLAYER_KEY_STORAGE = 'gdscPlayerKey';
 export const PLAYER_NAME_STORAGE = 'gdscPlayerName';
+export const PLAYER_PHONE_STORAGE = 'gdscPlayerPhone';
 
 // sessionStorage keys for the current game session.
 const TOKEN_KEY = 'playerToken';
@@ -19,9 +20,12 @@ const PLAYER_KEY_PATTERN = /^[0-9a-f]{64}$/;
 const GENERIC_ERROR = 'Something went wrong. Please try again.';
 const STORAGE_ERROR = "Couldn't save your session. Check that your browser allows site storage.";
 
+/** The form field a failed start refers to, when the server says which one. */
+export type StartSessionField = 'name' | 'phone' | 'consent';
+
 export type StartSessionResult =
   | { ok: true }
-  | { ok: false; status: number; error: string };
+  | { ok: false; status: number; error: string; field?: StartSessionField };
 
 export interface PlayerSession {
   token: string;
@@ -76,6 +80,23 @@ export function saveName(name: string): void {
     localStorage.setItem(PLAYER_NAME_STORAGE, name);
   } catch {
     // Name is only a convenience for the next visit; ignore storage failures.
+  }
+}
+
+/** The phone number used last time in this browser, or null. Consent is never remembered. */
+export function getSavedPhone(): string | null {
+  try {
+    return localStorage.getItem(PLAYER_PHONE_STORAGE);
+  } catch {
+    return null;
+  }
+}
+
+export function savePhone(phone: string): void {
+  try {
+    localStorage.setItem(PLAYER_PHONE_STORAGE, phone);
+  } catch {
+    // Phone is only a convenience for the next visit; ignore storage failures.
   }
 }
 
@@ -145,13 +166,17 @@ async function readJson(res: Response): Promise<unknown> {
   }
 }
 
+const FIELDS: readonly StartSessionField[] = ['name', 'phone', 'consent'];
+
 /**
- * Creates a new game session for `name` (POST /api/session) with this browser's player key.
- * On success, stores only the token and name in sessionStorage and remembers the name.
+ * Creates a new game session (POST /api/session) with this browser's player key.
+ * `phone` is checked and normalised by the server. `consent` must be true.
+ * On success, stores only the token and name in sessionStorage and remembers the name and phone.
  * Never throws.
  */
-export async function startSession(name: string): Promise<StartSessionResult> {
+export async function startSession(name: string, phone: string, consent: boolean): Promise<StartSessionResult> {
   const trimmed = name.trim();
+  const trimmedPhone = phone.trim();
 
   let res: Response;
   let data: unknown;
@@ -159,7 +184,7 @@ export async function startSession(name: string): Promise<StartSessionResult> {
     res = await fetch('/api/session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: trimmed, playerKey: getPlayerKey() }),
+      body: JSON.stringify({ name: trimmed, phone: trimmedPhone, consent, playerKey: getPlayerKey() }),
     });
     data = await readJson(res);
   } catch {
@@ -168,10 +193,12 @@ export async function startSession(name: string): Promise<StartSessionResult> {
 
   const body = (data ?? {}) as Record<string, unknown>;
   if (!res.ok) {
+    const field = FIELDS.find((f) => f === body.field);
     return {
       ok: false,
       status: res.status,
       error: typeof body.error === 'string' ? body.error : GENERIC_ERROR,
+      ...(field ? { field } : {}),
     };
   }
   if (typeof body.token !== 'string') {
@@ -188,5 +215,6 @@ export async function startSession(name: string): Promise<StartSessionResult> {
   }
 
   saveName(trimmed);
+  savePhone(trimmedPhone);
   return { ok: true };
 }

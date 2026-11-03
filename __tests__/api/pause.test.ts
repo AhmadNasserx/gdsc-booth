@@ -33,7 +33,7 @@ afterAll(() => {
 
 describe('paused game', () => {
   it.each([
-    ['session', sessionPOST, { name: 'Ahmad', playerKey: 'a'.repeat(64) }],
+    ['session', sessionPOST, { name: 'Ahmad', phone: '+961 70 123 456', consent: true, playerKey: 'a'.repeat(64) }],
     ['start', startPOST, { token: 'x', game: 'riddles' }],
     ['action', actionPOST, { token: 'x', runId: 'y', answers: [] }],
   ])('%s answers 503 with the paused message', async (_name, handler, body) => {

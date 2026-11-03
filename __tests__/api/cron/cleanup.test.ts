@@ -28,6 +28,10 @@ function seed() {
   writePath('leaderboard/new', { name: 'New', score: 200, games: { riddles: 200 }, timestamp: 1, expiresAt: future });
   writePath('names/old', { keyHash: 'x', claimedAt: 1, expiresAt: past });
   writePath('names/new', { keyHash: 'y', claimedAt: 1, expiresAt: future });
+  writePath('phones/96170111222', { keyHash: 'x', normKey: 'old', claimedAt: 1, expiresAt: past });
+  writePath('phones/96171333444', { keyHash: 'y', normKey: 'new', claimedAt: 1, expiresAt: future });
+  writePath('contacts/old', { name: 'Old', phone: '+96170111222', consentAt: 1, expiresAt: past });
+  writePath('contacts/new', { name: 'New', phone: '+96171333444', consentAt: 1, expiresAt: future });
   writePath('runs/expired', { sessionId: 's1', game: 'riddles', status: 'done', startedAt: 1, expiresAt: past, state: { indices: [0] } });
   writePath('runs/live', { sessionId: 's2', game: 'riddles', status: 'active', startedAt: 1, expiresAt: future, state: { indices: [0] } });
   writePath('runs-active/s1_riddles', 'expired');
@@ -53,7 +57,7 @@ describe('GET /api/cron/cleanup', () => {
     seed();
     const res = await GET(makeRequest('test-cron-secret'));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ deleted: 6 }); // 3 expired records, 1 expired seen record, 2 pointers left dangling
+    expect(await res.json()).toEqual({ deleted: 8 }); // 5 expired records, 1 expired seen record, 2 pointers left dangling
 
     expect(readPath('leaderboard/old')).toBeNull();
     expect(readPath('leaderboard/new')).not.toBeNull();
@@ -61,6 +65,15 @@ describe('GET /api/cron/cleanup', () => {
     expect(readPath('names/new')).not.toBeNull();
     expect(readPath('runs/expired')).toBeNull();
     expect(readPath('runs/live')).not.toBeNull();
+  });
+
+  it('removes expired phone claims and contacts, and keeps the live ones', async () => {
+    seed();
+    await GET(makeRequest('test-cron-secret'));
+    expect(readPath('phones/96170111222')).toBeNull();
+    expect(readPath('phones/96171333444')).toMatchObject({ normKey: 'new' });
+    expect(readPath('contacts/old')).toBeNull();
+    expect(readPath('contacts/new')).toMatchObject({ phone: '+96171333444' });
   });
 
   it('removes expired seen records per game and keeps live ones', async () => {
