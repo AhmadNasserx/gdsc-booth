@@ -9,18 +9,21 @@ import {
   getSavedName,
   getSavedPhone,
   peekSessionNotice,
+  savePhone,
   startSession,
   useIsBrowser,
 } from '@/lib/clientSession';
-import { normalizePhone } from '@/lib/phone';
+import { COUNTRIES, DEFAULT_COUNTRY, countryLabel, findCountry } from '@/lib/countries';
+import { combinePhone, normalizePhone, startsWithCountryCode } from '@/lib/phone';
 
 const NAME_PATTERN = /^[A-Za-z0-9À-ɏ ]{2,30}$/;
 
 // 'mine': the name is held by this browser's player key, so the player can reuse it.
 type CheckedStatus = 'idle' | 'available' | 'mine' | 'taken';
 type NameStatus = 'idle' | 'invalid' | 'checking' | CheckedStatus;
+// 'prefixed': a + or 00 was typed into the national field, which already has the country code picked.
 // 'taken': the server refused this number as registered to another player.
-type PhoneStatus = 'idle' | 'invalid' | 'taken' | 'valid';
+type PhoneStatus = 'idle' | 'invalid' | 'prefixed' | 'taken' | 'valid';
 
 export default function NameEntry() {
   const router = useRouter();
@@ -30,9 +33,13 @@ export default function NameEntry() {
   const name = typedName ?? (isBrowser ? getSavedName() ?? '' : '');
   // Result of the last availability check, tagged with the name it was for.
   const [check, setCheck] = useState<{ name: string; status: CheckedStatus } | null>(null);
-  // Like the name, the phone number is prefilled from the last visit. Consent is never prefilled.
-  const [typedPhone, setTypedPhone] = useState<string | null>(null);
-  const phone = typedPhone ?? (isBrowser ? getSavedPhone() ?? '' : '');
+  // The phone is a country code picked from the list (Lebanon by default) and the number typed after it.
+  // Like the name, both are prefilled from the last visit. Consent is never prefilled.
+  const savedPhone = isBrowser ? getSavedPhone() : null;
+  const [typedCountry, setTypedCountry] = useState<string | null>(null);
+  const countryCode = typedCountry ?? savedPhone?.country ?? DEFAULT_COUNTRY;
+  const [typedNational, setTypedNational] = useState<string | null>(null);
+  const national = typedNational ?? savedPhone?.national ?? '';
   const [consent, setConsent] = useState(false);
   // Key of the phone number the server refused as registered; it applies only while the field still holds it.
   const [takenPhone, setTakenPhone] = useState<string | null>(null);
@@ -49,15 +56,18 @@ export default function NameEntry() {
         ? check.status
         : 'checking';
 
-  const trimmedPhone = phone.trim();
-  const phoneCheck = normalizePhone(trimmedPhone);
-  const phoneStatus: PhoneStatus = !trimmedPhone
+  // The full number the server receives, for example "+96170123456". Empty when no digits were typed.
+  const internationalPhone = combinePhone(findCountry(countryCode)?.dial ?? '', national);
+  const phoneCheck = normalizePhone(internationalPhone);
+  const phoneStatus: PhoneStatus = !national.trim()
     ? 'idle'
-    : !phoneCheck.ok
-      ? 'invalid'
-      : phoneCheck.key === takenPhone
-        ? 'taken'
-        : 'valid';
+    : startsWithCountryCode(national)
+      ? 'prefixed'
+      : !phoneCheck.ok
+        ? 'invalid'
+        : phoneCheck.key === takenPhone
+          ? 'taken'
+          : 'valid';
 
   useEffect(() => {
     const trimmed = name.trim();
@@ -95,8 +105,9 @@ export default function NameEntry() {
     if (!canStart || loading) return;
     setLoading(true);
     setError('');
-    const result = await startSession(trimmedName, trimmedPhone, consent);
+    const result = await startSession(trimmedName, internationalPhone, consent);
     if (result.ok) {
+      savePhone({ country: countryCode, national: national.trim() });
       router.push('/play');
       return; // Stay in the loading state until the play page replaces this one.
     }
@@ -131,6 +142,7 @@ export default function NameEntry() {
   const phoneMsg: Record<PhoneStatus, string> = {
     idle: '',
     invalid: 'Enter 8 to 15 digits. Spaces, dashes and brackets are fine.',
+    prefixed: 'Leave out the + or 00. Choose your country code in the list instead.',
     taken: 'This phone number is already registered.',
     valid: '',
   };
@@ -186,25 +198,43 @@ export default function NameEntry() {
         <label htmlFor="phone-number" className="block text-sm font-semibold mb-1 text-[#202124]">
           Phone number
         </label>
-        <input
-          id="phone-number"
-          type="tel"
-          inputMode="tel"
-          autoComplete="tel"
-          placeholder="+961 70 123 456"
-          required
-          aria-describedby="phone-help"
-          aria-invalid={phoneStatus === 'invalid' || phoneStatus === 'taken'}
-          value={phone}
-          onChange={(e) => setTypedPhone(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleStart()}
-          className="w-full p-3.5 border border-[#DADCE0] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#1A73E8] text-sm mb-1.5"
-        />
+        <div className="flex gap-2 mb-1.5">
+          <select
+            id="country-code"
+            aria-label="Country code"
+            value={countryCode}
+            onChange={(e) => setTypedCountry(e.target.value)}
+            className="w-44 shrink-0 p-3.5 border border-[#DADCE0] rounded-2xl bg-white focus:outline-none focus:ring-2 focus:ring-[#1A73E8] text-sm"
+          >
+            {COUNTRIES.map((country) => (
+              <option key={country.code} value={country.code}>
+                {countryLabel(country)}
+              </option>
+            ))}
+          </select>
+          <input
+            id="phone-number"
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel-national"
+            placeholder="70 123 456"
+            required
+            aria-describedby="phone-help"
+            aria-invalid={phoneStatus === 'invalid' || phoneStatus === 'prefixed' || phoneStatus === 'taken'}
+            value={national}
+            onChange={(e) => setTypedNational(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleStart()}
+            className="min-w-0 flex-1 p-3.5 border border-[#DADCE0] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#1A73E8] text-sm"
+          />
+        </div>
         <p id="phone-help" className="text-xs text-[#5F6368] mb-1.5">
           Only used to contact the winner. Never shown on the leaderboard.
         </p>
         {phoneMsg[phoneStatus] && (
           <p className="text-xs mb-2 text-[#EA4335]">{phoneMsg[phoneStatus]}</p>
+        )}
+        {phoneStatus === 'valid' && phoneCheck.ok && (
+          <p className="text-xs mb-2 text-[#5F6368]">Sent as {phoneCheck.phone}</p>
         )}
 
         <label className="flex items-start gap-3 text-xs text-[#202124] mb-4 cursor-pointer">

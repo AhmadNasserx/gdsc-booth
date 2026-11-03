@@ -26,7 +26,7 @@ describe('paused home page', () => {
   it('keeps Start disabled even when the name, phone number and consent are all complete', async () => {
     render(<Page />);
     await userEvent.type(screen.getByPlaceholderText(/display name/i), 'Ahmad');
-    await userEvent.type(screen.getByLabelText(/phone number/i), '+961 70 123 456');
+    await userEvent.type(screen.getByLabelText(/phone number/i), '70 123 456');
     await userEvent.click(screen.getByLabelText(/I agree to be contacted on this number/i));
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
     expect(screen.getByRole('button', { name: /start/i })).toBeDisabled();

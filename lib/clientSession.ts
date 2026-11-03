@@ -4,10 +4,14 @@
 // Storage is only read during render on the client (see useIsBrowser), so server and
 // client markup stay identical.
 import { useSyncExternalStore } from 'react';
+import { findCountry } from './countries';
 
 export const PLAYER_KEY_STORAGE = 'gdscPlayerKey';
 export const PLAYER_NAME_STORAGE = 'gdscPlayerName';
-export const PLAYER_PHONE_STORAGE = 'gdscPlayerPhone';
+// The country and national number typed on the name entry page, as JSON. An older version stored the
+// raw number under LEGACY_PHONE_STORAGE; that value is ignored and removed when a new one is saved.
+export const PLAYER_PHONE_STORAGE = 'gdscPlayerCountryPhone';
+const LEGACY_PHONE_STORAGE = 'gdscPlayerPhone';
 
 // sessionStorage keys for the current game session.
 const TOKEN_KEY = 'playerToken';
@@ -30,6 +34,12 @@ export type StartSessionResult =
 export interface PlayerSession {
   token: string;
   name: string;
+}
+
+/** The phone fields as the player typed them: a country code from the picker and the digits after it. */
+export interface SavedPhone {
+  country: string;
+  national: string;
 }
 
 // Used only when localStorage is unavailable: the key then lasts for this page load.
@@ -83,18 +93,25 @@ export function saveName(name: string): void {
   }
 }
 
-/** The phone number used last time in this browser, or null. Consent is never remembered. */
-export function getSavedPhone(): string | null {
+/** The country and national number used last time in this browser, or null. Consent is never remembered. */
+export function getSavedPhone(): SavedPhone | null {
   try {
-    return localStorage.getItem(PLAYER_PHONE_STORAGE);
+    const parsed: unknown = JSON.parse(localStorage.getItem(PLAYER_PHONE_STORAGE) ?? 'null');
+    if (!parsed || typeof parsed !== 'object') return null;
+    const { country, national } = parsed as Record<string, unknown>;
+    if (typeof country !== 'string' || typeof national !== 'string') return null;
+    // A country code that is no longer in the list is treated as nothing saved.
+    if (!findCountry(country)) return null;
+    return { country, national };
   } catch {
     return null;
   }
 }
 
-export function savePhone(phone: string): void {
+export function savePhone(phone: SavedPhone): void {
   try {
-    localStorage.setItem(PLAYER_PHONE_STORAGE, phone);
+    localStorage.setItem(PLAYER_PHONE_STORAGE, JSON.stringify(phone));
+    localStorage.removeItem(LEGACY_PHONE_STORAGE);
   } catch {
     // Phone is only a convenience for the next visit; ignore storage failures.
   }
@@ -170,9 +187,10 @@ const FIELDS: readonly StartSessionField[] = ['name', 'phone', 'consent'];
 
 /**
  * Creates a new game session (POST /api/session) with this browser's player key.
- * `phone` is checked and normalised by the server. `consent` must be true.
- * On success, stores only the token and name in sessionStorage and remembers the name and phone.
- * Never throws.
+ * `phone` is the full international number (for example "+96170123456"), checked and normalised by the server.
+ * `consent` must be true.
+ * On success, stores only the token and name in sessionStorage and remembers the name. The page remembers
+ * the phone, since it knows the country and the digits typed. Never throws.
  */
 export async function startSession(name: string, phone: string, consent: boolean): Promise<StartSessionResult> {
   const trimmed = name.trim();
@@ -215,6 +233,5 @@ export async function startSession(name: string, phone: string, consent: boolean
   }
 
   saveName(trimmed);
-  savePhone(trimmedPhone);
   return { ok: true };
 }

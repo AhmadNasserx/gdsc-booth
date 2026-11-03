@@ -123,7 +123,7 @@ describe('startSession', () => {
     expect(result).toEqual({ ok: false, status: 409, error: 'Display name already taken. Choose another.' });
     expect(sessionStorage.getItem('playerToken')).toBeNull();
     expect(localStorage.getItem('gdscPlayerName')).toBeNull();
-    expect(localStorage.getItem('gdscPlayerPhone')).toBeNull();
+    expect(localStorage.getItem('gdscPlayerCountryPhone')).toBeNull();
   });
 
   it('passes on the field the server names, so the page can show the error in the right place', async () => {
@@ -145,12 +145,17 @@ describe('startSession', () => {
     expect(result).toEqual({ ok: false, status: 400, error: 'Nope' });
   });
 
-  it('remembers the phone number after a successful start, and never the consent', async () => {
+  it('remembers the name but not the phone, which the page saves with its country and number', async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse(200, { token: 'tok' }));
     await loadModule().startSession('Ahmad', ' +961 70 123 456 ', true);
-    expect(localStorage.getItem('gdscPlayerPhone')).toBe('+961 70 123 456');
     const stored = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i));
-    expect(stored.sort()).toEqual(['gdscPlayerKey', 'gdscPlayerName', 'gdscPlayerPhone']); // no consent flag
+    expect(stored.sort()).toEqual(['gdscPlayerKey', 'gdscPlayerName']); // no phone, no consent flag
+  });
+
+  it('sends the phone trimmed, as the full international number the page builds', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse(200, { token: 'tok' }));
+    await loadModule().startSession('Ahmad', ' +96170123456 ', true);
+    expect(JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body).phone).toBe('+96170123456');
   });
 
   it('uses a generic error when the server error has no message', async () => {
@@ -182,22 +187,52 @@ describe('startSession', () => {
 });
 
 describe('saved phone', () => {
+  const SAVED = { country: 'LB', national: '70 123 456' };
+
   it('returns null when nothing is saved', () => {
     expect(loadModule().getSavedPhone()).toBeNull();
   });
 
-  it('saves and reads back the phone number', () => {
+  it('saves the country and the typed number, and reads them back', () => {
     const { savePhone, getSavedPhone } = loadModule();
-    savePhone(PHONE);
-    expect(getSavedPhone()).toBe(PHONE);
+    savePhone(SAVED);
+    expect(getSavedPhone()).toEqual(SAVED);
+    expect(JSON.parse(localStorage.getItem('gdscPlayerCountryPhone') as string)).toEqual(SAVED);
+  });
+
+  it('keeps the country code of a player who picked another country', () => {
+    const { savePhone, getSavedPhone } = loadModule();
+    savePhone({ country: 'GB', national: '07700 900123' });
+    expect(getSavedPhone()).toEqual({ country: 'GB', national: '07700 900123' });
   });
 
   it('does not throw when localStorage is unavailable', () => {
     jest.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('blocked'); });
     jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('blocked'); });
     const { savePhone, getSavedPhone } = loadModule();
-    expect(() => savePhone(PHONE)).not.toThrow();
+    expect(() => savePhone(SAVED)).not.toThrow();
     expect(getSavedPhone()).toBeNull();
+  });
+
+  it('ignores the raw number saved by the previous version, and removes it when a new value is saved', () => {
+    localStorage.setItem('gdscPlayerPhone', PHONE);
+    const { getSavedPhone, savePhone } = loadModule();
+    expect(getSavedPhone()).toBeNull();
+
+    savePhone(SAVED);
+    expect(localStorage.getItem('gdscPlayerPhone')).toBeNull();
+    expect(getSavedPhone()).toEqual(SAVED);
+  });
+
+  it.each([
+    ['text that is not JSON', 'not json'],
+    ['JSON that is not an object', '"+96170123456"'],
+    ['a missing number', '{"country":"LB"}'],
+    ['a number that is not text', '{"country":"LB","national":70123456}'],
+    ['a country code that is not in the list', '{"country":"XX","national":"70123456"}'],
+  ])('returns null for %s', (_label, stored) => {
+    localStorage.setItem('gdscPlayerCountryPhone', stored);
+    expect(loadModule().getSavedPhone()).toBeNull();
   });
 });
 

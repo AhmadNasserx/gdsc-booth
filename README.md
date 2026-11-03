@@ -27,7 +27,7 @@ The booth app for **Google Developer Groups on Campus, Beirut Arab University, T
 
 ## How a visit works
 
-1. **Name and phone.** Players choose a display name, which is reserved for 48 hours, and enter a phone number so the booth can contact the winner. They must tick a consent box for the number. Returning players on the same browser get their name and number back, but tick the box again.
+1. **Name and phone.** Players choose a display name, which is reserved for 48 hours, and enter a phone number with its country code (Lebanon by default) so the booth can contact the winner. They must tick a consent box for the number. Returning players on the same browser get their name and number back, but tick the box again.
 2. **Play.** The three games start one after another, in a fixed order: Emoji Riddles, Memory Match, Tech Trivia. Each is played once.
 3. **Result.** After each game the player sees the points they earned, their total and rank, and a button for the next game.
 4. **Finish.** After the last game the player sees their final total and rank, a link to the leaderboard and the sign-up form. Reloading the page picks up at the next unplayed game.
@@ -75,8 +75,8 @@ A public leaderboard with a prize at the end of the day is an open invitation to
 - Players give a display name and a phone number. The display name is public: it appears on the leaderboard.
 - The phone number is stored privately, only so the booth can contact the prize winner. It is never shown on the leaderboard and never returned by any API route. Players must tick a consent box before they can start.
 - The winner's number is read from the `contacts` node in the Firebase console. Each record holds the name, the number and the time consent was given.
-- A phone number is reserved for 48 hours, like a display name, so one number belongs to one player at a time.
-- The browser remembers the last phone number so returning players don't retype it. Consent is never remembered, so it is asked again on every visit.
+- A phone number is reserved for 48 hours, like a display name, so one number belongs to one player at a time. A country code is required (Lebanon by default), so one number is unique however it is typed: with `+` or `00`, and with or without the trunk `0`.
+- The browser remembers the last country and phone number so returning players don't retype it. Consent is never remembered, so it is asked again on every visit.
 - Every record is written with an `expiresAt` timestamp 48 hours out. A daily Vercel cron job (`/api/cron/cleanup`, protected by `CRON_SECRET`) deletes anything past it, including phone numbers and contacts, along with expired game runs.
 - No IP addresses or other identifiers are stored.
 

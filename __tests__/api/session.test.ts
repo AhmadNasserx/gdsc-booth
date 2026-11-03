@@ -3,6 +3,7 @@
  */
 import { POST } from '@/app/api/session/route';
 import { hashPlayerKey } from '@/lib/names';
+import { combinePhone } from '@/lib/phone';
 import { verifySession } from '@/lib/session';
 import { readPath, resetDb, writePath } from '@/test/support/rtdbMock';
 
@@ -190,6 +191,10 @@ describe('POST /api/session: phone number', () => {
     ['letters', 'ring me maybe'],
     ['a plus sign after the first character', '961+70111222'],
     ['a zero straight after the plus', '+0961701112'],
+    ['a local number without a country code', '70 111 222'],
+    ['a local number with the trunk 0 and no country code', '03-111-222'],
+    ['a zero straight after the country code', '+961 0 70 111 222'],
+    ['a zero straight after 00', '00961 070 111 222'],
   ])('returns 400 with field phone for %s, and claims nothing', async (_label, phone) => {
     const res = await POST(makeRequest({ name: 'Ahmad', playerKey: KEY_A, consent: true, phone }));
     expect(res.status).toBe(400);
@@ -222,13 +227,32 @@ describe('POST /api/session: phone number', () => {
     ['(+961) 70-111-222', '+96170111222', '96170111222'],
     ['0096170111222', '+96170111222', '96170111222'],
     ['00 961 70 111 222', '+96170111222', '96170111222'],
-    ['70 111 222', '70111222', '70111222'],
-    ['03-111-222', '03111222', '03111222'],
   ])('normalises %s to %s and keys the phone claim by its digits %s', async (input, phone, key) => {
     const res = await claim('Ahmad', KEY_A, input);
     expect(res.status).toBe(200);
     expect(readPath('contacts/ahmad')).toMatchObject({ phone });
     expect(readPath(`phones/${key}`)).toMatchObject({ keyHash: hashPlayerKey(KEY_A) });
+  });
+
+  it('treats the same number typed with and without the trunk 0 as a duplicate', async () => {
+    // The page drops the trunk 0 before sending, so both spellings reach the server as the same number.
+    expect(combinePhone('961', '070 111 222')).toBe(combinePhone('961', '70 111 222'));
+
+    const first = await claim('Ahmad', KEY_A, combinePhone('961', '070 111 222'));
+    expect(first.status).toBe(200);
+
+    const second = await claim('Bilal', KEY_B, combinePhone('961', '70 111 222'));
+    expect(second.status).toBe(409);
+    expect(await second.json()).toEqual({ error: 'This phone number is already registered.', field: 'phone' });
+    expect(readPath('names/bilal')).toBeNull();
+    expect(readPath('phones/96170111222')).toMatchObject({ keyHash: hashPlayerKey(KEY_A) });
+  });
+
+  it('refuses a country code followed by the trunk 0, sent without the page', async () => {
+    const res = await claim('Ahmad', KEY_A, '+961 070 111 222');
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: expect.any(String), field: 'phone' });
+    expect(readPath('names/ahmad')).toBeNull();
   });
 
   it('stores the phone claim with the hash, the name key and the expiry, and nothing else', async () => {

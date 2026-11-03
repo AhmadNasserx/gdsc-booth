@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Page from '@/app/page';
+import { COUNTRIES } from '@/lib/countries';
 
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
@@ -8,7 +9,9 @@ jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
 global.fetch = jest.fn();
 
 const PLAYER_KEY = /^[0-9a-f]{64}$/;
-const PHONE = '+961 70 123 456';
+// What the player types after the country code (Lebanon is the default), and what the server receives.
+const NATIONAL = '70 123 456';
+const SENT = '+96170123456';
 
 function availableResponse(extra: Record<string, unknown> = {}) {
   return { ok: true, json: async () => ({ available: true, ...extra }) };
@@ -26,6 +29,10 @@ function nameInput() {
   return screen.getByPlaceholderText(/display name/i);
 }
 
+function countrySelect() {
+  return screen.getByLabelText(/country code/i);
+}
+
 function phoneInput() {
   return screen.getByLabelText(/phone number/i);
 }
@@ -34,11 +41,26 @@ function consentBox() {
   return screen.getByLabelText(/I agree to be contacted on this number/i);
 }
 
-/** Types a name and phone number and ticks consent. The name check is answered by the next fetch. */
-async function fillForm(name = 'Ahmad', phone = PHONE) {
+/** Types a name and national number and ticks consent. The name check is answered by the next fetch. */
+async function fillForm(name = 'Ahmad', national = NATIONAL) {
   await userEvent.type(nameInput(), name);
-  await userEvent.type(phoneInput(), phone);
+  await userEvent.type(phoneInput(), national);
   await userEvent.click(consentBox());
+}
+
+/** Fills the form for the given country and number, starts the session and returns the sent request body. */
+async function startWith(national: string, country?: string) {
+  (global.fetch as jest.Mock)
+    .mockResolvedValueOnce(availableResponse())
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ token: 't' }) });
+  render(<Page />);
+  if (country) await userEvent.selectOptions(countrySelect(), country);
+  await userEvent.type(nameInput(), 'Ahmad');
+  await userEvent.type(phoneInput(), national);
+  await userEvent.click(consentBox());
+  fireEvent.click(await startButtonEnabled());
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/play'));
+  return JSON.parse((global.fetch as jest.Mock).mock.calls[1][1].body);
 }
 
 describe('Name Entry Page', () => {
@@ -89,7 +111,7 @@ describe('Name Entry Page', () => {
     localStorage.setItem('gdscPlayerName', 'Ahmad');
     (global.fetch as jest.Mock).mockResolvedValue(availableResponse({ mine: true }));
     render(<Page />);
-    await userEvent.type(phoneInput(), PHONE);
+    await userEvent.type(phoneInput(), NATIONAL);
     await userEvent.click(consentBox());
 
     expect(await screen.findByText('Welcome back, Ahmad! Your best scores are kept.')).toBeInTheDocument();
@@ -154,7 +176,7 @@ describe('Name Entry Page', () => {
     expect(sessionStorage.getItem('playerQuestions')).toBeNull();
   });
 
-  it('posts the name, phone, consent and a 64-character hex player key, and remembers name and phone', async () => {
+  it('posts the name, the full number, consent and a 64-character hex player key, and remembers the country and number', async () => {
     (global.fetch as jest.Mock)
       .mockResolvedValueOnce(availableResponse())
       .mockResolvedValueOnce({ ok: true, json: async () => ({ token: 't' }) });
@@ -170,18 +192,21 @@ describe('Name Entry Page', () => {
     const body = JSON.parse(init.body);
     expect(body).toEqual({
       name: 'Ahmad',
-      phone: PHONE,
+      phone: SENT,
       consent: true,
       playerKey: expect.stringMatching(PLAYER_KEY),
     });
     expect(localStorage.getItem('gdscPlayerKey')).toBe(body.playerKey);
     expect(localStorage.getItem('gdscPlayerName')).toBe('Ahmad');
-    expect(localStorage.getItem('gdscPlayerPhone')).toBe(PHONE);
+    expect(JSON.parse(localStorage.getItem('gdscPlayerCountryPhone') as string)).toEqual({
+      country: 'LB',
+      national: NATIONAL,
+    });
   });
 
-  it('starts a returning player with their saved name and the welcome-back status', async () => {
+  it('starts a returning player with their saved country, number and the welcome-back status', async () => {
     localStorage.setItem('gdscPlayerName', 'Ahmad');
-    localStorage.setItem('gdscPlayerPhone', PHONE);
+    localStorage.setItem('gdscPlayerCountryPhone', JSON.stringify({ country: 'LB', national: NATIONAL }));
     (global.fetch as jest.Mock)
       .mockResolvedValueOnce(availableResponse({ mine: true }))
       .mockResolvedValueOnce({ ok: true, json: async () => ({ token: 't' }) });
@@ -192,7 +217,7 @@ describe('Name Entry Page', () => {
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/play'));
     const body = JSON.parse((global.fetch as jest.Mock).mock.calls[1][1].body);
-    expect(body).toMatchObject({ name: 'Ahmad', phone: PHONE, consent: true });
+    expect(body).toMatchObject({ name: 'Ahmad', phone: SENT, consent: true });
   });
 
   it('shows error message when session creation fails', async () => {
@@ -261,7 +286,7 @@ describe('Name Entry Page', () => {
     await screen.findByText('This phone number is already registered.');
 
     await userEvent.clear(phoneInput());
-    await userEvent.type(phoneInput(), '+961 71 999 888');
+    await userEvent.type(phoneInput(), '71 999 888');
 
     expect(screen.queryByText('This phone number is already registered.')).not.toBeInTheDocument();
     expect(await startButtonEnabled()).toBeEnabled();
@@ -277,17 +302,36 @@ describe('Phone number and consent', () => {
     localStorage.clear();
   });
 
-  it('shows a tel input with the right attributes and a placeholder, with the helper line under it', () => {
+  it('shows a tel input with the right attributes and a national placeholder, with the helper line under it', () => {
     render(<Page />);
     const input = phoneInput();
     expect(input).toHaveAttribute('type', 'tel');
     expect(input).toHaveAttribute('inputmode', 'tel');
-    expect(input).toHaveAttribute('autocomplete', 'tel');
-    expect(input).toHaveAttribute('placeholder', '+961 70 123 456');
+    expect(input).toHaveAttribute('autocomplete', 'tel-national');
+    expect(input).toHaveAttribute('placeholder', '70 123 456');
     expect(screen.getByText('Only used to contact the winner. Never shown on the leaderboard.')).toBeInTheDocument();
   });
 
-  it('places the phone field under the name field and the consent box directly under the phone field', () => {
+  it('defaults the country code select to Lebanon (+961)', () => {
+    render(<Page />);
+    expect(countrySelect()).toHaveValue('LB');
+    expect(countrySelect()).toHaveDisplayValue('Lebanon (+961)');
+  });
+
+  it('lists every country in the native select, sorted by name', () => {
+    render(<Page />);
+    const options = Array.from(countrySelect().querySelectorAll('option'));
+    expect(options).toHaveLength(COUNTRIES.length);
+    expect(options[0]).toHaveTextContent(COUNTRIES[0].name);
+    expect(screen.getByRole('option', { name: 'United Kingdom (+44)' })).toBeInTheDocument();
+  });
+
+  it('puts the country picker and the number in the same row', () => {
+    render(<Page />);
+    expect(countrySelect().parentElement).toBe(phoneInput().parentElement);
+  });
+
+  it('places the phone field under the name field and the consent box directly under the phone row', () => {
     render(<Page />);
     const name = nameInput();
     const phone = phoneInput();
@@ -301,10 +345,10 @@ describe('Phone number and consent', () => {
     expect(consentBox()).not.toBeChecked();
   });
 
-  it('keeps Start disabled until the phone number is valid and consent is ticked', async () => {
+  it('keeps Start disabled until the number is valid and consent is ticked', async () => {
     render(<Page />);
     await userEvent.type(nameInput(), 'Ahmad');
-    await userEvent.type(phoneInput(), PHONE);
+    await userEvent.type(phoneInput(), NATIONAL);
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
     expect(screen.getByRole('button', { name: /start/i })).toBeDisabled();
 
@@ -312,7 +356,7 @@ describe('Phone number and consent', () => {
     expect(await startButtonEnabled()).toBeEnabled();
   });
 
-  it('keeps Start disabled when consent is ticked but the phone is empty', async () => {
+  it('keeps Start disabled when consent is ticked but the number is empty', async () => {
     render(<Page />);
     await userEvent.type(nameInput(), 'Ahmad');
     await userEvent.click(consentBox());
@@ -322,14 +366,14 @@ describe('Phone number and consent', () => {
 
   it.each([
     ['letters', 'call me maybe'],
-    ['too few digits', '12345'],
-    ['too many digits', '+1234567890123456'],
-    ['a plus sign in the middle', '961+70123456'],
+    ['too few digits', '1234'],
+    ['too many digits', '1234567890123'],
+    ['a plus sign in the middle', '70+123456'],
     ['a stray symbol', '70123456#'],
-  ])('shows an inline error and keeps Start disabled for a phone with %s', async (_label, phone) => {
+  ])('shows an inline error and keeps Start disabled for a number with %s', async (_label, national) => {
     render(<Page />);
     await userEvent.type(nameInput(), 'Ahmad');
-    await userEvent.type(phoneInput(), phone);
+    await userEvent.type(phoneInput(), national);
     await userEvent.click(consentBox());
 
     expect(await screen.findByText('Enter 8 to 15 digits. Spaces, dashes and brackets are fine.')).toBeInTheDocument();
@@ -337,46 +381,78 @@ describe('Phone number and consent', () => {
     expect(screen.getByRole('button', { name: /start/i })).toBeDisabled();
   });
 
-  it('accepts a local number without a country code, and a 00 prefix', async () => {
+  it('accepts a local number under the default country, and shows the full number it will send', async () => {
     render(<Page />);
     await userEvent.type(nameInput(), 'Ahmad');
-    await userEvent.type(phoneInput(), '70 123 456');
+    await userEvent.type(phoneInput(), NATIONAL);
     await userEvent.click(consentBox());
     expect(await startButtonEnabled()).toBeEnabled();
-
-    await userEvent.clear(phoneInput());
-    await userEvent.type(phoneInput(), '0096170123456');
-    expect(await startButtonEnabled()).toBeEnabled();
+    expect(screen.getByText(`Sent as ${SENT}`)).toBeInTheDocument();
   });
 
-  it('prefills the phone number from the last visit, but never prefills consent', () => {
-    localStorage.setItem('gdscPlayerPhone', PHONE);
+  it.each([
+    ['a plus sign', '+961 70 123 456'],
+    ['a 00 prefix', '0096170123456'],
+  ])('refuses %s typed into the number field, since the country is picked above', async (_label, typed) => {
     render(<Page />);
-    expect(phoneInput()).toHaveValue(PHONE);
+    await userEvent.type(nameInput(), 'Ahmad');
+    await userEvent.type(phoneInput(), typed);
+    await userEvent.click(consentBox());
+
+    expect(await screen.findByText(/leave out the \+ or 00/i)).toBeInTheDocument();
+    expect(phoneInput()).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByRole('button', { name: /start/i })).toBeDisabled();
+  });
+
+  it('sends the number with the picked country, not Lebanon', async () => {
+    const body = await startWith('07700 900123', 'GB');
+    expect(body.phone).toBe('+447700900123');
+  });
+
+  it.each(['03 123 456', '3 123 456'])(
+    'sends %s and 3 123 456 as the same number, with the trunk 0 dropped',
+    async (typed) => {
+      const body = await startWith(typed);
+      expect(body.phone).toBe('+9613123456');
+    },
+  );
+
+  it('prefills the country and number from the last visit, but never prefills consent', () => {
+    localStorage.setItem('gdscPlayerCountryPhone', JSON.stringify({ country: 'GB', national: '7700 900123' }));
+    render(<Page />);
+    expect(countrySelect()).toHaveValue('GB');
+    expect(phoneInput()).toHaveValue('7700 900123');
     expect(consentBox()).not.toBeChecked();
   });
 
-  it('sends the phone and consent with the session request', async () => {
+  it('ignores the raw number saved by the previous version and starts on Lebanon', () => {
+    localStorage.setItem('gdscPlayerPhone', '+961 70 123 456');
+    render(<Page />);
+    expect(countrySelect()).toHaveValue('LB');
+    expect(phoneInput()).toHaveValue('');
+  });
+
+  it('sends the number and consent with the session request, trimmed', async () => {
     (global.fetch as jest.Mock)
       .mockResolvedValueOnce(availableResponse())
       .mockResolvedValueOnce({ ok: true, json: async () => ({ token: 't' }) });
 
     render(<Page />);
     await userEvent.type(nameInput(), 'Ahmad');
-    await userEvent.type(phoneInput(), '  +961 70 123 456 ');
+    await userEvent.type(phoneInput(), '  70 123 456 ');
     await userEvent.click(consentBox());
     fireEvent.click(await startButtonEnabled());
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/play'));
     const body = JSON.parse((global.fetch as jest.Mock).mock.calls[1][1].body);
-    expect(body.phone).toBe(PHONE);
+    expect(body.phone).toBe(SENT);
     expect(body.consent).toBe(true);
   });
 
   it('keeps the phone number out of the availability check', async () => {
     render(<Page />);
     await userEvent.type(nameInput(), 'Ahmad');
-    await userEvent.type(phoneInput(), PHONE);
+    await userEvent.type(phoneInput(), NATIONAL);
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
     const urls = (global.fetch as jest.Mock).mock.calls.map(([url]) => String(url));
     expect(urls.every((url) => !url.includes('70123456') && !url.includes('961'))).toBe(true);
