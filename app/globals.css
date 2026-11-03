@@ -39,6 +39,39 @@ body {
 
 .anim-pop      { animation: pop 0.28s ease-out; }
 .anim-shake    { animation: shake 0.38s ease-out; }
+
+/*
+ * Verdict burst for a right or wrong answer. It is drawn by ::after, so the element keeps its own
+ * animation (anim-pop or anim-shake) and the two do not fight over the animation property.
+ */
+@keyframes verdictBurstGreen {
+  0%   { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0.6); opacity: 1; }
+  100% { box-shadow: 0 0 0 12px rgba(52, 168, 83, 0); opacity: 0; }
+}
+
+@keyframes verdictBurstRed {
+  0%   { box-shadow: 0 0 0 0 rgba(234, 67, 53, 0.55); opacity: 1; }
+  100% { box-shadow: 0 0 0 12px rgba(234, 67, 53, 0); opacity: 0; }
+}
+
+.anim-flash-green::after,
+.anim-flash-red::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  animation: verdictBurstGreen 0.55s ease-out forwards;
+}
+
+.anim-flash-red::after { animation-name: verdictBurstRed; }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-flash-green::after,
+  .anim-flash-red::after { display: none; animation: none; }
+  .anim-pop.anim-flash-green,
+  .anim-shake.anim-flash-red { animation: none; }
+}
 .anim-slide-in { animation: fadeSlideIn 0.3s ease-out both; }
 
 /* Wordle: tile flip, win bounce, confetti, key tap feedback */

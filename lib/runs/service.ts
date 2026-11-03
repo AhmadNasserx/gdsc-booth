@@ -228,7 +228,7 @@ export async function performAction(
       last.missing = undefined;
       last.error = undefined;
       last.t = t;
-      return t.kind === 'applied' ? toStorable(t.next) : undefined;
+      return t.kind === 'applied' || t.kind === 'checked' ? toStorable(t.next) : undefined;
     } catch (err) {
       if (!(err instanceof RunError)) throw err;
       last.missing = undefined;
@@ -248,6 +248,8 @@ export async function performAction(
   }
   if (t.kind === 'replay') return t.response;
   if (!committed) throw new RunError(409, 'Please try again');
+  // A checked question replies with its own result. The run is still open, so there is no `done`.
+  if (t.kind === 'checked') return t.response;
   if (!t.finished) return { ...t.response, done: false };
   return completeRun(runId, t.next, session, now);
 }

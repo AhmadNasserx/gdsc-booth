@@ -10,6 +10,7 @@ jest.mock('next/navigation', () => ({ useRouter: () => mockRouter }));
 // so the tests can drive `act` and `onDone` the way a real game would.
 interface ProbeProps {
   act: (body: unknown) => Promise<unknown>;
+  check?: (body: unknown) => Promise<unknown>;
   onDone: (result: unknown) => void;
   questions?: unknown[];
   cards?: number;
@@ -101,6 +102,20 @@ async function gameAct(game: string, body: unknown) {
   await act(async () => {
     try {
       response = await mockProbes[game].act(body);
+    } catch (e) {
+      error = e;
+    }
+  });
+  return { response, error };
+}
+
+// The same for a per-question check, which riddles and trivia send as the player answers.
+async function gameCheck(game: string, body: unknown) {
+  let response: unknown;
+  let error: unknown;
+  await act(async () => {
+    try {
+      response = await mockProbes[game].check?.(body);
     } catch (e) {
       error = e;
     }
@@ -409,6 +424,79 @@ describe('Play page: session expiry', () => {
       url === '/api/game/action' ? { status: 401, body: { error: 'Session expired' } } : defaultHandler(url, body);
 
     await gameAct('riddles', { answers: [] });
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/'));
+    expect(sessionStorage.getItem('playerName')).toBeNull();
+    expect(sessionStorage.getItem('sessionNotice')).not.toBeNull();
+  });
+});
+
+describe('Play page: checking answers as they are given', () => {
+  const RIDDLES_CHECK = { check: { index: 0, answer: 'a' } };
+  const actionCalls = () => fetchCalls('/api/game/action');
+
+  it('gives Emoji Riddles and Tech Trivia a check that sends the token, run id and check body', async () => {
+    startSession();
+    render(<PlayPage />);
+    await waitForGame('riddles');
+
+    expect(mockProbes.riddles.check).toEqual(expect.any(Function));
+    handler = (url, body) =>
+      url === '/api/game/action' ? { body: { index: 0, correct: true, correctAnswer: 'a' } } : defaultHandler(url, body);
+    const { response } = await gameCheck('riddles', RIDDLES_CHECK);
+
+    expect(response).toEqual({ index: 0, correct: true, correctAnswer: 'a' });
+    expect(actionCalls()).toEqual([{ token: 'tok', runId: 'run-riddles', ...RIDDLES_CHECK }]);
+  });
+
+  it('gives trivia a check too, once it is the game being played', async () => {
+    startSession();
+    handler = (url, body) => (url === '/api/me' ? { body: meWith({ riddles: 500, memory: 500 }) } : defaultHandler(url, body));
+    render(<PlayPage />);
+    await waitForGame('trivia');
+
+    expect(mockProbes.trivia.check).toEqual(expect.any(Function));
+  });
+
+  it('a refused check keeps the game on screen, with no notice and no resume', async () => {
+    startSession();
+    render(<PlayPage />);
+    await waitForGame('riddles');
+    const meCalls = () => (global.fetch as jest.Mock).mock.calls.filter(([u]) => u === '/api/me').length;
+    const meBefore = meCalls();
+    handler = (url, body) =>
+      url === '/api/game/action' ? { status: 409, body: { error: 'Answer the questions in order' } } : defaultHandler(url, body);
+
+    const { error } = await gameCheck('riddles', { check: { index: 3, answer: 'a' } });
+
+    expect((error as Error).message).toBe('Answer the questions in order');
+    expect(screen.getByTestId('game-riddles')).toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(meCalls()).toBe(meBefore);
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('a check that ends the run elsewhere does not move the player on either', async () => {
+    startSession();
+    render(<PlayPage />);
+    await waitForGame('riddles');
+    handler = (url, body) =>
+      url === '/api/game/action' ? { status: 409, body: { error: 'This game is already finished' } } : defaultHandler(url, body);
+
+    await gameCheck('riddles', RIDDLES_CHECK);
+
+    expect(screen.getByTestId('game-riddles')).toBeInTheDocument();
+    expect(screen.queryByText(/already finished, so we moved you on/i)).not.toBeInTheDocument();
+  });
+
+  it('an unauthorized check leaves the session, as an action does', async () => {
+    startSession();
+    render(<PlayPage />);
+    await waitForGame('riddles');
+    handler = (url, body) =>
+      url === '/api/game/action' ? { status: 401, body: { error: 'Invalid or expired session' } } : defaultHandler(url, body);
+
+    await gameCheck('riddles', RIDDLES_CHECK);
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/'));
     expect(sessionStorage.getItem('playerName')).toBeNull();

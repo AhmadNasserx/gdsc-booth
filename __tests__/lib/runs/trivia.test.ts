@@ -1,13 +1,13 @@
 /**
  * @jest-environment node
  */
-import { gradeTrivia, hydrateTrivia, parseTriviaBatch, startTrivia, TRIVIA_COUNT, type TriviaState } from '@/lib/runs/trivia';
+import { checkTrivia, gradeTrivia, hydrateTrivia, parseTriviaBatch, startTrivia, TRIVIA_COUNT, type TriviaState } from '@/lib/runs/trivia';
 import { TRIVIA_POOL } from '@/lib/questions';
 import { RunError } from '@/lib/runs/shared';
 import { triviaPerformance } from '@/lib/scoring';
 
 const ALL_INDICES = Array.from({ length: 15 }, (_, i) => i);
-const FRESH: TriviaState = { indices: ALL_INDICES };
+const FRESH: TriviaState = { indices: ALL_INDICES, given: [] };
 
 const rightOf = (i: number) => TRIVIA_POOL[ALL_INDICES[i]].answer;
 const wrongOf = (i: number) => TRIVIA_POOL[ALL_INDICES[i]].options.find((o) => o !== rightOf(i)) as string;
@@ -42,7 +42,12 @@ describe('startTrivia', () => {
 describe('hydrateTrivia', () => {
   it('keeps the question indices and fills in a missing list', () => {
     expect(hydrateTrivia({ indices: ALL_INDICES })).toEqual(FRESH);
-    expect(hydrateTrivia(null)).toEqual({ indices: [] });
+    expect(hydrateTrivia(null)).toEqual({ indices: [], given: [] });
+  });
+
+  it('reads given answers that RTDB returned keyed by position, and never keeps more than there are questions', () => {
+    const hydrated = hydrateTrivia({ indices: [3, 7], given: { 0: 'Flutter', 1: 'Angular', 2: 'extra' } as unknown as string[] });
+    expect(hydrated.given).toEqual(['Flutter', 'Angular']);
   });
 });
 
@@ -122,5 +127,95 @@ describe('gradeTrivia', () => {
   it('rejects text that is not one of the options for that question', () => {
     expect(statusOf(() => gradeTrivia(FRESH, ['nope']))).toBe(400);
     expect(statusOf(() => gradeTrivia(FRESH, [''] ))).toBe(400);
+  });
+});
+
+describe('startTrivia answers', () => {
+  it('starts with no answers locked in', () => {
+    expect(startTrivia().state.given).toEqual([]);
+  });
+});
+
+describe('checkTrivia', () => {
+  const check = (state: TriviaState, index: number, answer: string) => checkTrivia(state, { check: { index, answer } });
+
+  it('records the first answer and reveals the correct answer for that question only', () => {
+    const step = check(FRESH, 0, rightOf(0));
+    expect(step.response).toEqual({ index: 0, correct: true, correctAnswer: rightOf(0) });
+    expect(step.state.given).toEqual([rightOf(0)]);
+  });
+
+  it('says a wrong answer is wrong and reveals no other question', () => {
+    const step = check(FRESH, 0, wrongOf(0));
+    expect(step.response).toEqual({ index: 0, correct: false, correctAnswer: rightOf(0) });
+    expect(JSON.stringify(step.response)).not.toContain(rightOf(1));
+  });
+
+  it('does not count points while the round is being played', () => {
+    const step = check(FRESH, 0, wrongOf(0));
+    expect(step).not.toHaveProperty('performance');
+  });
+
+  it('a repeat check returns the stored result and ignores a different option', () => {
+    const first = check(FRESH, 0, wrongOf(0));
+    const again = checkTrivia(first.state, { check: { index: 0, answer: rightOf(0) } });
+    expect(again.response).toEqual(first.response);
+    expect(again.state.given).toEqual([wrongOf(0)]);
+  });
+
+  it('rejects an index ahead of the next unanswered question with 409', () => {
+    expect(statusOf(() => check(FRESH, 1, rightOf(1)))).toBe(409);
+    expect(statusOf(() => check({ ...FRESH, given: [rightOf(0)] }, 2, rightOf(2)))).toBe(409);
+  });
+
+  it('rejects an option that was not offered for that question with 400', () => {
+    expect(statusOf(() => check(FRESH, 0, 'not an option'))).toBe(400);
+    expect(statusOf(() => check({ ...FRESH, given: [rightOf(0)] }, 0, 'not an option'))).toBe(400);
+  });
+
+  it('rejects an index outside the 15 questions with 400', () => {
+    expect(statusOf(() => checkTrivia(FRESH, { check: { index: 15, answer: rightOf(0) } }))).toBe(400);
+    expect(statusOf(() => checkTrivia(FRESH, { check: { index: -1, answer: rightOf(0) } }))).toBe(400);
+    expect(statusOf(() => checkTrivia(FRESH, { check: { index: 1.5, answer: rightOf(0) } }))).toBe(400);
+  });
+
+  it('rejects a body with no check object', () => {
+    expect(statusOf(() => checkTrivia(FRESH, {}))).toBe(400);
+    expect(statusOf(() => checkTrivia(FRESH, { check: { index: 0 } }))).toBe(400);
+  });
+});
+
+describe('gradeTrivia with answers locked in by checks', () => {
+  it('a locked-in answer is scored even when the batch leaves that question open', () => {
+    const state: TriviaState = { ...FRESH, given: [rightOf(0)] };
+    const step = gradeTrivia(state, []);
+    expect(step.response.results[0]).toEqual({ answered: true, correct: true, correctAnswer: rightOf(0) });
+    expect(step.performance).toBeCloseTo(triviaPerformance(20));
+  });
+
+  it('a locked-in answer beats a different batch value for the same question', () => {
+    const state: TriviaState = { ...FRESH, given: [wrongOf(0)] };
+    const step = gradeTrivia(state, [rightOf(0), rightOf(1)]);
+    expect(step.response.results[0]).toMatchObject({ answered: true, correct: false });
+    // 0 after the wrong answer, then 20 for the batch's right answer to question 2
+    expect(step.performance).toBeCloseTo(triviaPerformance(20));
+  });
+
+  it('points run in order over locked-in and batch answers together', () => {
+    // Locked in: right (20). Batch: question 2 wrong (10), question 3 right (30).
+    const state: TriviaState = { ...FRESH, given: [rightOf(0)] };
+    const step = gradeTrivia(state, [null, wrongOf(1), rightOf(2)]);
+    expect(step.performance).toBeCloseTo(triviaPerformance(20 - 10 + 20));
+  });
+
+  it('a locked-in wrong answer followed by a batch skip scores the floor, not a negative total', () => {
+    const state: TriviaState = { ...FRESH, given: [wrongOf(0)] };
+    expect(gradeTrivia(state, [null]).performance).toBe(0);
+  });
+
+  it('the batch does not change the locked-in state', () => {
+    const state: TriviaState = { ...FRESH, given: [rightOf(0)] };
+    gradeTrivia(state, [wrongOf(0)]);
+    expect(state.given).toEqual([rightOf(0)]);
   });
 });

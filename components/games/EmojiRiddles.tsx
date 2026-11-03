@@ -2,15 +2,20 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { BatchResponse, ReviewItem, RiddleView, RunResult } from '@/lib/apiTypes';
+import { buzz, isVerdictReply, runInOrder, VERDICT_WAIT_MS, type CheckFn, type Verdict } from './verdict';
 
-// Short neutral "locked in" pause before the next question. No network involved.
+// Short neutral "locked in" pause before the next question when there is no check to wait for.
 const PICK_MS = 250;
+// How long the right/wrong verdict stays on screen before the next question.
+const VERDICT_MS = 600;
 
 type Phase = 'play' | 'checking' | 'error' | 'review';
 
 interface Props {
   questions: RiddleView[];
   act: (body: { answers: (string | null)[] }) => Promise<BatchResponse>;
+  /** Checks each pick as it is made. Optional: without it the answers are only sent in the final batch. */
+  check?: CheckFn;
   onDone: (result: RunResult) => void;
 }
 
@@ -18,10 +23,12 @@ function errorMessage(err: unknown): string {
   return err instanceof Error && err.message ? err.message : 'Something went wrong. Please try again.';
 }
 
-export default function EmojiRiddles({ questions, act, onDone }: Props) {
+export default function EmojiRiddles({ questions, act, check, onDone }: Props) {
   const [idx, setIdx] = useState(0);
   // Option locked in for the current question, shown neutrally until the transition ends.
   const [picked, setPicked] = useState<string | null>(null);
+  // Right or wrong for the locked-in option, once the server has replied.
+  const [verdict, setVerdict] = useState<Verdict | null>(null);
   const [answers, setAnswers] = useState<(string | null)[]>(() => questions.map(() => null));
   const [phase, setPhase] = useState<Phase>('play');
   const [error, setError] = useState<string | null>(null);
@@ -34,12 +41,23 @@ export default function EmojiRiddles({ questions, act, onDone }: Props) {
   const inFlightRef = useRef(false);
   const doneRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Counts the picks. A timer or reply from an earlier pick checks it and does nothing if it moved on.
+  const pickSeqRef = useRef(0);
+  const checkQueueRef = useRef<Promise<unknown>>(Promise.resolve());
 
   useEffect(() => {
     return () => {
+      pickSeqRef.current += 1;
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, []);
+
+  function clearTimer() {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }
 
   async function submit() {
     if (inFlightRef.current || doneRef.current) return;
@@ -73,17 +91,51 @@ export default function EmojiRiddles({ questions, act, onDone }: Props) {
     setAnswers(next);
     setPicked(opt);
 
-    const isLast = idx === questions.length - 1;
-    timerRef.current = setTimeout(() => {
+    const q = idx;
+    const isLast = q === questions.length - 1;
+    const seq = pickSeqRef.current;
+
+    // Moves on from this pick. Does nothing if the pick was already left.
+    const leave = () => {
+      if (pickSeqRef.current !== seq) return;
+      pickSeqRef.current = seq + 1;
       timerRef.current = null;
       setPicked(null);
+      setVerdict(null);
       if (isLast) {
         void submit();
         return;
       }
       lockedRef.current = false;
-      setIdx((i) => i + 1);
-    }, PICK_MS);
+      setIdx(q + 1);
+    };
+
+    if (!check) {
+      timerRef.current = setTimeout(leave, PICK_MS);
+      return;
+    }
+
+    // If the verdict is slow, the game moves on without it. The reply is then ignored.
+    timerRef.current = setTimeout(leave, VERDICT_WAIT_MS);
+    runInOrder(checkQueueRef, () => check({ check: { index: q, answer: opt } })).then(
+      (reply) => {
+        if (pickSeqRef.current !== seq) return;
+        clearTimer();
+        if (!isVerdictReply(reply)) {
+          timerRef.current = setTimeout(leave, PICK_MS);
+          return;
+        }
+        setVerdict({ option: opt, correct: reply.correct, correctAnswer: reply.correctAnswer });
+        buzz(reply.correct ? 30 : 80);
+        timerRef.current = setTimeout(leave, VERDICT_MS);
+      },
+      () => {
+        // A failed check never blocks the game. The answer is still sent with the final batch.
+        if (pickSeqRef.current !== seq) return;
+        clearTimer();
+        timerRef.current = setTimeout(leave, PICK_MS);
+      },
+    );
   }
 
   function finish() {
@@ -172,6 +224,19 @@ export default function EmojiRiddles({ questions, act, onDone }: Props) {
     return <p className="py-8 text-center text-sm text-[#5F6368]">No riddles this round.</p>;
   }
 
+  // Look of one option. Before a verdict the picked option is neutral; after it, right and wrong show.
+  function toneOf(opt: string): string {
+    if (verdict && picked === opt) {
+      return verdict.correct
+        ? 'anim-pop anim-flash-green border-[#34A853] bg-[#E6F4EA] text-[#137333]'
+        : 'anim-shake anim-flash-red border-[#EA4335] bg-[#FCE8E6] text-[#C5221F]';
+    }
+    if (verdict && verdict.correctAnswer === opt) return 'border-[#34A853] bg-[#E6F4EA] text-[#137333]';
+    if (picked === opt) return 'anim-pop border-[#1A73E8] bg-[#E8F0FE] text-[#1A73E8]';
+    if (picked !== null) return 'border-[#DADCE0] bg-[#F8F9FA] text-[#9AA0A6]';
+    return 'border-[#DADCE0] bg-white hover:border-[#1A73E8] hover:bg-[#E8F0FE] active:scale-95';
+  }
+
   return (
     <div className="flex flex-col items-center text-center">
       <div className="mb-4 flex w-full items-center justify-center">
@@ -185,28 +250,22 @@ export default function EmojiRiddles({ questions, act, onDone }: Props) {
         <p className="mb-6 text-sm italic text-[#5F6368]">Hint: {riddle.hint}</p>
 
         <div className="mb-2 grid w-full grid-cols-2 gap-3">
-          {riddle.options.map((opt) => {
-            const isPicked = picked === opt;
-            const dimmed = picked !== null && !isPicked;
-            return (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => pick(opt)}
-                disabled={picked !== null}
-                className={`rounded-2xl border-2 p-4 text-sm font-semibold transition-all duration-150 ${
-                  isPicked
-                    ? 'anim-pop border-[#1A73E8] bg-[#E8F0FE] text-[#1A73E8]'
-                    : dimmed
-                      ? 'border-[#DADCE0] bg-[#F8F9FA] text-[#9AA0A6]'
-                      : 'border-[#DADCE0] bg-white hover:border-[#1A73E8] hover:bg-[#E8F0FE] active:scale-95'
-                }`}
-              >
-                {opt}
-              </button>
-            );
-          })}
+          {riddle.options.map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => pick(opt)}
+              disabled={picked !== null}
+              className={`relative rounded-2xl border-2 p-4 text-sm font-semibold transition-all duration-150 ${toneOf(opt)}`}
+            >
+              {opt}
+            </button>
+          ))}
         </div>
+
+        <p role="status" className="sr-only">
+          {verdict ? (verdict.correct ? 'Correct' : `Not quite. The answer is ${verdict.correctAnswer}.`) : ''}
+        </p>
       </div>
     </div>
   );

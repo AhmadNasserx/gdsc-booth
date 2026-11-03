@@ -2,15 +2,21 @@
 
 import { useState, useEffect, useRef } from 'react';
 import type { BatchResponse, ReviewItem, RunResult, TriviaView } from '@/lib/apiTypes';
+import { buzz, isVerdictReply, runInOrder, VERDICT_WAIT_MS, type CheckFn, type Verdict } from './verdict';
 
 const GAME_SECS = 35;
+// Brief flash after a pick when there is no check to wait for.
 const ANSWER_FLASH_MS = 200;
+// How long the right/wrong verdict stays on screen. The clock keeps running, so it is kept short.
+const VERDICT_MS = 450;
 
 type Phase = 'start' | 'play' | 'checking' | 'review';
 
 interface Props {
   questions: TriviaView[];
   act: (body: { answers: (string | null)[] }) => Promise<BatchResponse>;
+  /** Checks each pick as it is made. Optional: without it the answers are only sent in the final batch. */
+  check?: CheckFn;
   onDone: (result: RunResult) => void;
 }
 
@@ -22,10 +28,12 @@ function errorMessage(err: unknown): string {
   return err instanceof Error && err.message ? err.message : 'Something went wrong. Please try again.';
 }
 
-export default function TechTrivia({ questions, act, onDone }: Props) {
+export default function TechTrivia({ questions, act, check, onDone }: Props) {
   const [phase, setPhase] = useState<Phase>('start');
   const [idx, setIdx] = useState(0);
   const [chosen, setChosen] = useState<string | null>(null);
+  // Right or wrong for the locked-in option, once the server has replied.
+  const [verdict, setVerdict] = useState<Verdict | null>(null);
   const [timeLeft, setTimeLeft] = useState(GAME_SECS);
   const [picks, setPicks] = useState<(string | null)[]>([]);
   const [review, setReview] = useState<ReviewItem[] | null>(null);
@@ -40,12 +48,23 @@ export default function TechTrivia({ questions, act, onDone }: Props) {
   const resultRef = useRef<RunResult | null>(null);
   const doneRef = useRef(false);
   const advanceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Counts the picks. A timer or reply from an earlier pick checks it and does nothing if it moved on.
+  const pickSeqRef = useRef(0);
+  const checkQueueRef = useRef<Promise<unknown>>(Promise.resolve());
 
   useEffect(() => {
     return () => {
+      pickSeqRef.current += 1;
       if (advanceRef.current) clearTimeout(advanceRef.current);
     };
   }, []);
+
+  function clearAdvance() {
+    if (advanceRef.current) {
+      clearTimeout(advanceRef.current);
+      advanceRef.current = null;
+    }
+  }
 
   // Sends every pick in one batch. Runs once when the round ends; a failed send can be retried
   // with the same answers, because the server treats a repeated batch as idempotent.
@@ -81,24 +100,55 @@ export default function TechTrivia({ questions, act, onDone }: Props) {
     answersRef.current[q] = opt;
     chosenRef.current = opt;
     setChosen(opt);
-    advanceRef.current = setTimeout(() => {
+    const seq = pickSeqRef.current;
+
+    // Moves on from this pick. Does nothing if the pick was already left.
+    const leave = () => {
+      if (pickSeqRef.current !== seq) return;
+      pickSeqRef.current = seq + 1;
       advanceRef.current = null;
       chosenRef.current = null;
       setChosen(null);
+      setVerdict(null);
       if (q + 1 >= questions.length) {
         submitRound();
       } else {
         setIdx(q + 1);
       }
-    }, ANSWER_FLASH_MS);
+    };
+
+    if (!check) {
+      advanceRef.current = setTimeout(leave, ANSWER_FLASH_MS);
+      return;
+    }
+
+    // If the verdict is slow, the game moves on without it. The reply is then ignored.
+    advanceRef.current = setTimeout(leave, VERDICT_WAIT_MS);
+    runInOrder(checkQueueRef, () => check({ check: { index: q, answer: opt } })).then(
+      (reply) => {
+        // Time may have run out while the check was in flight. The round is then already on its way.
+        if (pickSeqRef.current !== seq || frozenRef.current) return;
+        clearAdvance();
+        if (!isVerdictReply(reply)) {
+          advanceRef.current = setTimeout(leave, ANSWER_FLASH_MS);
+          return;
+        }
+        setVerdict({ option: opt, correct: reply.correct, correctAnswer: reply.correctAnswer });
+        buzz(reply.correct ? 30 : 80);
+        advanceRef.current = setTimeout(leave, VERDICT_MS);
+      },
+      () => {
+        // A failed check never blocks the round. The answer is still sent with the final batch.
+        if (pickSeqRef.current !== seq || frozenRef.current) return;
+        clearAdvance();
+        advanceRef.current = setTimeout(leave, ANSWER_FLASH_MS);
+      },
+    );
   }
 
   // Time ran out: keep whatever was picked (the pick is already recorded) and send the round now.
   function expire() {
-    if (advanceRef.current) {
-      clearTimeout(advanceRef.current);
-      advanceRef.current = null;
-    }
+    clearAdvance();
     frozenRef.current = true;
     submitRound();
   }
@@ -229,6 +279,28 @@ export default function TechTrivia({ questions, act, onDone }: Props) {
   const timerPct = (timeLeft / GAME_SECS) * 100;
   const timerColor = timeLeft <= 8 ? 'text-[#EA4335] bg-[#FCE8E6]' : timeLeft <= 17 ? 'text-[#FBBC04] bg-[#FEF9E5]' : 'text-[#34A853] bg-[#E6F4EA]';
 
+  // Look of one option. Before a verdict the picked option is neutral; after it, right and wrong show.
+  function toneOf(opt: string): string {
+    if (verdict && chosen === opt) {
+      return verdict.correct
+        ? 'anim-pop anim-flash-green bg-[#E6F4EA] border-[#34A853] text-[#137333]'
+        : 'anim-shake anim-flash-red bg-[#FCE8E6] border-[#EA4335] text-[#C5221F]';
+    }
+    if (verdict && verdict.correctAnswer === opt) return 'bg-[#E6F4EA] border-[#34A853] text-[#137333]';
+    if (chosen !== null) {
+      return chosen === opt
+        ? 'anim-pop bg-[#E8F0FE] border-[#1A73E8] text-[#1A73E8]'
+        : 'border-[#DADCE0] text-[#9AA0A6] bg-[#F8F9FA]';
+    }
+    return 'border-[#DADCE0] bg-white hover:border-[#1A73E8] hover:bg-[#E8F0FE]';
+  }
+
+  const pillTone = !verdict
+    ? 'border-[#1A73E8] bg-[#E8F0FE] text-[#1A73E8]'
+    : verdict.correct
+      ? 'border-[#34A853] bg-[#E6F4EA] text-[#137333]'
+      : 'border-[#EA4335] bg-[#FCE8E6] text-[#C5221F]';
+
   return (
     <div className="flex flex-col items-center w-full anim-slide-in">
       <div className="w-full flex justify-between items-center mb-4">
@@ -247,8 +319,8 @@ export default function TechTrivia({ questions, act, onDone }: Props) {
 
       <div className="w-full h-9 mb-3 flex items-center justify-center" role="status">
         {chosen !== null && (
-          <span className="rounded-xl border border-[#1A73E8] bg-[#E8F0FE] px-4 py-1.5 text-xs font-bold text-[#1A73E8]">
-            Locked in
+          <span className={`rounded-xl border px-4 py-1.5 text-xs font-bold ${pillTone}`}>
+            {verdict ? (verdict.correct ? 'Correct!' : 'Not quite') : 'Locked in'}
           </span>
         )}
       </div>
@@ -258,26 +330,17 @@ export default function TechTrivia({ questions, act, onDone }: Props) {
           <h3 className="text-base font-bold mb-5 text-[#202124] text-center">{q.question}</h3>
 
           <div className="w-full flex flex-col gap-2.5">
-            {q.options.map((opt) => {
-              const isChosen = opt === chosen;
-              return (
-                <button
-                  key={opt}
-                  type="button"
-                  onClick={() => pickOption(opt)}
-                  disabled={chosen !== null}
-                  className={`w-full p-3.5 text-left text-sm font-semibold border-2 rounded-2xl transition-all active:scale-[0.98] disabled:cursor-default ${
-                    chosen !== null
-                      ? isChosen
-                        ? 'bg-[#E8F0FE] border-[#1A73E8] text-[#1A73E8]'
-                        : 'border-[#DADCE0] text-[#9AA0A6] bg-[#F8F9FA]'
-                      : 'border-[#DADCE0] bg-white hover:border-[#1A73E8] hover:bg-[#E8F0FE]'
-                  }`}
-                >
-                  {opt}
-                </button>
-              );
-            })}
+            {q.options.map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => pickOption(opt)}
+                disabled={chosen !== null}
+                className={`relative w-full p-3.5 text-left text-sm font-semibold border-2 rounded-2xl transition-all active:scale-[0.98] disabled:cursor-default ${toneOf(opt)}`}
+              >
+                {opt}
+              </button>
+            ))}
           </div>
         </>
       )}

@@ -61,6 +61,7 @@ A public leaderboard with a prize at the end of the day is an open invitation to
 
 - **Answers stay on the server.** Correct answers and the Memory Match layout are never sent to the browser before the player has acted. Answers to Emoji Riddles and Tech Trivia never reach the browser before the player submits them, and the browser learns which were right only from the server's reply to that submission.
 - **Graded on the server.** Emoji Riddles and Tech Trivia are graded in one batch when the round ends: the browser sends all of its answers together, and the server grades them then. Memory Match is graded step by step, one card flip at a time. The server keeps each run's state in one transaction, so double taps can't count twice.
+- **Instant feedback, still graded on the server.** In Emoji Riddles and Tech Trivia, each pick is sent to the server as it is made. The server locks in the first answer for that question and replies right or wrong, so the screen can flash green or red at once. Only the question just answered is revealed, a repeat can't change the answer, and questions must be answered in order. The final batch still decides the score and the review.
 - **The server measures time.** Each run's duration is taken from the server's clock, not the browser's.
 - **One run at a time.** A run can be finished only once. Memory Match takes its flips one at a time, in order, with no retries. Each game can be played once and only in order, which the server checks against the leaderboard. Starting a new run of a game ends any earlier run of that game that is still open.
 - **Sessions expire.** Session tokens are encrypted, carry only the name and an issue time, and last 90 minutes.
@@ -90,7 +91,7 @@ Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS 4 · Firebase 
 | `POST /api/session` | Checks and reserves a display name and a phone number, and issues a session token (no game content) |
 | `GET /api/names/check` | Whether a display name is free, or already held by this browser |
 | `POST /api/game/start` | Starts a fresh run of one game and returns its questions or board, with no answers |
-| `POST /api/game/action` | Submits one action for a run (a batch of answers or a card flip) and returns the graded result |
+| `POST /api/game/action` | Submits one action for a run (one checked answer, a batch of answers or a card flip) and returns the graded result |
 | `POST /api/me` | The player's name, total, rank and score in each game |
 | `GET /api/leaderboard` | Leaderboard entries |
 | `GET /api/cron/cleanup` | Daily cleanup of expired names, phone numbers, contacts, leaderboard entries and game runs |

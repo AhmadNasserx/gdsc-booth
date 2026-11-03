@@ -7,7 +7,7 @@ import ResultScreen from '@/components/ResultScreen';
 import EmojiRiddles from '@/components/games/EmojiRiddles';
 import TechTrivia from '@/components/games/TechTrivia';
 import MemoryMatch from '@/components/games/MemoryMatch';
-import type { ActionBody, BatchResponse, FlipResponse, GameView, MeResponse, RunResult, StartResponse } from '@/lib/apiTypes';
+import type { ActionBody, BatchResponse, CheckBody, CheckResponse, FlipResponse, GameView, MeResponse, RunResult, StartResponse } from '@/lib/apiTypes';
 import { clearSession, getSession, setSessionNotice, useIsBrowser, type PlayerSession } from '@/lib/clientSession';
 import { GameApiError, fetchMe, sendAction, startGame } from '@/lib/gameClient';
 import { GAMES } from '@/lib/games';
@@ -24,6 +24,7 @@ type PlayingStage = {
   game: Tab;
   start: StartResponse;
   act: <R>(body: ActionBody) => Promise<R>;
+  check: (body: CheckBody) => Promise<CheckResponse>;
   onDone: (result: RunResult) => void;
 };
 
@@ -120,8 +121,15 @@ function PlayFlow() {
             onActionError(runId, error);
             throw error;
           });
+        // A refused check does not resume the game the way a refused action does. The run is still
+        // fine, and the batch at the end decides the result. An expired session still has to leave.
+        const check = (body: CheckBody): Promise<CheckResponse> =>
+          sendAction<CheckResponse>(token, runId, body).catch((error: unknown) => {
+            if (isSessionExpired(error)) expireSession();
+            throw error;
+          });
         const onDone = (result: RunResult) => finishRun(runId, game, result);
-        setStage({ kind: 'playing', game, start: started, act, onDone });
+        setStage({ kind: 'playing', game, start: started, act, check, onDone });
       } catch (error) {
         if (isSessionExpired(error)) {
           expireSession();
@@ -222,7 +230,7 @@ function PlayFlow() {
           <p className="text-xs font-bold text-[#5F6368] mb-4">
             {`Game ${TABS.indexOf(stage.game) + 1} of ${TABS.length}`}
           </p>
-          <div key={stage.start.runId}>{renderGame(stage.start.view, stage.act, stage.onDone)}</div>
+          <div key={stage.start.runId}>{renderGame(stage.start.view, stage.act, stage.check, stage.onDone)}</div>
         </Card>
       )}
 
@@ -261,14 +269,29 @@ function Card({ children }: { children: React.ReactNode }) {
 function renderGame(
   view: GameView,
   act: <R>(body: ActionBody) => Promise<R>,
+  check: (body: CheckBody) => Promise<CheckResponse>,
   onDone: (result: RunResult) => void,
 ) {
   switch (view.game) {
     case 'riddles':
-      return <EmojiRiddles questions={view.questions} act={(body) => act<BatchResponse>(body)} onDone={onDone} />;
+      return (
+        <EmojiRiddles
+          questions={view.questions}
+          act={(body) => act<BatchResponse>(body)}
+          check={check}
+          onDone={onDone}
+        />
+      );
     case 'memory':
       return <MemoryMatch cards={view.cards} act={(body) => act<FlipResponse>(body)} onDone={onDone} />;
     case 'trivia':
-      return <TechTrivia questions={view.questions} act={(body) => act<BatchResponse>(body)} onDone={onDone} />;
+      return (
+        <TechTrivia
+          questions={view.questions}
+          act={(body) => act<BatchResponse>(body)}
+          check={check}
+          onDone={onDone}
+        />
+      );
   }
 }

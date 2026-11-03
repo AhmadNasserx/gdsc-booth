@@ -142,3 +142,57 @@ export function readAnswers<T extends string | number>(
 export function answeredOf(answers: ReadonlyArray<unknown>): number {
   return answers.filter((value) => value !== null).length;
 }
+
+/** One question checked as it is answered: its place in the run and the option chosen. */
+export interface CheckAction {
+  index: number;
+  answer: string;
+}
+
+/**
+ * Reads `check` from a body. The index must be a whole number below `count` and the answer a string.
+ * Whether the answer is one of the question's options is for the game to decide. Throws RunError(400).
+ */
+export function readCheck(body: Record<string, unknown>, count: number): CheckAction {
+  const check: unknown = body.check;
+  if (!check || typeof check !== 'object' || Array.isArray(check)) throw new RunError(400, 'check must be an object');
+  const { index, answer } = check as Record<string, unknown>;
+  if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index >= count) {
+    throw new RunError(400, `check.index must be a question number from 0 to ${count - 1}`);
+  }
+  if (typeof answer !== 'string') throw new RunError(400, 'check.answer must be an option text');
+  return { index, answer };
+}
+
+/**
+ * Locks in the first answer to a question. Answers are kept in question order, so `given` covers
+ * questions 0 to n-1 and only question n can be answered next. A repeat for a question that has an
+ * answer returns the stored answer and ignores the one sent. The answer must be one of the options.
+ */
+export function lockAnswer(
+  given: readonly string[],
+  check: CheckAction,
+  options: readonly string[],
+): { given: string[]; locked: string } {
+  if (!options.includes(check.answer)) throw new RunError(400, 'answer is not one of the options');
+  if (check.index > given.length) throw new RunError(409, 'Answer the questions in order');
+  if (check.index < given.length) return { given: [...given], locked: given[check.index] };
+  return { given: [...given, check.answer], locked: check.answer };
+}
+
+/**
+ * The answer each question of a batch is graded with. A check recorded for a question wins over the
+ * batch's value for it. A question with neither is left open (null).
+ */
+export function mergeAnswers(
+  given: readonly string[],
+  batch: ReadonlyArray<string | null>,
+  count: number,
+): Array<string | null> {
+  return Array.from({ length: count }, (_, i) => given[i] ?? batch[i] ?? null);
+}
+
+/** Answers recorded so far, in question order. RTDB drops empty lists and can return them keyed by position. */
+export function givenOf(value: unknown): string[] {
+  return listOf<unknown>(value).filter((item): item is string => typeof item === 'string');
+}

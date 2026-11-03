@@ -1,8 +1,9 @@
-import type { GameView } from '../apiTypes';
+import type { CheckResponse, GameView } from '../apiTypes';
 import type { Tab } from '../types';
 import type { BatchAction, BatchReply, RandomInt, Step } from './shared';
-import { gradeRiddles, hydrateRiddles, parseRiddleBatch, startRiddles, type RiddleState } from './riddles';
-import { gradeTrivia, hydrateTrivia, parseTriviaBatch, startTrivia, type TriviaState } from './trivia';
+import { mergeAnswers } from './shared';
+import { checkRiddle, gradeRiddles, hydrateRiddles, parseRiddleBatch, startRiddles, type RiddleState } from './riddles';
+import { checkTrivia, gradeTrivia, hydrateTrivia, parseTriviaBatch, startTrivia, type TriviaState } from './trivia';
 import { applyMemoryFlip, hydrateMemory, parseMemoryAction, startMemory, type MemoryState } from './memory';
 
 export type GameState = RiddleState | TriviaState | MemoryState;
@@ -60,4 +61,18 @@ export function applyAction(state: GameState, parsed: ParsedAction): Step<GameSt
     case 'memory':
       return applyMemoryFlip(state as MemoryState, parsed.action) as Step<GameState, Record<string, unknown>>;
   }
+}
+
+/** Locks in one answer of a riddles or trivia run and replies for that question only. Pure. */
+export function checkQuestion(state: GameState, game: BatchGame, body: Record<string, unknown>): Step<GameState, CheckResponse> {
+  switch (game) {
+    case 'riddles': return checkRiddle(state as RiddleState, body) as Step<GameState, CheckResponse>;
+    case 'trivia': return checkTrivia(state as TriviaState, body) as Step<GameState, CheckResponse>;
+  }
+}
+
+/** The answers a batch is graded with: a check recorded for a question wins over the batch's value for it. */
+export function answersWithChecks(state: GameState, batch: ReadonlyArray<string | null>): Array<string | null> {
+  const quiz = state as RiddleState | TriviaState;
+  return mergeAnswers(quiz.given, batch, quiz.indices.length);
 }

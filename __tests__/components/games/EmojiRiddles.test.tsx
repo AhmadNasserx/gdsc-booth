@@ -197,3 +197,217 @@ describe('EmojiRiddles', () => {
     expect(mockAct).not.toHaveBeenCalled();
   });
 });
+
+describe('EmojiRiddles with a check per pick', () => {
+  const mockCheck = jest.fn();
+
+  beforeEach(() => {
+    mockCheck.mockReset();
+  });
+
+  // Lets the promise chain of a check (queue, reply, state update) run to the end.
+  async function settle() {
+    await act(async () => {
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    });
+  }
+
+  async function tapAndSettle(label: string) {
+    await tap(option(label));
+    await settle();
+  }
+
+  const isQuestion = (n: number) => screen.getByText(new RegExp(`Question ${n} of 4`, 'i'));
+
+  it('shows the pick and locks the options at once, and sends the check with its index and option', async () => {
+    mockCheck.mockReturnValueOnce(new Promise(() => {}));
+    render(<EmojiRiddles questions={questions} act={mockAct} check={mockCheck} onDone={jest.fn()} />);
+
+    await tap(option('Bug Bounty'));
+
+    expect(option('Bug Bounty')).toHaveClass('anim-pop');
+    expect(option('Web Crawler')).toBeDisabled();
+    expect(option('Bug Bounty')).toBeDisabled();
+    expect(mockCheck).toHaveBeenCalledTimes(1);
+    expect(mockCheck).toHaveBeenCalledWith({ check: { index: 0, answer: 'Bug Bounty' } });
+    expect(mockAct).not.toHaveBeenCalled();
+  });
+
+  it('turns a right pick green and moves on 600ms after the verdict, not before', async () => {
+    mockCheck.mockResolvedValueOnce({ index: 0, correct: true, correctAnswer: 'Web Crawler' });
+    render(<EmojiRiddles questions={questions} act={mockAct} check={mockCheck} onDone={jest.fn()} />);
+
+    await tapAndSettle('Web Crawler');
+
+    expect(option('Web Crawler')).toHaveClass('border-[#34A853]', 'anim-pop', 'anim-flash-green');
+    expect(option('Web Crawler')).not.toHaveClass('anim-shake');
+    expect(screen.getByRole('status')).toHaveTextContent('Correct');
+
+    await advance(599);
+    expect(isQuestion(1)).toBeInTheDocument();
+    await advance(1);
+    expect(isQuestion(2)).toBeInTheDocument();
+    expect(mockAct).not.toHaveBeenCalled();
+  });
+
+  it('turns a wrong pick red with the shake, and highlights the right answer green', async () => {
+    mockCheck.mockResolvedValueOnce({ index: 0, correct: false, correctAnswer: 'Web Crawler' });
+    render(<EmojiRiddles questions={questions} act={mockAct} check={mockCheck} onDone={jest.fn()} />);
+
+    await tapAndSettle('Bug Bounty');
+
+    expect(option('Bug Bounty')).toHaveClass('anim-shake', 'anim-flash-red', 'border-[#EA4335]');
+    expect(option('Web Crawler')).toHaveClass('border-[#34A853]', 'bg-[#E6F4EA]');
+    expect(option('Docker')).toHaveClass('text-[#9AA0A6]');
+    expect(screen.getByRole('status')).toHaveTextContent('Not quite. The answer is Web Crawler.');
+    expect(mockAct).not.toHaveBeenCalled();
+  });
+
+  it('moves on after 600ms from a wrong verdict, and sends the batch only at the end', async () => {
+    mockCheck.mockResolvedValue({ index: 0, correct: false, correctAnswer: 'Web Crawler' });
+    mockAct.mockReturnValueOnce(new Promise(() => {}));
+    render(<EmojiRiddles questions={questions} act={mockAct} check={mockCheck} onDone={jest.fn()} />);
+
+    await tapAndSettle('Bug Bounty');
+    await advance(600);
+    expect(isQuestion(2)).toBeInTheDocument();
+    expect(mockAct).not.toHaveBeenCalled();
+  });
+
+  it('gives a slow verdict up after 1200ms, moves on with the neutral look and ignores the late reply', async () => {
+    const late = deferred<unknown>();
+    mockCheck.mockReturnValueOnce(late.promise);
+    render(<EmojiRiddles questions={questions} act={mockAct} check={mockCheck} onDone={jest.fn()} />);
+
+    await tap(option('Bug Bounty'));
+    await advance(1199);
+    expect(isQuestion(1)).toBeInTheDocument();
+    await advance(1);
+    expect(isQuestion(2)).toBeInTheDocument();
+
+    await act(async () => {
+      late.resolve({ index: 0, correct: false, correctAnswer: 'Web Crawler' });
+    });
+    await settle();
+    // The late reply is for question 1, so question 2 keeps its neutral look.
+    expect(isQuestion(2)).toBeInTheDocument();
+    expect(option('Docker').className).not.toMatch(/anim-shake|anim-flash|border-\[#34A853\]|border-\[#EA4335\]/);
+    expect(screen.getByRole('status')).toHaveTextContent(/^$/);
+    expect(mockAct).not.toHaveBeenCalled();
+  });
+
+  it('a check that fails shows the neutral look, moves on after 250ms, and the answer still goes in the batch', async () => {
+    mockCheck.mockRejectedValue(new Error('Server busy'));
+    mockAct.mockReturnValueOnce(new Promise(() => {}));
+    render(<EmojiRiddles questions={questions} act={mockAct} check={mockCheck} onDone={jest.fn()} />);
+
+    await tapAndSettle('Web Crawler');
+    expect(option('Web Crawler')).toHaveClass('anim-pop');
+    expect(option('Web Crawler')).not.toHaveClass('anim-flash-green');
+    expect(option('Web Crawler')).not.toHaveClass('anim-flash-red');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+    await advance(249);
+    expect(isQuestion(1)).toBeInTheDocument();
+    await advance(1);
+    expect(isQuestion(2)).toBeInTheDocument();
+
+    for (const answer of ['Docker', 'SSL/TLS', 'Python']) {
+      await pickAndAdvance(answer);
+    }
+    expect(mockAct).toHaveBeenCalledWith({ answers: ANSWERS });
+  });
+
+  it('a reply without a verdict in it is treated as a failed check', async () => {
+    mockCheck.mockResolvedValueOnce({ index: 0 });
+    render(<EmojiRiddles questions={questions} act={mockAct} check={mockCheck} onDone={jest.fn()} />);
+
+    await tapAndSettle('Web Crawler');
+    expect(option('Web Crawler')).not.toHaveClass('anim-flash-green');
+    await advance(250);
+    expect(isQuestion(2)).toBeInTheDocument();
+  });
+
+  it('a check that throws on the call itself does not block the game', async () => {
+    mockCheck.mockImplementation(() => {
+      throw new Error('bad call');
+    });
+    render(<EmojiRiddles questions={questions} act={mockAct} check={mockCheck} onDone={jest.fn()} />);
+
+    await tapAndSettle('Web Crawler');
+    await advance(250);
+    expect(isQuestion(2)).toBeInTheDocument();
+  });
+
+  it('sends each check only after the one before it has settled, so the server sees the questions in order', async () => {
+    const first = deferred<unknown>();
+    mockCheck.mockReturnValueOnce(first.promise).mockReturnValueOnce(new Promise(() => {}));
+    render(<EmojiRiddles questions={questions} act={mockAct} check={mockCheck} onDone={jest.fn()} />);
+
+    await tap(option('Web Crawler'));
+    // The first verdict is slow: give up on it, then answer the next question while it is still out.
+    await advance(1200);
+    await tap(option('Docker'));
+    await settle();
+    expect(mockCheck).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      first.resolve({ index: 0, correct: true, correctAnswer: 'Web Crawler' });
+    });
+    await settle();
+    expect(mockCheck).toHaveBeenCalledTimes(2);
+    expect(mockCheck).toHaveBeenLastCalledWith({ check: { index: 1, answer: 'Docker' } });
+  });
+
+  it('gives a buzz on a verdict where vibration is available, and not where it is not', async () => {
+    const vibrate = jest.fn();
+    Object.defineProperty(navigator, 'vibrate', { value: vibrate, configurable: true });
+    try {
+      mockCheck.mockResolvedValueOnce({ index: 0, correct: true, correctAnswer: 'Web Crawler' });
+      mockCheck.mockResolvedValueOnce({ index: 1, correct: false, correctAnswer: 'Docker' });
+      render(<EmojiRiddles questions={questions} act={mockAct} check={mockCheck} onDone={jest.fn()} />);
+
+      await tapAndSettle('Web Crawler');
+      expect(vibrate).toHaveBeenLastCalledWith(30);
+      await advance(600);
+      await tapAndSettle('GitLab');
+      expect(vibrate).toHaveBeenLastCalledWith(80);
+    } finally {
+      delete (navigator as unknown as { vibrate?: unknown }).vibrate;
+    }
+  });
+
+  it('a verdict that arrives after the component has gone is ignored', async () => {
+    const late = deferred<unknown>();
+    mockCheck.mockReturnValueOnce(late.promise);
+    const { unmount } = render(<EmojiRiddles questions={questions} act={mockAct} check={mockCheck} onDone={jest.fn()} />);
+
+    await tap(option('Web Crawler'));
+    unmount();
+    await act(async () => {
+      late.resolve({ index: 0, correct: true, correctAnswer: 'Web Crawler' });
+    });
+    await advance(5000);
+    expect(mockAct).not.toHaveBeenCalled();
+  });
+
+  it('plays a whole round with checks and sends the final batch once', async () => {
+    mockCheck.mockImplementation(async ({ check: { index, answer } }: { check: { index: number; answer: string } }) => ({
+      index,
+      correct: answer === ANSWERS[index],
+      correctAnswer: ANSWERS[index],
+    }));
+    mockAct.mockResolvedValueOnce(batch(ANSWERS.map((a) => ({ answered: true, correct: true, correctAnswer: a }))));
+    render(<EmojiRiddles questions={questions} act={mockAct} check={mockCheck} onDone={jest.fn()} />);
+
+    for (const answer of ANSWERS) {
+      await tapAndSettle(answer);
+      await advance(600);
+    }
+
+    expect(mockCheck).toHaveBeenCalledTimes(4);
+    expect(mockAct).toHaveBeenCalledTimes(1);
+    expect(mockAct).toHaveBeenCalledWith({ answers: ANSWERS });
+    expect(screen.getByRole('heading', { name: 'Your answers' })).toBeInTheDocument();
+  });
+});

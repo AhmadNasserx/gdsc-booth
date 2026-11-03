@@ -22,8 +22,19 @@ export type GameView =
 export interface StartResponse { runId: string; view: GameView }
 
 // ---- actions (POST /api/game/action body = { token, runId, ...action }) ----
+
+/**
+ * riddles and trivia: check one question as it is answered. The server locks in the first answer
+ * for that question and replies with whether it was right. `index` is the question's place in the run.
+ */
+export interface CheckBody { check: { index: number; answer: string } }
+
+/** Reply to a check. Only the checked question is revealed. The run is not finished by a check. */
+export type CheckResponse = { index: number; correct: boolean; correctAnswer: string; explanation?: string };
+
 export type ActionBody =
   | { answers: (string | number | null)[] }  // riddles and trivia (option text). The whole run in one submission; null = unanswered
+  | CheckBody                                // riddles and trivia: one question checked as it is answered
   | { flip: number };                        // memory: card index 0..15
 
 /** One entry per question of a batch-graded run. Sent in BatchResponse, for every question. */

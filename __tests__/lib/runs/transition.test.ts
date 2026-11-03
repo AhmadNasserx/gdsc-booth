@@ -208,3 +208,114 @@ describe('transition: a finished batch', () => {
     expect(t.kind).toBe('settle');
   });
 });
+
+describe('transition: per-question checks', () => {
+  const RIGHT = (run: RunRecord) => (run.state as { indices: number[] }).indices.map((i) => RIDDLE_POOL[i].answer);
+  const checkBody = (index: number, answer: string) => ({ check: { index, answer } });
+
+  it('answers the question with a checked result: the run stays active and nothing is finished', () => {
+    const run = frozen(runFor('riddles'));
+    const t = transition(run, SESSION, checkBody(0, RIGHT(run)[0]), T0 + 1000);
+    expect(t.kind).toBe('checked');
+    if (t.kind !== 'checked') return;
+    expect(t.response).toEqual({ index: 0, correct: true, correctAnswer: RIGHT(run)[0] });
+    expect(t.next).toMatchObject({ status: 'active', lastActionAt: T0 });
+    expect(t.next.final).toBeUndefined();
+    expect((t.next.state as { given: string[] }).given).toEqual([RIGHT(run)[0]]);
+  });
+
+  it('is not held up by the throttle, and does not move the clock the batch is timed from', () => {
+    const run = runFor('riddles');
+    // Right after the start, when a batch would be "Too fast" under the throttle.
+    expect(statusOf(() => transition(run, SESSION, checkBody(0, RIGHT(run)[0]), T0 + 1))).toBeUndefined();
+    const t = transition(run, SESSION, checkBody(0, RIGHT(run)[0]), T0 + 1);
+    expect(t.kind === 'checked' && t.next.lastActionAt).toBe(T0);
+  });
+
+  it('a repeat check gives the stored reply and the run state is not changed by the other option', () => {
+    const run = runFor('riddles');
+    const wrong = RIDDLE_POOL[(run.state as { indices: number[] }).indices[0]].options.find((o) => o !== RIGHT(run)[0]) as string;
+    const first = transition(run, SESSION, checkBody(0, wrong), T0 + 1000);
+    if (first.kind !== 'checked') throw new Error('expected a check');
+    const again = transition(first.next, SESSION, checkBody(0, RIGHT(run)[0]), T0 + 2000);
+    expect(again).toMatchObject({ kind: 'checked', response: { correct: false } });
+    if (again.kind === 'checked') expect((again.next.state as { given: string[] }).given).toEqual([wrong]);
+  });
+
+  it('an out-of-order check is 409', () => {
+    const run = runFor('riddles');
+    expect(statusOf(() => transition(run, SESSION, checkBody(1, RIGHT(run)[1]), T0 + 1000))).toBe(409);
+  });
+
+  it('a malformed check is 400 and does not change the run', () => {
+    const run = frozen(runFor('riddles'));
+    expect(statusOf(() => transition(run, SESSION, { check: { index: 0 } }, T0 + 1000))).toBe(400);
+    expect(statusOf(() => transition(run, SESSION, checkBody(0, 'Not An Option'), T0 + 1000))).toBe(400);
+  });
+
+  it('a check for a trivia question works the same way', () => {
+    const run = runFor('trivia');
+    const answer = TRIVIA_POOL[(run.state as { indices: number[] }).indices[0]].answer;
+    const t = transition(run, SESSION, checkBody(0, answer), T0 + 1000);
+    expect(t).toMatchObject({ kind: 'checked', response: { index: 0, correct: true, correctAnswer: answer } });
+  });
+
+  it('a check for a memory run is 400', () => {
+    expect(statusOf(() => transition(runFor('memory'), SESSION, checkBody(0, 'x'), T0 + 1000))).toBe(400);
+  });
+
+  it('a body with both a check and answers is 400', () => {
+    const run = runFor('riddles');
+    expect(statusOf(() => transition(run, SESSION, { ...checkBody(0, RIGHT(run)[0]), answers: [null, null, null, null, null] }, T0 + 1000))).toBe(400);
+  });
+
+  it('a check on a finished run is 409, settled or not', () => {
+    const settled = runFor('riddles', { status: 'done', final: { score: 1, durationMs: 1, response: {}, settled: true } });
+    const unsettled = runFor('riddles', { status: 'done', final: { score: 1, durationMs: 1, response: {}, settled: false } });
+    expect(statusOf(() => transition(settled, SESSION, checkBody(0, 'x'), T0 + 9000))).toBe(409);
+    expect(statusOf(() => transition(unsettled, SESSION, checkBody(0, 'x'), T0 + 9000))).toBe(409);
+  });
+
+  it('a check on an abandoned or expired run is 409', () => {
+    const abandoned = runFor('riddles', { status: 'abandoned' });
+    const expired = runFor('riddles', { expiresAt: T0 + 1000 });
+    expect(statusOf(() => transition(abandoned, SESSION, checkBody(0, 'x'), T0 + 1000))).toBe(409);
+    expect(statusOf(() => transition(expired, SESSION, checkBody(0, 'x'), T0 + 1000))).toBe(409);
+  });
+
+  it('a check from another session is 404', () => {
+    expect(statusOf(() => transition(runFor('riddles'), 'other', checkBody(0, 'x'), T0 + 1000))).toBe(404);
+  });
+
+  it('the batch cannot skip its wait by checking first: checked answers count toward the 500ms per answer', () => {
+    const base = runFor('riddles');
+    const answers = RIGHT(base);
+    let run: RunRecord = base;
+    for (let i = 0; i < 5; i++) {
+      const t = transition(run, SESSION, checkBody(i, answers[i]), T0 + 10);
+      if (t.kind !== 'checked') throw new Error('expected a check');
+      run = t.next;
+    }
+    // Five answers locked in, so the batch needs 2500ms since the start even though it sends nothing.
+    expect(statusOf(() => transition(run, SESSION, { answers: [null, null, null, null, null] }, T0 + 2499))).toBe(429);
+    expect(statusOf(() => transition(run, SESSION, { answers: [null, null, null, null, null] }, T0 + 2500))).toBeUndefined();
+  });
+
+  it('a batch after checks is graded with the locked-in answers and scores the run', () => {
+    const base = runFor('riddles');
+    const answers = RIGHT(base);
+    const checked = transition(base, SESSION, checkBody(0, answers[0]), T0 + 100);
+    if (checked.kind !== 'checked') throw new Error('expected a check');
+    const t = transition(checked.next, SESSION, { answers: [null, null, null, null, null] }, T0 + 3000);
+    expect(t).toMatchObject({ kind: 'applied', finished: true });
+    if (t.kind !== 'applied') return;
+    expect(t.next.final?.response.results).toEqual([
+      { answered: true, correct: true, correctAnswer: answers[0] },
+      { answered: false, correct: false, correctAnswer: answers[1] },
+      { answered: false, correct: false, correctAnswer: answers[2] },
+      { answered: false, correct: false, correctAnswer: answers[3] },
+      { answered: false, correct: false, correctAnswer: answers[4] },
+    ]);
+    expect(t.next.final?.score).toBe(calcRunScore('riddles', 1 / 5, 3000));
+  });
+});

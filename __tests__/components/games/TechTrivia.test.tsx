@@ -315,3 +315,163 @@ describe('TechTrivia', () => {
     expect(onDone).not.toHaveBeenCalled();
   });
 });
+
+describe('TechTrivia with a check per pick', () => {
+  const mockCheck = jest.fn();
+
+  beforeEach(() => {
+    mockCheck.mockReset();
+  });
+
+  // Lets the promise chain of a check (queue, reply, state update) run to the end.
+  async function settle() {
+    await act(async () => {
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    });
+  }
+
+  async function tapAndSettle(label: string) {
+    await tap(option(label));
+    await settle();
+  }
+
+  it('shows the pick at once, locks the options and sends the check with its index and option', async () => {
+    mockCheck.mockReturnValueOnce(new Promise(() => {}));
+    render(<TechTrivia questions={questions} act={mockAct} check={mockCheck} onDone={jest.fn()} />);
+    startGame();
+
+    await tap(option(GDSC));
+
+    expect(option(GDSC)).toHaveClass('anim-pop');
+    expect(option('Global Data Science Center')).toBeDisabled();
+    expect(mockCheck).toHaveBeenCalledWith({ check: { index: 0, answer: GDSC } });
+    expect(mockAct).not.toHaveBeenCalled();
+  });
+
+  it('turns a right pick green and moves on 450ms after the verdict', async () => {
+    mockCheck.mockResolvedValueOnce({ index: 0, correct: true, correctAnswer: GDSC });
+    render(<TechTrivia questions={questions} act={mockAct} check={mockCheck} onDone={jest.fn()} />);
+    startGame();
+
+    await tapAndSettle(GDSC);
+
+    expect(option(GDSC)).toHaveClass('border-[#34A853]', 'anim-pop', 'anim-flash-green');
+    expect(screen.getByText('Correct!')).toBeInTheDocument();
+
+    await advance(449);
+    expect(screen.getByText(/^Q1$/)).toBeInTheDocument();
+    await advance(1);
+    expect(screen.getByText(/^Q2$/)).toBeInTheDocument();
+    expect(mockAct).not.toHaveBeenCalled();
+  });
+
+  it('turns a wrong pick red with the shake, and highlights the right answer green', async () => {
+    mockCheck.mockResolvedValueOnce({ index: 0, correct: false, correctAnswer: GDSC });
+    render(<TechTrivia questions={questions} act={mockAct} check={mockCheck} onDone={jest.fn()} />);
+    startGame();
+
+    await tapAndSettle('Global Data Science Center');
+
+    expect(option('Global Data Science Center')).toHaveClass('anim-shake', 'anim-flash-red', 'border-[#EA4335]');
+    expect(option(GDSC)).toHaveClass('border-[#34A853]', 'bg-[#E6F4EA]');
+    expect(screen.getByText('Not quite')).toBeInTheDocument();
+    expect(mockAct).not.toHaveBeenCalled();
+  });
+
+  it('gives a slow verdict up after 1200ms, moves on, and ignores the late reply', async () => {
+    const late = deferred<unknown>();
+    mockCheck.mockReturnValueOnce(late.promise);
+    render(<TechTrivia questions={questions} act={mockAct} check={mockCheck} onDone={jest.fn()} />);
+    startGame();
+
+    await tap(option(GDSC));
+    await advance(1199);
+    expect(screen.getByText(/^Q1$/)).toBeInTheDocument();
+    await advance(1);
+    expect(screen.getByText(/^Q2$/)).toBeInTheDocument();
+
+    await act(async () => {
+      late.resolve({ index: 0, correct: true, correctAnswer: GDSC });
+    });
+    await settle();
+    // The late reply is for question 1, so question 2 keeps its neutral look.
+    expect(screen.getByText(/^Q2$/)).toBeInTheDocument();
+    expect(option(FLUTTER).className).not.toMatch(/anim-flash|border-\[#34A853\]|border-\[#EA4335\]/);
+    expect(screen.queryByText('Correct!')).not.toBeInTheDocument();
+    expect(mockAct).not.toHaveBeenCalled();
+  });
+
+  it('a check that fails shows the neutral look, moves on after the usual flash, and the picks still go in the batch', async () => {
+    mockCheck.mockRejectedValue(new Error('Server busy'));
+    mockAct.mockReturnValueOnce(new Promise(() => {}));
+    render(<TechTrivia questions={questions} act={mockAct} check={mockCheck} onDone={jest.fn()} />);
+    startGame();
+
+    await tapAndSettle(GDSC);
+    expect(screen.getByText('Locked in')).toBeInTheDocument();
+    expect(option(GDSC)).not.toHaveClass('anim-flash-green');
+    expect(option(GDSC)).not.toHaveClass('anim-flash-red');
+
+    await advance(200);
+    expect(screen.getByText(/^Q2$/)).toBeInTheDocument();
+
+    await pickAndAdvance(FLUTTER);
+    await pickAndAdvance(GEMINI);
+    expect(mockAct).toHaveBeenCalledWith({ answers: [GDSC, FLUTTER, GEMINI] });
+  });
+
+  it('when time runs out while a check is still out, the round is sent with the picks so far, once', async () => {
+    const late = deferred<unknown>();
+    mockCheck.mockReturnValueOnce(late.promise);
+    mockAct.mockReturnValueOnce(new Promise(() => {}));
+    render(<TechTrivia questions={questions} act={mockAct} check={mockCheck} onDone={jest.fn()} />);
+    startGame();
+
+    for (let i = 0; i < 34; i++) {
+      await advance(1000);
+    }
+    await advance(900);
+    await tap(option(GDSC));
+    await advance(100);
+    await advance(5000);
+
+    expect(mockAct).toHaveBeenCalledTimes(1);
+    expect(mockAct).toHaveBeenCalledWith({ answers: [GDSC, null, null] });
+
+    // The reply comes after the round has gone: it changes nothing and sends nothing.
+    await act(async () => {
+      late.resolve({ index: 0, correct: true, correctAnswer: GDSC });
+    });
+    await advance(5000);
+    expect(mockAct).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Checking your answers…')).toBeInTheDocument();
+  });
+
+  it('plays a whole round with checks and sends the final batch once', async () => {
+    const answers = [GDSC, FLUTTER, GEMINI];
+    const correct = [GDSC, FLUTTER, GEMINI];
+    mockCheck.mockImplementation(async ({ check: { index, answer } }: { check: { index: number; answer: string } }) => ({
+      index,
+      correct: answer === correct[index],
+      correctAnswer: correct[index],
+    }));
+    mockAct.mockResolvedValueOnce(
+      batchReply(answers.map((a) => ({ answered: true, correct: true, correctAnswer: a }))),
+    );
+    const onDone = jest.fn();
+    render(<TechTrivia questions={questions} act={mockAct} check={mockCheck} onDone={onDone} />);
+    startGame();
+
+    for (const answer of answers) {
+      await tapAndSettle(answer);
+      await advance(450);
+    }
+
+    expect(mockCheck).toHaveBeenCalledTimes(3);
+    expect(mockAct).toHaveBeenCalledTimes(1);
+    expect(mockAct).toHaveBeenCalledWith({ answers });
+    expect(screen.getByText('3 correct')).toBeInTheDocument();
+    await tap(screen.getByRole('button', { name: 'Continue' }));
+    expect(onDone).toHaveBeenCalledWith(result);
+  });
+});

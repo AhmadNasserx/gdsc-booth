@@ -676,3 +676,163 @@ describe('transactions that start from a cache miss', () => {
     expect(readPath('leaderboard/ahmad')).toMatchObject({ games: { riddles: last.data.result.score, trivia: res.data.result.score } });
   });
 });
+
+describe('riddles and trivia: checking one question at a time', () => {
+  const checkOf = (runId: string, index: number) => (run(runId).state.indices as number[])[index];
+  const rightOf = (runId: string, index: number) => RIDDLE_POOL[checkOf(runId, index)].answer;
+  const wrongRiddleOf = (runId: string, index: number) =>
+    RIDDLE_POOL[checkOf(runId, index)].options.find((o) => o !== RIDDLE_POOL[checkOf(runId, index)].answer) as string;
+
+  it('replies with the result of the checked question only, and leaves the run open', async () => {
+    const { token } = login();
+    const { runId } = await start('riddles', token);
+    tick(1000);
+    const res = await act(token, runId, { check: { index: 0, answer: rightOf(runId, 0) } });
+    expect(res.status).toBe(200);
+    expect(res.data).toEqual({ index: 0, correct: true, correctAnswer: rightOf(runId, 0) });
+    expect(res.data).not.toHaveProperty('done');
+    expect(res.data).not.toHaveProperty('result');
+    expect(run(runId)).toMatchObject({ status: 'active', state: { given: [rightOf(runId, 0)] } });
+  });
+
+  it('a wrong check reveals the answer for that question and nothing about the others', async () => {
+    const { token } = login();
+    const { runId } = await start('riddles', token);
+    tick(1000);
+    const res = await act(token, runId, { check: { index: 0, answer: wrongRiddleOf(runId, 0) } });
+    expect(res.data).toEqual({ index: 0, correct: false, correctAnswer: rightOf(runId, 0) });
+    expect(JSON.stringify(res.data)).not.toContain(rightOf(runId, 1));
+  });
+
+  it('is not held up by the throttle: a check can follow the start at once', async () => {
+    const { token } = login();
+    const { runId } = await start('riddles', token);
+    const res = await act(token, runId, { check: { index: 0, answer: rightOf(runId, 0) } });
+    expect(res.status).toBe(200);
+  });
+
+  it('does not move the clock the batch is timed from', async () => {
+    const { token } = login();
+    const { runId } = await start('riddles', token);
+    const lastActionAt = run(runId).lastActionAt;
+    tick(1000);
+    await act(token, runId, { check: { index: 0, answer: rightOf(runId, 0) } });
+    expect(run(runId).lastActionAt).toBe(lastActionAt);
+  });
+
+  it('a repeat check returns the stored reply whatever option it sends, and the answer does not change', async () => {
+    const { token } = login();
+    const { runId } = await start('riddles', token);
+    tick(1000);
+    const first = await act(token, runId, { check: { index: 0, answer: wrongRiddleOf(runId, 0) } });
+    tick(1000);
+    const again = await act(token, runId, { check: { index: 0, answer: rightOf(runId, 0) } });
+    expect(again.status).toBe(200);
+    expect(again.data).toEqual(first.data);
+    expect(again.data.correct).toBe(false);
+    expect(run(runId).state.given).toEqual([wrongRiddleOf(runId, 0)]);
+  });
+
+  it('an out-of-order check is 409 and changes nothing', async () => {
+    const { token } = login();
+    const { runId } = await start('riddles', token);
+    tick(1000);
+    const res = await act(token, runId, { check: { index: 2, answer: rightOf(runId, 2) } });
+    expect(res.status).toBe(409);
+    expect(run(runId).state.given).toBeUndefined();
+  });
+
+  it('a check that is not a valid index or option is 400', async () => {
+    const { token } = login();
+    const { runId } = await start('riddles', token);
+    tick(1000);
+    expect((await act(token, runId, { check: { index: '0', answer: rightOf(runId, 0) } })).status).toBe(400);
+    expect((await act(token, runId, { check: { index: 0, answer: 'Not An Option' } })).status).toBe(400);
+    expect((await act(token, runId, { check: { index: 5, answer: 'Docker' } })).status).toBe(400);
+    expect(run(runId).status).toBe('active');
+  });
+
+  it('a check for a memory run is 400', async () => {
+    const { token } = login();
+    const { runId } = await start('memory', token);
+    tick(1000);
+    expect((await act(token, runId, { check: { index: 0, answer: 'x' } })).status).toBe(400);
+  });
+
+  it('a check sent with answers is 400', async () => {
+    const { token } = login();
+    const { runId } = await start('riddles', token);
+    tick(1000);
+    const res = await act(token, runId, { check: { index: 0, answer: rightOf(runId, 0) }, answers: [null, null, null, null, null] });
+    expect(res.status).toBe(400);
+  });
+
+  it('a check after the run has finished is 409', async () => {
+    const { token } = login();
+    const { runId } = await start('riddles', token);
+    tick(3000);
+    await act(token, runId, NONE5);
+    tick();
+    const res = await act(token, runId, { check: { index: 0, answer: rightOf(runId, 0) } });
+    expect(res.status).toBe(409);
+    expect(res.data).toEqual({ error: 'This game is already finished' });
+  });
+
+  it('the batch is graded with the answers locked in by checks, and the leaderboard gets that score', async () => {
+    const { token } = login();
+    const { runId } = await start('riddles', token);
+    const startedAt = run(runId).startedAt;
+    tick(1000);
+    await act(token, runId, { check: { index: 0, answer: rightOf(runId, 0) } });
+    tick(1000);
+    await act(token, runId, { check: { index: 1, answer: wrongRiddleOf(runId, 1) } });
+    tick(2000);
+    // The batch leaves both open. The checks still count.
+    const res = await act(token, runId, NONE5);
+    expect(res.status).toBe(200);
+    expect(res.data.results.slice(0, 2)).toEqual([
+      { answered: true, correct: true, correctAnswer: rightOf(runId, 0) },
+      { answered: true, correct: false, correctAnswer: rightOf(runId, 1) },
+    ]);
+    expect(res.data.result.score).toBe(calcRunScore('riddles', 1 / 5, clock.now - startedAt));
+    expect(readPath('leaderboard/ahmad')).toMatchObject({ games: { riddles: res.data.result.score } });
+  });
+
+  it('a batch with too few seconds since the start is refused even after checks', async () => {
+    const { token } = login();
+    const { runId } = await start('riddles', token);
+    for (let i = 0; i < 5; i++) {
+      await act(token, runId, { check: { index: i, answer: rightOf(runId, i) } });
+    }
+    tick(1000);
+    // Five answers are locked in, so 2500ms are needed since the start. Only 1000ms have passed.
+    const res = await act(token, runId, NONE5);
+    expect(res.status).toBe(429);
+    expect(res.data).toEqual({ error: 'Too fast' });
+    expect(run(runId).status).toBe('active');
+  });
+
+  it('a trivia check is graded in the batch the same way', async () => {
+    const { token } = login();
+    const { runId } = await start('trivia', token);
+    const indices: number[] = run(runId).state.indices;
+    const answer = TRIVIA_POOL[indices[0]].answer;
+    tick(3000);
+    const checked = await act(token, runId, { check: { index: 0, answer } });
+    expect(checked.data).toEqual({ index: 0, correct: true, correctAnswer: answer });
+    tick(3000);
+    const res = await act(token, runId, { answers: [null] });
+    expect(res.status).toBe(200);
+    expect(res.data.results[0]).toEqual({ answered: true, correct: true, correctAnswer: answer });
+    expect(res.data.result.score).toBeGreaterThan(0);
+  });
+
+  it('a check is a single transaction on the run record', async () => {
+    const { token } = login();
+    const { runId } = await start('riddles', token);
+    tick(1000);
+    const ops = trackOps();
+    expect((await act(token, runId, { check: { index: 0, answer: rightOf(runId, 0) } })).status).toBe(200);
+    expect(ops).toEqual([`transaction runs/${runId}`]);
+  });
+});
