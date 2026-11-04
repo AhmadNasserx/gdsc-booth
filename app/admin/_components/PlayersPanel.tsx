@@ -151,12 +151,12 @@ export default function PlayersPanel({ players, onChanged, onUnauthorized }: Pro
 
   return (
     <section aria-labelledby="players-heading" className={CARD}>
-      <h2 id="players-heading" className="text-lg font-extrabold text-[#202124]">
+      <h2 id="players-heading" className="text-lg font-extrabold text-ink">
         Players
       </h2>
 
       <div className="mt-4">
-        <label htmlFor={`${idBase}-search`} className="mb-1.5 block text-sm font-semibold text-[#202124]">
+        <label htmlFor={`${idBase}-search`} className="mb-1.5 block text-sm font-semibold text-ink">
           Search players by name
         </label>
         <input
@@ -177,9 +177,9 @@ export default function PlayersPanel({ players, onChanged, onUnauthorized }: Pro
       ) : (
         <ul className="mt-4 grid gap-3 md:grid-cols-2">
           {visible.map((player) => (
-            <li key={player.key} className="rounded-2xl border border-[#E8EAED] bg-[#F8F9FA] p-4">
-              <p className="break-words text-lg font-bold text-[#202124]">{player.name}</p>
-              <p className="mt-1 text-base text-[#202124]">
+            <li key={player.key} className="rounded-2xl border border-line bg-mist p-4">
+              <p className="break-words text-lg font-bold text-ink">{player.name}</p>
+              <p className="mt-1 text-base text-ink">
                 <span className="font-black tabular-nums">{player.score}</span> points in total
               </p>
               <p className={SUBTLE_TEXT}>{player.gamesPlayed} of 3 games</p>
@@ -202,7 +202,7 @@ export default function PlayersPanel({ players, onChanged, onUnauthorized }: Pro
                       const error = editErrors[key];
                       return (
                         <div key={key} className="min-w-0">
-                          <label htmlFor={inputId} className="mb-1 block text-sm font-semibold text-[#202124]">
+                          <label htmlFor={inputId} className="mb-1 block text-sm font-semibold text-ink">
                             {GAME_LABELS[key]}
                           </label>
                           <input
@@ -267,7 +267,7 @@ export default function PlayersPanel({ players, onChanged, onUnauthorized }: Pro
 
       {removing && (
         <Dialog titleId={removeTitleId} title="Delete player?" onClose={closeRemove}>
-          <p className="mt-3 text-base text-[#5F6368]">
+          <p className="mt-3 text-base text-muted">
             Delete {removing.name}? Their score, name, phone number and contact are removed so they
             can play again. This cannot be undone.
           </p>

@@ -121,7 +121,18 @@ describe('buildWinnerRounds', () => {
       contacts: { ann: contact('Ann', '+96170111222') },
       prizes: {},
     });
-    expect(rounds[0].winners[0]).toMatchObject({ normKey: 'ann', phone: '+96170111222' });
+    expect(rounds[0].winners[0]).toMatchObject({ normKey: 'ann', phone: '+96170111222', school: null, level: null });
+  });
+
+  it('adds the school and class from the contact', () => {
+    const rounds = buildWinnerRounds({
+      startedAt: START,
+      now: START + ROUND_MS + 1,
+      entries: { ann: finished('Ann', 900, hourAt(1)) },
+      contacts: { ann: { ...contact('Ann', '+96170111222'), school: 'Al Iman School', grade: '11', track: 'scientific' } },
+      prizes: {},
+    });
+    expect(rounds[0].winners[0]).toMatchObject({ school: 'Al Iman School', level: 'Grade 11 · Scientific' });
   });
 
   it('gives a null phone for an expired contact', () => {

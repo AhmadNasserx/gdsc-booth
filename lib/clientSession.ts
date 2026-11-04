@@ -25,7 +25,7 @@ const GENERIC_ERROR = 'Something went wrong. Please try again.';
 const STORAGE_ERROR = "Couldn't save your session. Check that your browser allows site storage.";
 
 /** The form field a failed start refers to, when the server says which one. */
-export type StartSessionField = 'name' | 'phone' | 'consent';
+export type StartSessionField = 'name' | 'phone' | 'consent' | 'school' | 'grade' | 'lang';
 
 export type StartSessionResult =
   | { ok: true }
@@ -117,6 +117,38 @@ export function savePhone(phone: SavedPhone): void {
   }
 }
 
+/** The school and class typed on the home page, remembered for the next visit like the name. */
+export interface SavedProfile {
+  school: string;
+  /** True when the school was typed because it is not in the list. */
+  other: boolean;
+  grade: string;
+  track: string;
+}
+
+export const PLAYER_PROFILE_STORAGE = 'bauPlayerProfile';
+
+/** The school and class used last time in this browser, or null. */
+export function getSavedProfile(): SavedProfile | null {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(PLAYER_PROFILE_STORAGE) ?? 'null');
+    if (!parsed || typeof parsed !== 'object') return null;
+    const { school, other, grade, track } = parsed as Record<string, unknown>;
+    if (typeof school !== 'string' || typeof grade !== 'string' || typeof track !== 'string') return null;
+    return { school, other: other === true, grade, track };
+  } catch {
+    return null;
+  }
+}
+
+export function saveProfile(profile: SavedProfile): void {
+  try {
+    localStorage.setItem(PLAYER_PROFILE_STORAGE, JSON.stringify(profile));
+  } catch {
+    // Only a convenience for the next visit; ignore storage failures.
+  }
+}
+
 /** The current session's token and name, or null when there is no complete session. */
 export function getSession(): PlayerSession | null {
   try {
@@ -183,16 +215,21 @@ async function readJson(res: Response): Promise<unknown> {
   }
 }
 
-const FIELDS: readonly StartSessionField[] = ['name', 'phone', 'consent'];
+const FIELDS: readonly StartSessionField[] = ['name', 'phone', 'consent', 'school', 'grade', 'lang'];
 
 /**
  * Creates a new game session (POST /api/session) with this browser's player key.
  * `phone` is the full international number (for example "+96170123456"), checked and normalised by the server.
- * `consent` must be true.
+ * `consent` must be true. `profile` carries the school, class and language picked on the home page.
  * On success, stores only the token and name in sessionStorage and remembers the name. The page remembers
  * the phone, since it knows the country and the digits typed. Never throws.
  */
-export async function startSession(name: string, phone: string, consent: boolean): Promise<StartSessionResult> {
+export async function startSession(
+  name: string,
+  phone: string,
+  consent: boolean,
+  profile?: Record<string, unknown>,
+): Promise<StartSessionResult> {
   const trimmed = name.trim();
   const trimmedPhone = phone.trim();
 
@@ -202,7 +239,7 @@ export async function startSession(name: string, phone: string, consent: boolean
     res = await fetch('/api/session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: trimmed, phone: trimmedPhone, consent, playerKey: getPlayerKey() }),
+      body: JSON.stringify({ name: trimmed, phone: trimmedPhone, consent, playerKey: getPlayerKey(), ...profile }),
     });
     data = await readJson(res);
   } catch {

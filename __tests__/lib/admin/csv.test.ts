@@ -11,6 +11,8 @@ function winner(overrides: Partial<WinnerRow> = {}): WinnerRow {
     normKey: 'ann',
     score: 900,
     phone: null,
+    school: null,
+    level: null,
     prizeGiven: false,
     prizeGivenAt: null,
     ...overrides,
@@ -74,7 +76,7 @@ describe('csvCell', () => {
 });
 
 describe('winnersCsv', () => {
-  const HEADER = 'name,hour,rank,score,phone,prize given';
+  const HEADER = 'name,hour,rank,score,phone,school,class,prize given';
 
   it('starts with the UTF-8 byte order mark', () => {
     expect(winnersCsv([]).charAt(0)).toBe('﻿');
@@ -98,7 +100,7 @@ describe('winnersCsv', () => {
   it('escapes a winner whose name is a formula', () => {
     const text = winnersCsv([round({ winners: [winner({ name: '=HYPERLINK("x")' })] })]);
     const row = text.split('\r\n')[1];
-    expect(row).toBe('"\'=HYPERLINK(""x"")",1,1,900,,no');
+    expect(row).toBe('"\'=HYPERLINK(""x"")",1,1,900,,,,no');
   });
 
   it('leaves the phone cell empty when there is no phone', () => {
@@ -108,7 +110,12 @@ describe('winnersCsv', () => {
 
   it('writes the phone, with the formula prefix, when there is one', () => {
     const row = winnersCsv([round({ winners: [winner({ phone: '+96170123456' })] })]).split('\r\n')[1];
-    expect(row).toBe("Ann,1,1,900,'+96170123456,no");
+    expect(row).toBe("Ann,1,1,900,'+96170123456,,,no");
+  });
+
+  it('writes the school and class after the phone', () => {
+    const row = winnersCsv([round({ winners: [winner({ school: 'Collège des Frères', level: 'Grade 12 · LS / SV' })] })]).split('\r\n')[1];
+    expect(row).toBe('Ann,1,1,900,,Collège des Frères,Grade 12 · LS / SV,no');
   });
 
   it('writes yes for a prize given and no otherwise', () => {
@@ -131,6 +138,6 @@ describe('winnersCsv', () => {
       round({ round: 2, winners: [winner({ name: 'Bob', rank: 1, score: 700 })] }),
     ]);
     const rows = text.split('\r\n').slice(1, 3);
-    expect(rows).toEqual(['Ann,1,1,900,,no', 'Bob,2,1,700,,no']);
+    expect(rows).toEqual(['Ann,1,1,900,,,,no', 'Bob,2,1,700,,,,no']);
   });
 });

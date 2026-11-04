@@ -38,11 +38,11 @@ export default function GamePanel({ paused, onChanged, onUnauthorized }: Props) 
   return (
     <section aria-labelledby="game-heading" className={CARD}>
       <div className="flex items-center justify-between gap-3">
-        <h2 id="game-heading" className="text-lg font-extrabold text-[#202124]">
+        <h2 id="game-heading" className="text-lg font-extrabold text-ink">
           Game
         </h2>
         {paused ? (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FEF7E0] px-3 py-1 text-sm font-bold text-[#B06000]">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-sci-soft px-3 py-1 text-sm font-bold text-sci-ink">
             <span className="h-2 w-2 rounded-full bg-[#B06000]" />
             Paused
           </span>

@@ -1,190 +1,225 @@
+/* eslint-disable @next/next/no-img-element -- static logos on a full-screen loop; next/image adds nothing here */
 import type { Metadata } from 'next';
+import Mosaic from '@/components/Mosaic';
+import { MEMORY_EMOJIS } from '@/lib/memoryEmojis';
 import styles from './marketing.module.css';
 import SceneLoop from './SceneLoop';
+import BoothSound from './BoothSound';
 import { MARKETING_URL, getQrSvg } from './qr';
 
 export const metadata: Metadata = {
-  title: 'BAU Tripoli Open House: Play and Win',
+  title: 'BAU Open Doors 2026 · Faculty of Science: Play and Win',
   description:
-    'Three quick tech mini-games, one leaderboard and a prize every hour at the BAU Tripoli Open House. Scan the code and play.',
+    'Three quick science and tech games, one leaderboard and a prize every hour at the Faculty of Science booth, BAU Open Doors 2026. Scan the code and play.',
 };
 
-const MEMORY_EMOJI = ['🚀', '🎯', '💡', '🧩', '🔥', '⭐', '🚀', '🎯', '💡', '🧩', '🔥', '⭐'];
+/** Seconds into the Memory scene at which each pair is found, in board order. */
+const MEMORY_BOARD = [0, 3, 5, 1, 2, 6, 0, 4, 7, 1, 3, 2, 4, 5, 6, 7];
+const PAIR_AT = [0.5, 1.1, 1.7, 2.3, 2.9, 3.5, 4.1, 4.7];
 
-const MEMORY_DELAY: Record<string, number> = {
-  '🚀': 0.6,
-  '🎯': 1.4,
-  '💡': 2.2,
-  '🧩': 3.0,
-  '🔥': 3.8,
-  '⭐': 4.6,
-};
+const TICKER = [
+  'A prize every hour for the top 3',
+  'Check the leaderboard, ranks change all the time',
+  'Questions in English or French',
+  '3 games · 1 try each',
+  'Scan the QR code to play',
+];
 
-function Badge({ qrSvg }: { qrSvg: string }) {
+function Tag({ children }: { children: React.ReactNode }) {
+  return <span className={styles.tag}>{children}</span>;
+}
+
+function HookScene() {
   return (
-    <div className={styles.badge}>
-      <div className={styles.badgeQr} dangerouslySetInnerHTML={{ __html: qrSvg }} />
-      <span>Scan to play</span>
+    <div className={styles.hook}>
+      <Tag>Faculty of Science · Open Doors 2026</Tag>
+      <h1 className={styles.hero}>
+        <span>The door is open.</span>
+        <span>
+          Are you ready<b className={styles.q}>?</b>
+        </span>
+      </h1>
+      <p className={styles.lead}>Play 3 quick science games. The top 3 win a prize every hour.</p>
+      <div className={styles.tiles}>
+        {[
+          ['🧩', 'Emoji Riddles'],
+          ['🧠', 'Memory Match'],
+          ['⚡', 'Tech Trivia'],
+        ].map(([emoji, name], i) => (
+          <div key={name} className={styles.tile} style={{ animationDelay: `${0.5 + i * 0.15}s` }}>
+            <span className={styles.tileNo}>{`0${i + 1}`}</span>
+            <span className={styles.tileEmoji}>{emoji}</span>
+            <span className={styles.tileName}>{name}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
-function HookScene({ qrSvg }: { qrSvg: string }) {
+function HowScene() {
+  const steps = [
+    ['Scan the QR code', 'Your phone camera is enough. Nothing to install.'],
+    ['English or Français', 'Pick the language of your questions.'],
+    ['Name, school, class', 'Choose a display name and tell us your school and class.'],
+    ['Play 3 games', 'Emoji Riddles, Memory Match and Tech Trivia. Once each.'],
+  ];
   return (
-    <>
-      <p className={styles.eyebrow}>BAU Tripoli Open House</p>
-      <h1 className={styles.hero}>{"Think you're the smartest in the room?"}</h1>
-      <p className={styles.lead}>Three quick games. One leaderboard. A prize every hour.</p>
-      <div className={styles.dots} aria-hidden="true">
-        <span className={styles.dot} />
-        <span className={styles.dot} />
-        <span className={styles.dot} />
-        <span className={styles.dot} />
-      </div>
-      <p className={styles.footerNote}>GDG on Campus BAU Tripoli</p>
-      <Badge qrSvg={qrSvg} />
-    </>
+    <div className={styles.block}>
+      <Tag>How it works</Tag>
+      <h2 className={styles.title}>Four steps to play</h2>
+      <ol className={styles.steps}>
+        {steps.map(([title, caption], i) => (
+          <li key={title} className={styles.step} style={{ animationDelay: `${0.3 + i * 0.35}s` }}>
+            <span className={styles.stepNo}>{i + 1}</span>
+            <h3 className={styles.stepTitle}>{title}</h3>
+            <p className={styles.stepCaption}>{caption}</p>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }
 
-function HowScene({ qrSvg }: { qrSvg: string }) {
+function RiddleScene() {
   return (
-    <>
-      <h2 className={styles.title}>How it works</h2>
-      <div className={styles.steps}>
-        <div className={styles.step}>
-          <span className={styles.stepNumber}>1</span>
-          <h3 className={styles.stepTitle}>Scan the QR code</h3>
-          <p className={styles.stepCaption}>Use your phone camera. Nothing to install.</p>
+    <div className={styles.split}>
+      <div className={styles.copy}>
+        <Tag>Game 1 of 3</Tag>
+        <h2 className={styles.title}>Emoji Riddles</h2>
+        <p className={styles.lead}>Read the emoji and the hint. Pick the word. 5 riddles, faster scores more.</p>
+      </div>
+      <div className={styles.phone}>
+        <p className={styles.phoneTop}>Question 2 of 5</p>
+        <div className={styles.emojiRow}>
+          <span>🔬</span>
+          <span>🔎</span>
+          <span>🧫</span>
         </div>
-        <div className={styles.step}>
-          <span className={styles.stepNumber}>2</span>
-          <h3 className={styles.stepTitle}>Enter your name</h3>
-          <p className={styles.stepCaption}>Pick the name you will be known by.</p>
-        </div>
-        <div className={styles.step}>
-          <span className={styles.stepNumber}>3</span>
-          <h3 className={styles.stepTitle}>Play 3 mini-games</h3>
-          <p className={styles.stepCaption}>Emoji Riddles, Memory Match and Tech Trivia. Each game once.</p>
+        <p className={styles.hint}>Hint: Makes tiny things look much bigger</p>
+        <div className={styles.options}>
+          <span className={styles.option}>Periscope</span>
+          <span className={styles.option}>Stethoscope</span>
+          <span className={styles.option}>Kaleidoscope</span>
+          <span className={`${styles.option} ${styles.optionRight}`}>Microscope</span>
         </div>
       </div>
-      <Badge qrSvg={qrSvg} />
-    </>
+    </div>
   );
 }
 
-function RiddleScene({ qrSvg }: { qrSvg: string }) {
+function MemoryScene() {
   return (
-    <>
-      <h2 className={styles.title}>Emoji Riddles</h2>
-      <p className={styles.lead}>Read the emoji. Pick the answer.</p>
-      <div className={styles.riddleRow}>
-        <span className={styles.riddleEmoji}>🤖</span>
-        <span className={styles.riddleEmoji}>☁️</span>
-        <span className={styles.riddleEmoji}>📱</span>
+    <div className={styles.split}>
+      <div className={styles.copy}>
+        <Tag>Game 2 of 3</Tag>
+        <h2 className={styles.title}>Memory Match</h2>
+        <p className={styles.lead}>Flip two cards at a time and find all 8 pairs. Fewer moves score more.</p>
       </div>
-      <div className={styles.options}>
-        <div className={styles.option}>Robot phone</div>
-        <div className={`${styles.option} ${styles.optionCorrect}`}>Robot in the cloud</div>
-        <div className={styles.option}>Rainy day</div>
-        <div className={styles.option}>Phone call</div>
-      </div>
-      <Badge qrSvg={qrSvg} />
-    </>
-  );
-}
-
-function MemoryScene({ qrSvg }: { qrSvg: string }) {
-  return (
-    <>
-      <h2 className={styles.title}>Memory Match</h2>
-      <p className={styles.lead}>Flip two cards. Find every pair.</p>
       <div className={styles.board} aria-hidden="true">
-        {MEMORY_EMOJI.map((emoji, index) => {
-          const delay = MEMORY_DELAY[emoji] ?? 0;
-          return (
-            <div key={index} className={styles.card}>
-              <div className={styles.cardInner} style={{ animationDelay: `${delay}s` }}>
-                <div className={`${styles.face} ${styles.faceFront}`}>?</div>
-                <div
-                  className={`${styles.face} ${styles.faceBack}`}
-                  style={{ animationDelay: `${(delay + 0.6).toFixed(1)}s` }}
-                >
-                  {emoji}
-                </div>
+        {MEMORY_BOARD.map((pair, i) => (
+          <div key={i} className={styles.card}>
+            <div className={styles.cardInner} style={{ animationDelay: `${PAIR_AT[pair]}s` }}>
+              <div className={`${styles.face} ${styles.faceDown}`}>?</div>
+              <div className={`${styles.face} ${styles.faceUp}`} style={{ animationDelay: `${PAIR_AT[pair] + 0.5}s` }}>
+                {MEMORY_EMOJIS[pair]}
               </div>
             </div>
-          );
-        })}
+          </div>
+        ))}
       </div>
-      <Badge qrSvg={qrSvg} />
-    </>
+    </div>
   );
 }
 
-function TriviaScene({ qrSvg }: { qrSvg: string }) {
+function TriviaScene() {
   return (
-    <>
-      <h2 className={styles.title}>Tech Trivia</h2>
-      <p className={styles.lead}>Answer fast. Build a streak.</p>
-      <p className={styles.question}>Which language runs in the browser?</p>
-      <div className={styles.trackBar} aria-hidden="true">
-        <div className={styles.fill} />
+    <div className={styles.split}>
+      <div className={styles.copy}>
+        <Tag>Game 3 of 3</Tag>
+        <h2 className={styles.title}>Tech Trivia</h2>
+        <p className={styles.lead}>35 seconds. Right answers add points, wrong ones cost you. Build a streak.</p>
       </div>
-      <div className={styles.answers}>
-        <span className={styles.answer}>Python</span>
-        <span className={`${styles.answer} ${styles.answerCorrect}`}>JavaScript</span>
-        <span className={styles.answer}>COBOL</span>
-        <span className={styles.answer}>Fortran</span>
+      <div className={styles.phone}>
+        <div className={styles.timer} aria-hidden="true">
+          <span />
+        </div>
+        <p className={styles.question}>Which organelle is known as the powerhouse of the cell?</p>
+        <div className={styles.answers}>
+          <span className={styles.answer}>Nucleus</span>
+          <span className={styles.answer}>Ribosome</span>
+          <span className={styles.answer}>Vacuole</span>
+          <span className={`${styles.answer} ${styles.answerRight}`}>Mitochondrion</span>
+        </div>
+        <p className={styles.streak}>x3 streak 🔥</p>
       </div>
-      <p className={styles.streak}>Streak 🔥 3</p>
-      <Badge qrSvg={qrSvg} />
-    </>
+    </div>
   );
 }
 
-function PrizeScene({ qrSvg }: { qrSvg: string }) {
+function PrizeScene() {
   return (
-    <>
-      <h2 className={styles.title}>{'A prize EVERY HOUR'}</h2>
-      <p className={styles.lead}>for the top 3 players of that hour</p>
-      <div className={styles.prizeRow}>
-        <div className={styles.podium} aria-hidden="true">
-          <div className={styles.slot}>
-            <span className={styles.medal}>🥈</span>
-            <div className={`${styles.bar} ${styles.bar2}`}>2</div>
-          </div>
-          <div className={styles.slot}>
-            <span className={styles.medal}>🥇</span>
-            <div className={`${styles.bar} ${styles.bar1}`}>1</div>
-          </div>
-          <div className={styles.slot}>
-            <span className={styles.medal}>🥉</span>
-            <div className={`${styles.bar} ${styles.bar3}`}>3</div>
-          </div>
-        </div>
-        <div className={styles.clockColumn}>
-          <div className={styles.clock} aria-hidden="true">
-            <div className={styles.clockFace}>
-              <span className={styles.clockHand} />
-            </div>
-          </div>
-          <p className={styles.clockCaption}>Every hour, on the hour</p>
-        </div>
+    <div className={styles.split}>
+      <div className={styles.copy}>
+        <Tag>Prizes</Tag>
+        <h2 className={styles.title}>A prize every hour</h2>
+        <p className={styles.lead}>The top 3 players of each hour win. Finish all 3 games to qualify.</p>
       </div>
-      <p className={styles.prizeLine}>Finish all 3 games to qualify.</p>
-      <Badge qrSvg={qrSvg} />
-    </>
+      <div className={styles.podium} aria-hidden="true">
+        {[
+          ['🥈', 2, styles.p2],
+          ['🥇', 1, styles.p1],
+          ['🥉', 3, styles.p3],
+        ].map(([medal, place, cls]) => (
+          <div key={String(place)} className={styles.ped}>
+            <span className={styles.medal}>{medal}</span>
+            <div className={`${styles.block} ${cls}`}>{place}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LeaderboardScene() {
+  const rows = [
+    ['ByteQueen', '3,102'],
+    ['nour_lab', '2,987'],
+    ['quantum', '2,954'],
+    ['cedar_coder', '2,880'],
+  ];
+  return (
+    <div className={styles.split}>
+      <div className={styles.copy}>
+        <Tag>Live</Tag>
+        <h2 className={styles.title}>Check the leaderboard</h2>
+        <p className={styles.lead}>Ranks change all the time. Watch the big screen to see if you are in this hour’s top 3.</p>
+      </div>
+      <div className={styles.board2} aria-hidden="true">
+        <p className={styles.boardHead}>
+          <span>Live leaderboard</span>
+          <span className={styles.live}>LIVE</span>
+        </p>
+        {rows.map(([name, score], i) => (
+          <div key={name} className={`${styles.row} ${i === 1 ? styles.climber : ''}`}>
+            <span className={styles.rank}>#{i + 1}</span>
+            <span className={styles.rowName}>{name}</span>
+            <span className={styles.rowScore}>{score}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
 function QrScene({ qrSvg }: { qrSvg: string }) {
   return (
     <div className={styles.qrScene}>
-      <div className={styles.qrText}>
+      <div className={styles.copy}>
+        <Tag>Your turn</Tag>
         <h2 className={styles.title}>Scan now. Play in 3 minutes.</h2>
         <p className={styles.url}>{MARKETING_URL}</p>
-        <p className={styles.qrCaption}>Finish all 3 games to qualify for the hourly prize.</p>
+        <p className={styles.lead}>Finish all 3 games to qualify for the hourly prize.</p>
       </div>
       <div className={styles.qrCard}>
         <div className={styles.qr} dangerouslySetInnerHTML={{ __html: qrSvg }} />
@@ -197,29 +232,64 @@ export default async function MarketingPage() {
   const qrSvg = await getQrSvg();
 
   const scenes = [
-    <HookScene key="hook" qrSvg={qrSvg} />,
-    <HowScene key="how" qrSvg={qrSvg} />,
-    <RiddleScene key="riddles" qrSvg={qrSvg} />,
-    <MemoryScene key="memory" qrSvg={qrSvg} />,
-    <TriviaScene key="trivia" qrSvg={qrSvg} />,
-    <PrizeScene key="prizes" qrSvg={qrSvg} />,
+    <HookScene key="hook" />,
+    <HowScene key="how" />,
+    <RiddleScene key="riddles" />,
+    <MemoryScene key="memory" />,
+    <TriviaScene key="trivia" />,
+    <PrizeScene key="prizes" />,
+    <LeaderboardScene key="leaderboard" />,
     <QrScene key="qr" qrSvg={qrSvg} />,
   ];
 
   return (
     <main className={styles.root}>
       <div className={styles.stage}>
-        <SceneLoop
-          scenes={scenes}
-          durations={[6000, 7000, 6500, 6500, 6500, 7000, 9000]}
-          staticIndex={6}
-        />
-        <div className={styles.stripe} aria-hidden="true">
-          <span />
-          <span />
-          <span />
-          <span />
+        <Mosaic className={styles.mosaic} cols={30} rows={10} />
+
+        <header className={styles.header}>
+          <img src="/brand/bau-logo.png" alt="Beirut Arab University" className={styles.bau} />
+          <span className={styles.rule} aria-hidden="true" />
+          <img src="/brand/open-doors-2026.png" alt="Open Doors 2026" className={styles.doors} />
+          <span className={styles.faculty}>Faculty of Science</span>
+        </header>
+
+        <SceneLoop scenes={scenes} durations={[6000, 6500, 6000, 6500, 6000, 6000, 6500, 8000]} staticIndex={7} />
+
+        <aside className={styles.rail}>
+          <div className={styles.railQr}>
+            <div className={styles.qrSmall} dangerouslySetInnerHTML={{ __html: qrSvg }} />
+            <b>Scan to play</b>
+          </div>
+          <div className={styles.railPrize}>
+            <span>🏆</span>
+            <b>A prize every hour</b>
+            <small>Top 3 of each hour</small>
+          </div>
+          <div className={styles.railLive}>
+            <span className={styles.liveTag}>
+              <i /> LIVE
+            </span>
+            <b>Check the leaderboard</b>
+          </div>
+        </aside>
+
+        <div className={styles.ticker} aria-hidden="true">
+          <div className={styles.track}>
+            {[0, 1].map((copy) => (
+              <span key={copy} className={styles.seg}>
+                {TICKER.map((line) => (
+                  <span key={line}>
+                    {line}
+                    <i>◆</i>
+                  </span>
+                ))}
+              </span>
+            ))}
+          </div>
         </div>
+
+        <BoothSound />
       </div>
     </main>
   );

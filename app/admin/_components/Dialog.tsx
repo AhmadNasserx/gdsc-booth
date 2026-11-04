@@ -25,9 +25,9 @@ export default function Dialog({ titleId, title, onClose, children }: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="w-full max-w-md rounded-3xl border border-[#DADCE0] bg-white p-6 shadow-lg"
+        className="w-full max-w-md rounded-3xl border border-line bg-white p-6 shadow-lg"
       >
-        <h2 id={titleId} className="text-xl font-extrabold text-[#202124]">
+        <h2 id={titleId} className="text-xl font-extrabold text-ink">
           {title}
         </h2>
         {children}

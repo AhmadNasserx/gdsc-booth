@@ -47,10 +47,10 @@ function TopRow({ entry, size }: { entry: RoundTop; size: TextSize }) {
   return (
     <li className="flex items-center gap-3 min-w-0">
       <span className={`${size.medal} leading-none shrink-0`}>{MEDALS[entry.rank - 1]}</span>
-      <span className={`${size.name} flex-1 min-w-0 truncate font-semibold text-[#202124]`}>
+      <span className={`${size.name} flex-1 min-w-0 truncate font-semibold text-ink`}>
         {entry.name}
       </span>
-      <span className={`${size.score} shrink-0 whitespace-nowrap font-black tabular-nums text-[#1A73E8]`}>
+      <span className={`${size.score} shrink-0 whitespace-nowrap font-black tabular-nums text-ink`}>
         {`${entry.score} pts`}
       </span>
     </li>
@@ -61,7 +61,7 @@ function WaitingRow({ rank, size }: { rank: number; size: TextSize }) {
   return (
     <li className="flex items-center gap-3 min-w-0">
       <span className={`${size.medal} leading-none shrink-0 opacity-40`}>{MEDALS[rank - 1]}</span>
-      <span className={`${size.name} text-[#9AA0A6]`}>Waiting for a finisher</span>
+      <span className={`${size.name} text-muted-2`}>Waiting for a finisher</span>
     </li>
   );
 }
@@ -83,29 +83,29 @@ export default function RoundBoard({ rounds, currentRound }: Props) {
 
   return (
     <div className="space-y-5 md:space-y-6">
-      <section className="rounded-3xl border border-[#E8EAED] bg-white p-5 md:p-7 shadow-sm">
+      <section className="rounded-3xl border-2 border-sci bg-white p-5 md:p-7 shadow-sm">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg md:text-2xl font-extrabold text-[#202124]">This hour&apos;s top 3</h2>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E6F4EA] px-2.5 py-1 text-xs font-bold text-[#34A853]">
-            <span className="h-2 w-2 rounded-full bg-[#34A853]" />
+          <h2 className="font-display text-xl md:text-3xl font-bold text-indigo">This hour&apos;s top 3</h2>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FDE8E8] px-2.5 py-1 text-xs font-bold text-coral">
+            <span className="h-2 w-2 rounded-full bg-coral" />
             LIVE
           </span>
         </div>
 
         {currentRound === null ? (
-          <p className="mt-4 text-base md:text-xl text-[#5F6368]">The first player starts the prize clock</p>
+          <p className="mt-4 text-base md:text-xl text-muted">The first player starts the prize clock</p>
         ) : currentTop.length === 0 ? (
           <>
-            <p className="mt-1 text-sm md:text-base text-[#5F6368] tabular-nums">
+            <p className="mt-1 text-sm md:text-base text-muted tabular-nums">
               {current ? hourLabel(current) : `Hour ${currentRound}`}
             </p>
-            <p className="mt-5 text-base md:text-xl text-[#5F6368]">
+            <p className="mt-5 text-base md:text-xl text-muted">
               No one has finished all three games this hour yet
             </p>
           </>
         ) : (
           <>
-            <p className="mt-1 text-sm md:text-base text-[#5F6368] tabular-nums">
+            <p className="mt-1 text-sm md:text-base text-muted tabular-nums">
               {current ? hourLabel(current) : `Hour ${currentRound}`}
             </p>
             <ol className="mt-5 space-y-4 md:space-y-5">
@@ -123,9 +123,9 @@ export default function RoundBoard({ rounds, currentRound }: Props) {
       </section>
 
       <section>
-        <h2 className="px-1 text-lg md:text-xl font-extrabold text-[#202124]">Earlier hours</h2>
+        <h2 className="font-display px-1 text-lg md:text-2xl font-bold text-indigo">Earlier hours</h2>
         {earlier.length === 0 ? (
-          <p className="mt-3 rounded-3xl border border-[#E8EAED] bg-white p-5 text-base text-[#9AA0A6] shadow-sm">
+          <p className="mt-3 rounded-3xl border border-line bg-white p-5 text-base text-muted-2 shadow-sm">
             No earlier hours yet
           </p>
         ) : (
@@ -135,11 +135,11 @@ export default function RoundBoard({ rounds, currentRound }: Props) {
               return (
                 <li
                   key={round.round}
-                  className="rounded-2xl border border-[#E8EAED] bg-white p-4 md:p-5 shadow-sm"
+                  className="rounded-2xl border border-line bg-white p-4 md:p-5 shadow-sm"
                 >
-                  <p className="text-sm md:text-base font-bold text-[#5F6368] tabular-nums">{hourLabel(round)}</p>
+                  <p className="text-sm md:text-base font-bold text-muted tabular-nums">{hourLabel(round)}</p>
                   {top.length === 0 ? (
-                    <p className="mt-2 text-sm md:text-base text-[#9AA0A6]">No finishers this hour</p>
+                    <p className="mt-2 text-sm md:text-base text-muted-2">No finishers this hour</p>
                   ) : (
                     <ol className="mt-2 space-y-2">
                       {top.map((entry) => (

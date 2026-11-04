@@ -6,10 +6,11 @@ import CountUp from '@/components/CountUp';
 import type { RunResult } from '@/lib/apiTypes';
 import { feedback } from '@/lib/feedback';
 import { GAMES } from '@/lib/games';
+import { GAME_TEXT, useT } from '@/lib/i18n';
 import type { Tab } from '@/lib/types';
 
 // Pure CSS confetti. Positions are fixed so server and client render the same markup.
-const CONFETTI_COLORS = ['#4285F4', '#EA4335', '#FBBC04', '#34A853'];
+const CONFETTI_COLORS = ['#F7B500', '#965D94', '#00A6BA', '#7DB83A', '#E1484B'];
 const CONFETTI = Array.from({ length: 24 }, (_, i) => ({
   left: (i * 37) % 100,
   delay: (i % 8) * 0.15,
@@ -27,10 +28,12 @@ interface Props {
 }
 
 const buttonBase =
-  'min-h-12 w-full max-w-xs px-6 py-3.5 rounded-full text-base font-extrabold transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#1A73E8]/40 disabled:opacity-60';
+  'min-h-12 w-full max-w-xs px-6 py-3.5 rounded-full text-base font-extrabold transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sci/40 disabled:opacity-60';
 
 export default function ResultScreen({ game, result, nextGame, onNextGame }: Props) {
   const meta = GAMES[game];
+  const { lang, t } = useT();
+  const title = (tab: Tab) => (lang === 'fr' ? GAME_TEXT.fr[tab].title : GAMES[tab].title);
 
   // Sound plays once, when the screen appears. The screen mounts once per result, so the
   // result is read only on mount and later prop changes do not replay the sound.
@@ -63,37 +66,37 @@ export default function ResultScreen({ game, result, nextGame, onNextGame }: Pro
       )}
 
       <div className="relative text-5xl" aria-hidden="true">{result.improved ? '🏆' : '✅'}</div>
-      <h2 className="relative text-2xl font-extrabold text-[#202124]">Game done!</h2>
-      <p className="relative text-sm font-semibold text-[#5F6368]">
-        <span aria-hidden="true" className="font-emoji">{meta.emoji}</span> {meta.title}
+      <h2 className="font-display relative text-4xl font-bold text-indigo">{t('result.done')}</h2>
+      <p className="relative text-sm font-semibold text-muted">
+        <span aria-hidden="true" className="font-emoji">{meta.emoji}</span> {title(game)}
       </p>
 
-      <p className="relative text-4xl font-black text-[#1A73E8]">
+      <p className="relative text-4xl font-black text-ink">
         <CountUp
           value={result.score}
           format={(n) => `+${n} pts`}
-          className="relative text-4xl font-black text-[#1A73E8]"
+          className="relative text-4xl font-black text-ink"
         />
       </p>
 
       <p className="relative text-sm font-bold text-[#137333]">
-        {`Your total: ${result.total} pts · You're #${result.rank}`}
+        {t('result.total', { total: result.total, rank: result.rank })}
       </p>
 
       <div className="relative flex flex-col items-center gap-3 pt-3 w-full">
         <button
           type="button"
           onClick={onNextGame}
-          className={`${buttonBase} bg-[#1A73E8] hover:bg-[#1557B0] text-white shadow`}
+          className={`${buttonBase} bg-sci hover:bg-sci-deep text-ink shadow`}
         >
-          {nextGame ? `Next: ${GAMES[nextGame].title} →` : 'See my results →'}
+          {nextGame ? t('result.next', { game: title(nextGame) }) : t('result.see')}
         </button>
 
         <a
           href="/leaderboard"
-          className="min-h-11 inline-flex items-center px-4 text-sm font-semibold text-[#1A73E8] underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A73E8] rounded"
+          className="min-h-11 inline-flex items-center px-4 text-sm font-semibold text-ink underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sci rounded"
         >
-          View leaderboard
+          {t('result.leaderboard')}
         </a>
       </div>
     </div>

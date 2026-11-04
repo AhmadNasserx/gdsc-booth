@@ -17,6 +17,9 @@ function routeFetch(status: { paused: boolean; message?: string }) {
 }
 
 async function fillForm() {
+  // The language, school and class are prefilled as if from an earlier visit.
+  localStorage.setItem('bauOpenDoorsLang', 'en');
+  localStorage.setItem('bauPlayerProfile', JSON.stringify({ school: 'Al Iman School', other: true, grade: '10', track: '' }));
   await userEvent.type(screen.getByPlaceholderText(/display name/i), 'Ahmad');
   await userEvent.type(screen.getByLabelText(/phone number/i), '70 123 456');
   await userEvent.click(screen.getByLabelText(/I agree to be contacted on this number/i));

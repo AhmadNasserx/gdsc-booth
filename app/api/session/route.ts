@@ -5,6 +5,7 @@ import { isPaused, PAUSED_MESSAGE } from '@/lib/config';
 import { NAME_PATTERN, normalizeName, hashPlayerKey, isValidPlayerKey } from '@/lib/names';
 import { normalizePhone } from '@/lib/phone';
 import { ensureEventStarted } from '@/lib/event';
+import { readProfile } from '@/lib/profile';
 
 const NAME_TTL_MS = 172800000;
 
@@ -67,6 +68,12 @@ export async function POST(request: Request) {
     );
   }
 
+  // School, class and language. Checked before anything is claimed, so a refusal leaves nothing behind.
+  const profile = readProfile(fields);
+  if (!profile.ok) {
+    return NextResponse.json({ error: profile.error, field: profile.field }, { status: 400 });
+  }
+
   const now = Date.now();
   const keyHash = hashPlayerKey(playerKey);
 
@@ -113,6 +120,11 @@ export async function POST(request: Request) {
     name,
     phone: phone.phone,
     consentAt: now,
+    school: profile.profile.school,
+    schoolListed: profile.profile.schoolListed,
+    grade: profile.profile.grade,
+    track: profile.profile.track,
+    lang: profile.profile.lang,
     expiresAt: now + NAME_TTL_MS,
   });
 

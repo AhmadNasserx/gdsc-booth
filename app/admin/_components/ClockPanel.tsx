@@ -85,13 +85,13 @@ export default function ClockPanel({ event, serverNow, onChanged, onUnauthorized
 
   return (
     <section aria-labelledby="clock-heading" className={CARD}>
-      <h2 id="clock-heading" className="text-lg font-extrabold text-[#202124]">
+      <h2 id="clock-heading" className="text-lg font-extrabold text-ink">
         Event clock
       </h2>
 
       {event.startedAt === null ? (
         <div className="mt-3 space-y-4">
-          <p className="text-base text-[#5F6368]">
+          <p className="text-base text-muted">
             The event clock has not started. It starts when the first player presses Start.
           </p>
           <button
@@ -112,12 +112,12 @@ export default function ClockPanel({ event, serverNow, onChanged, onUnauthorized
         <div className="mt-3 space-y-3">
           <p className={SUBTLE_TEXT}>Event started {formatTime(event.startedAt)}</p>
           {event.currentRound !== null && (
-            <p className="text-2xl font-extrabold text-[#202124]">Hour {event.currentRound}</p>
+            <p className="text-2xl font-extrabold text-ink">Hour {event.currentRound}</p>
           )}
           {event.currentRound !== null && endsIn !== null && (
-            <p className="text-base text-[#202124]">
+            <p className="text-base text-ink">
               Hour {event.currentRound} ends in{' '}
-              <span className="font-black tabular-nums text-[#1A73E8]">{endsIn}</span>
+              <span className="font-black tabular-nums text-ink">{endsIn}</span>
             </p>
           )}
           <button
@@ -132,11 +132,11 @@ export default function ClockPanel({ event, serverNow, onChanged, onUnauthorized
 
       {resetOpen && (
         <Dialog titleId={titleId} title="Reset the event clock?" onClose={closeReset}>
-          <p className="mt-3 text-base text-[#5F6368]">
+          <p className="mt-3 text-base text-muted">
             This clears the event start time. Hour numbers and prize clocks start again from the
             next player. Leaderboard scores are kept.
           </p>
-          <label htmlFor={inputId} className="mt-5 block text-sm font-semibold text-[#202124]">
+          <label htmlFor={inputId} className="mt-5 block text-sm font-semibold text-ink">
             Type RESET to confirm
           </label>
           <input

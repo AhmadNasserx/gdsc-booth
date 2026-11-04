@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import type { BatchResponse, ReviewItem, RunResult, TriviaView } from '@/lib/apiTypes';
 import Burst from '@/components/Burst';
 import { feedback } from '@/lib/feedback';
+import { useT } from '@/lib/i18n';
 import { isVerdictReply, nextStreak, runInOrder, STREAK_MIN, VERDICT_WAIT_MS, type CheckFn, type Verdict } from './verdict';
 
 const GAME_SECS = 35;
@@ -14,7 +15,7 @@ const VERDICT_MS = 450;
 // The last seconds of the clock each give a tick, so the end of the round is heard.
 const TICK_SECS = 10;
 // Confetti colours for a right answer, from the palette the game already uses.
-const BURST_COLORS = ['#34A853', '#FBBC04', '#1A73E8'];
+const BURST_COLORS = ['#7DB83A', '#F7B500', '#00A6BA'];
 
 type Phase = 'start' | 'play' | 'checking' | 'review';
 
@@ -30,11 +31,12 @@ function isBatch(res: BatchResponse): boolean {
   return !!res && Array.isArray(res.results) && !!res.result;
 }
 
-function errorMessage(err: unknown): string {
-  return err instanceof Error && err.message ? err.message : 'Something went wrong. Please try again.';
+function errorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error && err.message ? err.message : fallback;
 }
 
 export default function TechTrivia({ questions, act, check, onDone }: Props) {
+  const { t, tq } = useT();
   const [phase, setPhase] = useState<Phase>('start');
   const [idx, setIdx] = useState(0);
   const [chosen, setChosen] = useState<string | null>(null);
@@ -94,7 +96,7 @@ export default function TechTrivia({ questions, act, check, onDone }: Props) {
       res = raw;
     } catch (err) {
       busyRef.current = false;
-      setError(errorMessage(err));
+      setError(errorMessage(err, t('common.error')));
       return;
     }
 
@@ -199,17 +201,17 @@ export default function TechTrivia({ questions, act, check, onDone }: Props) {
     return (
       <div className="flex flex-col items-center text-center py-8 anim-slide-in">
         <div className="text-5xl mb-4">⚡</div>
-        <h2 className="text-xl font-bold mb-2">Speed Trivia</h2>
-        <p className="text-sm text-[#5F6368] mb-2">35 seconds · answer as many as you can</p>
-        <p className="text-xs text-[#5F6368] mb-6 bg-[#E8F0FE] rounded-xl px-4 py-2">
-          Answers are checked together when you finish or time runs out.
+        <h2 className="font-display text-3xl font-bold mb-2 text-indigo">{t('trivia.title')}</h2>
+        <p className="text-sm text-muted mb-2">{t('trivia.sub')}</p>
+        <p className="text-xs text-muted mb-6 bg-sci-soft rounded-xl px-4 py-2">
+          {t('trivia.note')}
         </p>
         <button
           type="button"
           onClick={startGame}
-          className="bg-[#1A73E8] hover:bg-[#1557B0] active:scale-95 text-white px-10 py-3 rounded-full font-bold shadow-md transition-all"
+          className="bg-sci hover:bg-sci-deep active:scale-95 text-ink px-10 py-3 rounded-full font-bold shadow-md transition-all"
         >
-          Start!
+          {t('trivia.start')}
         </button>
       </div>
     );
@@ -220,35 +222,35 @@ export default function TechTrivia({ questions, act, check, onDone }: Props) {
     const unansweredCount = review.filter((item) => !item.answered).length;
     return (
       <div className="flex flex-col items-center w-full anim-slide-in">
-        <h2 className="text-xl font-bold mb-1">Your answers</h2>
-        <p className="text-sm text-[#5F6368] mb-5">
-          {correctCount} correct
-          {unansweredCount > 0 ? ` · ${unansweredCount} unanswered` : ''}
+        <h2 className="font-display text-2xl font-bold mb-1 text-indigo">{t('game.yourAnswers')}</h2>
+        <p className="text-sm text-muted mb-5">
+          {t('trivia.correctCount', { n: correctCount })}
+          {unansweredCount > 0 ? t('trivia.unansweredCount', { n: unansweredCount }) : ''}
         </p>
 
         <ol className="w-full flex flex-col gap-2 mb-6">
           {review.map((item, i) => {
             const mark = !item.answered ? '—' : item.correct ? '✓' : '✗';
-            const label = !item.answered ? 'No answer' : item.correct ? 'Correct' : 'Wrong';
+            const label = t(!item.answered ? 'game.noAnswer' : item.correct ? 'game.correct' : 'trivia.wrong');
             const markColor = !item.answered
-              ? 'text-[#5F6368]'
+              ? 'text-muted'
               : item.correct
               ? 'text-[#137333]'
               : 'text-[#C5221F]';
             return (
-              <li key={i} className="flex gap-3 items-start rounded-2xl border-2 border-[#DADCE0] bg-white px-4 py-3">
+              <li key={i} className="flex gap-3 items-start rounded-2xl border-2 border-line bg-white px-4 py-3">
                 <span className={`text-base font-black w-5 shrink-0 text-center ${markColor}`}>
                   <span className="sr-only">{label}: </span>
                   <span aria-hidden="true">{mark}</span>
                 </span>
                 <div className="min-w-0 text-left">
-                  <p className="text-sm font-semibold text-[#202124]">
-                    <span className="text-[#5F6368]">Q{i + 1}.</span> {questions[i]?.question}
+                  <p className="text-sm font-semibold text-ink">
+                    <span className="text-muted">Q{i + 1}.</span> {tq(questions[i]?.question ?? '')}
                   </p>
                   {item.answered && !item.correct && picks[i] && (
-                    <p className="text-xs text-[#5F6368] mt-1">Your answer: {picks[i]}</p>
+                    <p className="text-xs text-muted mt-1">{t('trivia.yourAnswer', { answer: tq(picks[i] as string) })}</p>
                   )}
-                  <p className="text-xs text-[#137333] mt-1">Correct answer: {String(item.correctAnswer)}</p>
+                  <p className="text-xs text-[#137333] mt-1">{t('game.correctAnswer', { answer: tq(String(item.correctAnswer)) })}</p>
                 </div>
               </li>
             );
@@ -258,9 +260,9 @@ export default function TechTrivia({ questions, act, check, onDone }: Props) {
         <button
           type="button"
           onClick={finish}
-          className="bg-[#1A73E8] hover:bg-[#1557B0] active:scale-95 text-white px-10 py-3 rounded-full font-bold shadow-md transition-all"
+          className="bg-sci hover:bg-sci-deep active:scale-95 text-ink px-10 py-3 rounded-full font-bold shadow-md transition-all"
         >
-          Continue
+          {t('game.continue')}
         </button>
       </div>
     );
@@ -278,14 +280,14 @@ export default function TechTrivia({ questions, act, check, onDone }: Props) {
             <button
               type="button"
               onClick={() => void submitRound()}
-              className="rounded-full bg-[#1A73E8] px-5 py-2 text-xs font-bold text-white shadow-md transition-all hover:bg-[#1557B0] active:scale-95"
+              className="rounded-full bg-sci px-5 py-2 text-xs font-bold text-ink shadow-md transition-all hover:bg-sci-deep active:scale-95"
             >
-              Try again
+              {t('play.tryAgain')}
             </button>
           </div>
         ) : (
-          <p role="status" className="text-sm font-semibold text-[#5F6368]">
-            Checking your answers…
+          <p role="status" className="text-sm font-semibold text-muted">
+            {t('game.checking')}
           </p>
         )}
       </div>
@@ -294,7 +296,7 @@ export default function TechTrivia({ questions, act, check, onDone }: Props) {
 
   const q = questions[idx];
   const timerPct = (timeLeft / GAME_SECS) * 100;
-  const timerColor = timeLeft <= 8 ? 'text-[#EA4335] bg-[#FCE8E6]' : timeLeft <= 17 ? 'text-[#FBBC04] bg-[#FEF9E5]' : 'text-[#34A853] bg-[#E6F4EA]';
+  const timerColor = timeLeft <= 8 ? 'text-[#EA4335] bg-[#FCE8E6]' : timeLeft <= 17 ? 'text-sci-ink bg-sci-soft' : 'text-[#34A853] bg-[#E6F4EA]';
 
   // Look of one option. Before a verdict the picked option is neutral; after it, right and wrong show.
   function toneOf(opt: string): string {
@@ -306,14 +308,14 @@ export default function TechTrivia({ questions, act, check, onDone }: Props) {
     if (verdict && verdict.correctAnswer === opt) return 'bg-[#E6F4EA] border-[#34A853] text-[#137333]';
     if (chosen !== null) {
       return chosen === opt
-        ? 'anim-pop bg-[#E8F0FE] border-[#1A73E8] text-[#1A73E8]'
-        : 'border-[#DADCE0] text-[#9AA0A6] bg-[#F8F9FA]';
+        ? 'anim-pop bg-sci-soft border-sci text-ink'
+        : 'border-line text-muted-2 bg-mist';
     }
-    return 'border-[#DADCE0] bg-white hover:border-[#1A73E8] hover:bg-[#E8F0FE]';
+    return 'border-line bg-white hover:border-sci hover:bg-sci-soft';
   }
 
   const pillTone = !verdict
-    ? 'border-[#1A73E8] bg-[#E8F0FE] text-[#1A73E8]'
+    ? 'border-sci bg-sci-soft text-ink'
     : verdict.correct
       ? 'border-[#34A853] bg-[#E6F4EA] text-[#137333]'
       : 'border-[#EA4335] bg-[#FCE8E6] text-[#C5221F]';
@@ -321,7 +323,7 @@ export default function TechTrivia({ questions, act, check, onDone }: Props) {
   return (
     <div className="flex flex-col items-center w-full anim-slide-in">
       <div className="w-full flex justify-between items-center mb-4">
-        <span className="text-xs font-bold text-[#5F6368]">Q{idx + 1}</span>
+        <span className="text-xs font-bold text-muted">Q{idx + 1}</span>
         <span className={`text-sm font-black px-3 py-1 rounded-full transition-colors ${timerColor}`}>
           ⏱ {timeLeft}s
         </span>
@@ -329,7 +331,7 @@ export default function TechTrivia({ questions, act, check, onDone }: Props) {
 
       <div
         role="progressbar"
-        aria-label="Time left"
+        aria-label={t('trivia.timeLeft')}
         aria-valuemin={0}
         aria-valuemax={GAME_SECS}
         aria-valuenow={timeLeft}
@@ -341,23 +343,23 @@ export default function TechTrivia({ questions, act, check, onDone }: Props) {
       <div className="w-full h-9 mb-3 flex items-center justify-center" role="status">
         {chosen !== null && (
           <span className={`rounded-xl border px-4 py-1.5 text-xs font-bold ${pillTone}`}>
-            {verdict ? (verdict.correct ? 'Correct!' : 'Not quite') : 'Locked in'}
+            {verdict ? t(verdict.correct ? 'trivia.right' : 'trivia.notQuite') : t('trivia.locked')}
           </span>
         )}
       </div>
 
       {q && (
         <>
-          <h3 className="text-base font-bold mb-5 text-[#202124] text-center">{q.question}</h3>
+          <h3 className="text-base font-bold mb-5 text-ink text-center">{tq(q.question)}</h3>
 
           {streak >= STREAK_MIN && (
             <div className="mb-3 flex justify-center" aria-hidden="true">
               {/* Keyed by the count so the entrance plays again on each new streak. */}
               <span
                 key={streak}
-                className="streak-pop rounded-full bg-[#FBBC04] px-3 py-1 text-xs font-black text-[#202124]"
+                className="streak-pop rounded-full bg-sci px-3 py-1 text-xs font-black text-ink"
               >
-                x{streak} streak
+                {t('game.streak', { n: streak })}
               </span>
             </div>
           )}
@@ -371,7 +373,7 @@ export default function TechTrivia({ questions, act, check, onDone }: Props) {
                 disabled={chosen !== null}
                 className={`relative w-full p-3.5 text-left text-sm font-semibold border-2 rounded-2xl transition-all active:scale-[0.98] disabled:cursor-default ${toneOf(opt)}`}
               >
-                {opt}
+                {tq(opt)}
                 {verdict && verdict.correct && chosen === opt && (
                   <Burst key={idx} count={14} colors={BURST_COLORS} />
                 )}

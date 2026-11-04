@@ -27,21 +27,21 @@ export default function AuditPanel({ entries }: Props) {
 
   return (
     <section aria-labelledby="audit-heading" className={CARD}>
-      <h2 id="audit-heading" className="text-lg font-extrabold text-[#202124]">
+      <h2 id="audit-heading" className="text-lg font-extrabold text-ink">
         Recent actions
       </h2>
       {recent.length === 0 ? (
         <p className={`${SUBTLE_TEXT} mt-3`}>No actions yet.</p>
       ) : (
-        <ol className="mt-3 divide-y divide-[#E8EAED]">
+        <ol className="mt-3 divide-y divide-line">
           {recent.map((entry, index) => (
-            <li key={`${entry.at}-${entry.action}-${index}`} className="py-3 text-sm text-[#202124]">
-              <span className="tabular-nums text-[#5F6368]">{formatTime(entry.at)}</span>
-              <span className="text-[#5F6368]"> · </span>
+            <li key={`${entry.at}-${entry.action}-${index}`} className="py-3 text-sm text-ink">
+              <span className="tabular-nums text-muted">{formatTime(entry.at)}</span>
+              <span className="text-muted"> · </span>
               <span className="font-semibold">{ACTION_LABELS[entry.action] ?? entry.action}</span>
               {entry.target && (
                 <>
-                  <span className="text-[#5F6368]"> · </span>
+                  <span className="text-muted"> · </span>
                   <span className="break-words">{entry.target}</span>
                 </>
               )}

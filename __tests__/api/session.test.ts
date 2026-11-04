@@ -25,11 +25,15 @@ beforeEach(() => {
   resetDb();
 });
 
-function makeRequest(body: unknown) {
+// A valid school, class and language. Every request carries it unless a test overrides a field.
+const PROFILE = { school: 'Al Iman School', grade: '12', track: 'ls', lang: 'en' };
+
+function makeRequest(body: unknown, withProfile = true) {
+  const payload = withProfile && body && typeof body === 'object' && !Array.isArray(body) ? { ...PROFILE, ...body } : body;
   return new Request('http://localhost/api/session', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify(payload),
   });
 }
 
@@ -273,6 +277,11 @@ describe('POST /api/session: phone number', () => {
       name: 'Ahmad',
       phone: '+96170111222',
       consentAt: expect.any(Number),
+      school: 'Al Iman School',
+      schoolListed: false,
+      grade: '12',
+      track: 'ls',
+      lang: 'en',
       expiresAt: expect.any(Number),
     });
     expect(contact.consentAt as number).toBeGreaterThanOrEqual(before);
@@ -387,5 +396,60 @@ describe('POST /api/session: prize clock', () => {
     expect(res.status).toBe(409);
     expect((await res.json()).field).toBe('name');
     expect(readPath('event/startedAt')).toBeNull();
+  });
+});
+
+describe('POST /api/session: school, class and language', () => {
+  function withProfile(profile: Record<string, unknown>) {
+    return POST(makeRequest({ name: 'Ahmad', phone: PHONE_A, consent: true, playerKey: KEY_A, ...profile }));
+  }
+
+  it.each([
+    [{ lang: undefined }, 'lang'],
+    [{ lang: 'ar' }, 'lang'],
+    [{ school: '' }, 'school'],
+    [{ school: 'x' }, 'school'],
+    [{ school: 'a'.repeat(81) }, 'school'],
+    [{ school: '<script>' }, 'school'],
+    [{ grade: '9' }, 'grade'],
+    [{ grade: undefined }, 'grade'],
+    [{ grade: '11', track: 'gs' }, 'grade'],
+    [{ grade: '11', track: null }, 'grade'],
+    [{ grade: '12', track: 'literature' }, 'grade'],
+    [{ grade: '10', track: 'scientific' }, 'grade'],
+  ])('refuses %j with 400 and field %s, claiming nothing', async (profile, field) => {
+    const res = await withProfile(profile);
+    expect(res.status).toBe(400);
+    expect((await res.json()).field).toBe(field);
+    expect(readPath('names')).toBeNull();
+    expect(readPath('phones')).toBeNull();
+    expect(readPath('contacts')).toBeNull();
+  });
+
+  it.each([
+    [{ grade: '10', track: null }, null],
+    [{ grade: '11', track: 'scientific' }, 'scientific'],
+    [{ grade: '11', track: 'literature' }, 'literature'],
+    [{ grade: '12', track: 'gs' }, 'gs'],
+    [{ grade: '12', track: 'se' }, 'se'],
+    [{ grade: '12', track: 'ls' }, 'ls'],
+  ])('accepts %j and stores the section', async (profile, track) => {
+    const res = await withProfile(profile);
+    expect(res.status).toBe(200);
+    // The database drops null values, as Firebase does, so Grade 10 has no track stored.
+    const contact = readPath('contacts/ahmad') as Record<string, unknown>;
+    expect(contact.grade).toBe(profile.grade);
+    expect(contact.track ?? null).toBe(track);
+  });
+
+  it('stores the language and the trimmed school with the contact', async () => {
+    await withProfile({ school: '  Collège   des Frères ', lang: 'fr' });
+    expect(readPath('contacts/ahmad')).toMatchObject({ school: 'Collège des Frères', lang: 'fr' });
+  });
+
+  it('keeps the profile out of the token and the leaderboard', async () => {
+    const data = await (await withProfile({ school: 'Unique School Name' })).json();
+    expect(JSON.stringify(verifySession(data.token))).not.toContain('Unique School Name');
+    expect(JSON.stringify(readPath('leaderboard'))).not.toContain('Unique School Name');
   });
 });
