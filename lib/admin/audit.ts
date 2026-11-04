@@ -10,7 +10,9 @@ export type AdminAction =
   | 'player.edit'
   | 'player.delete'
   | 'game.pause'
-  | 'game.resume';
+  | 'game.resume'
+  | 'leaderboard.mask'
+  | 'leaderboard.unmask';
 
 export interface AuditEntry {
   at: number;

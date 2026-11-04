@@ -87,3 +87,21 @@ describe('LeaderboardPage countdown', () => {
     expect(screen.queryByText('15:00')).not.toBeInTheDocument();
   });
 });
+
+describe('LeaderboardPage while masked', () => {
+  const originalFetch = global.fetch;
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    global.fetch = originalFetch;
+  });
+
+  it('shows the winners-coming-up curtain instead of the countdown and the board', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(NOW);
+    mockFetch({ ...payload(), masked: true });
+    render(<LeaderboardPage />);
+    expect(await screen.findByRole('heading', { name: /winners coming up/i })).toBeInTheDocument();
+    expect(screen.queryByText('Hour 2 prize in')).toBeNull();
+    expect(screen.queryByText(/this hour.s top 3/i)).toBeNull();
+  });
+});

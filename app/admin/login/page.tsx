@@ -26,7 +26,8 @@ export default function AdminLoginPage() {
     setError('');
     const result = await callApi('/api/admin/login', { method: 'POST', body: { password } }, FALLBACK_ERROR);
     if (result.ok) {
-      router.replace('/admin');
+      // Coming from the ceremony page, go back there once signed in.
+      router.replace(new URLSearchParams(window.location.search).get('next') === '/announce' ? '/announce' : '/admin');
       return; // Stay busy until the dashboard replaces this page.
     }
     setError(errorText(result));

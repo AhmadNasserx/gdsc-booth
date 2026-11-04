@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import AuditPanel from '@/app/admin/_components/AuditPanel';
 import ClockPanel from '@/app/admin/_components/ClockPanel';
 import GamePanel from '@/app/admin/_components/GamePanel';
+import CeremonyPanel from '@/app/admin/_components/CeremonyPanel';
 import PlayersPanel from '@/app/admin/_components/PlayersPanel';
 import WinnersPanel from '@/app/admin/_components/WinnersPanel';
 import {
@@ -145,6 +146,9 @@ export default function AdminPage() {
           )}
           {overview && (
             <GamePanel paused={overview.paused} onChanged={load} onUnauthorized={goToLogin} />
+          )}
+          {overview && (
+            <CeremonyPanel masked={overview.masked === true} onChanged={load} onUnauthorized={goToLogin} />
           )}
           {winners && (
             <WinnersPanel rounds={winners.rounds} onChanged={load} onUnauthorized={goToLogin} />

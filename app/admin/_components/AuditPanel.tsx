@@ -13,6 +13,8 @@ const ACTION_LABELS: Record<string, string> = {
   'player.delete': 'Player deleted',
   'game.pause': 'Game paused',
   'game.resume': 'Game resumed',
+  'leaderboard.mask': 'Leaderboard masked',
+  'leaderboard.unmask': 'Leaderboard shown again',
 };
 
 const SHOWN = 20;

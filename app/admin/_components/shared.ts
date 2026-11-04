@@ -28,6 +28,8 @@ export interface AuditEntry {
 export interface OverviewResponse {
   event: EventInfo;
   paused: boolean;
+  /** True while the public leaderboard is hidden for a winners ceremony. */
+  masked?: boolean;
   audit: AuditEntry[];
 }
 
