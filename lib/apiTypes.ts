@@ -79,4 +79,10 @@ export interface EventInfo {
   roundEndsAt: number | null;   // end of the current hour
 }
 /** GET /api/leaderboard. */
-export interface LeaderboardResponse { entries: LeaderboardEntry[]; event: EventInfo; rounds: RoundResult[] }
+export interface LeaderboardResponse {
+  entries: LeaderboardEntry[];
+  event: EventInfo;
+  rounds: RoundResult[];
+  /** True while staff hide the board for a winners ceremony: entries and every hour's top are then empty. */
+  masked?: boolean;
+}

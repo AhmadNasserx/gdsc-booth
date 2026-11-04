@@ -118,41 +118,65 @@ export default function LeaderboardPage() {
         </div>
       </header>
 
-      <section className="relative overflow-hidden rounded-3xl bg-indigo shadow-[0_24px_60px_-28px_rgba(43,27,87,0.7)] px-5 py-6 md:px-10 md:py-8 mb-6 md:mb-8 text-center">
-        <Mosaic className="pointer-events-none absolute inset-y-0 right-0 h-full w-1/3 opacity-40" cols={10} rows={8} families={['#F7B500', '#00A6BA']} />
-        {countdown.label && (
-          <p className="font-display relative text-sm md:text-2xl font-semibold uppercase tracking-widest text-sci">
-            {countdown.label}
-          </p>
-        )}
-        <p
-          className={`font-display relative mt-2 font-bold tabular-nums leading-none text-sci ${
-            countdown.label
-              ? 'text-7xl sm:text-8xl md:text-[9rem]'
-              : 'text-2xl sm:text-3xl md:text-5xl text-white'
-          }`}
-        >
-          {countdown.value}
-        </p>
-        <p className="relative mt-4 text-sm md:text-lg font-semibold text-white/85">
-          Top 3 each hour win a prize. Finish all three games to qualify.
-        </p>
-      </section>
-
-      {data && (
-        <div className="relative flex flex-col gap-6 md:grid md:grid-cols-3 md:items-start md:gap-8">
-          <div className="min-w-0 md:col-span-1 md:order-2">
-            <RoundBoard rounds={data.rounds} currentRound={data.event.currentRound} />
-          </div>
-
-          <div className="min-w-0 md:col-span-2 md:order-1">
-            <LeaderboardTable entries={data.entries} />
-            <p className="mt-8 md:mt-10 text-center text-xs md:text-sm text-muted-2 leading-relaxed">
-              Top 3 each hour win a prize · Ties go to whoever reached their total first · Scores reset automatically after 48 hours
+      {data?.masked ? (
+        <MaskCurtain />
+      ) : (
+        <>
+          <section className="relative overflow-hidden rounded-3xl bg-indigo shadow-[0_24px_60px_-28px_rgba(43,27,87,0.7)] px-5 py-6 md:px-10 md:py-8 mb-6 md:mb-8 text-center">
+            <Mosaic className="pointer-events-none absolute inset-y-0 right-0 h-full w-1/3 opacity-40" cols={10} rows={8} families={['#F7B500', '#00A6BA']} />
+            {countdown.label && (
+              <p className="font-display relative text-sm md:text-2xl font-semibold uppercase tracking-widest text-sci">
+                {countdown.label}
+              </p>
+            )}
+            <p
+              className={`font-display relative mt-2 font-bold tabular-nums leading-none text-sci ${
+                countdown.label
+                  ? 'text-7xl sm:text-8xl md:text-[9rem]'
+                  : 'text-2xl sm:text-3xl md:text-5xl text-white'
+              }`}
+            >
+              {countdown.value}
             </p>
-          </div>
-        </div>
+            <p className="relative mt-4 text-sm md:text-lg font-semibold text-white/85">
+              Top 3 each hour win a prize. Finish all three games to qualify.
+            </p>
+          </section>
+
+          {data && (
+            <div className="relative flex flex-col gap-6 md:grid md:grid-cols-3 md:items-start md:gap-8">
+              <div className="min-w-0 md:col-span-1 md:order-2">
+                <RoundBoard rounds={data.rounds} currentRound={data.event.currentRound} />
+              </div>
+
+              <div className="min-w-0 md:col-span-2 md:order-1">
+                <LeaderboardTable entries={data.entries} />
+                <p className="mt-8 md:mt-10 text-center text-xs md:text-sm text-muted-2 leading-relaxed">
+                  Top 3 each hour win a prize · Ties go to whoever reached their total first · Scores reset automatically after 48 hours
+                </p>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
+  );
+}
+
+/** Shown instead of names and scores while staff hide the board for a winners ceremony. */
+function MaskCurtain() {
+  return (
+    <section
+      role="status"
+      className="relative flex flex-1 flex-col items-center justify-center overflow-hidden rounded-3xl bg-indigo px-6 py-16 text-center shadow-[0_24px_60px_-28px_rgba(43,27,87,0.7)] md:py-24"
+    >
+      <Mosaic className="pointer-events-none absolute inset-0 h-full w-full opacity-30" cols={40} rows={14} families={['#F7B500', '#00A6BA', '#965D94']} />
+      <span aria-hidden="true" className="relative font-emoji text-6xl md:text-8xl animate-bounce">🥁</span>
+      <p className="font-display relative mt-6 text-sm font-semibold uppercase tracking-[0.3em] text-sci md:text-2xl">Faculty of Science</p>
+      <h2 className="font-display relative mt-3 text-5xl font-bold text-white md:text-8xl">Winners coming up…</h2>
+      <p className="relative mt-5 max-w-2xl text-base font-semibold text-white/80 md:text-2xl">
+        The leaderboard is hidden while we announce the winners. Keep playing: every score still counts.
+      </p>
+    </section>
   );
 }

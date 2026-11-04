@@ -41,3 +41,10 @@ describe('reelNames', () => {
     expect(reelNames([entry('A', 1, 1), entry('A', 2, 2), entry('B', 1, 1)])).toEqual(['A', 'B']);
   });
 });
+
+describe('topFinishers since a time', () => {
+  it('counts only players who finished at or after that time', () => {
+    const winners = topFinishers([entry('Early', 900, 10), entry('Late', 500, 50), entry('Edge', 400, 30)], 9, 30);
+    expect(winners.map((w) => w.name)).toEqual(['Late', 'Edge']);
+  });
+});

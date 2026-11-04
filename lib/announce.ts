@@ -9,12 +9,14 @@ export interface Winner {
 }
 
 /**
- * The best `count` players who finished all three games, best first. Ties go to whoever reached
- * their total first, the same rule as the leaderboard and the hourly prizes. Pure.
+ * The best `count` players who finished all three games, best first. With `since`, only players
+ * who finished at or after that time count, so a ceremony can cover any stretch of the day, not
+ * just a full hour. Ties go to whoever reached their total first, the same rule as the leaderboard
+ * and the hourly prizes. Pure.
  */
-export function topFinishers(entries: readonly LeaderboardEntry[], count: number): Winner[] {
+export function topFinishers(entries: readonly LeaderboardEntry[], count: number, since?: number): Winner[] {
   return entries
-    .filter((entry) => typeof entry.finishedAt === 'number')
+    .filter((entry) => typeof entry.finishedAt === 'number' && (since === undefined || entry.finishedAt >= since))
     .sort((a, b) => b.score - a.score || a.timestamp - b.timestamp)
     .slice(0, count)
     .map((entry, i) => ({ rank: i + 1, name: entry.name, score: entry.score }));
