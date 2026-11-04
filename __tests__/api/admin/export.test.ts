@@ -15,7 +15,7 @@ process.env.ADMIN_PASSWORD = 'correct horse battery';
 
 const DAY = 24 * ROUND_MS;
 const START = 1_700_000_000_000;
-const HEADER = 'name,hour,rank,score,phone,prize given';
+const HEADER = 'name,hour,rank,score,phone,school,class,prize given';
 
 beforeEach(() => {
   resetDb();
@@ -71,8 +71,8 @@ describe('GET /api/admin/export', () => {
 
   it('includes the winners phone numbers, with the formula prefix', async () => {
     const text = await (await GET(exportRequest())).text();
-    expect(text).toContain("Ahmad,1,1,1500,'+96170111222,no");
-    expect(text).toContain("Sara,1,2,1000,'+96171333444,no");
+    expect(text).toContain("Ahmad,1,1,1500,'+96170111222,,,no");
+    expect(text).toContain("Sara,1,2,1000,'+96171333444,,,no");
   });
 
   it('answers 401 without the admin cookie', async () => {

@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 
-const DEFAULT_COLORS = ['#1A73E8', '#34A853', '#FBBC04', '#EA4335'];
+const DEFAULT_COLORS = ['#F7B500', '#965D94', '#00A6BA', '#7DB83A', '#E1484B'];
 
 interface Props {
   count?: number;

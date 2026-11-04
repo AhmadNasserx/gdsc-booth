@@ -281,7 +281,7 @@ describe('EmojiRiddles with a check per pick', () => {
 
     expect(option('Bug Bounty')).toHaveClass('anim-shake', 'anim-flash-red', 'border-[#EA4335]');
     expect(option('Web Crawler')).toHaveClass('border-[#34A853]', 'bg-[#E6F4EA]');
-    expect(option('Docker')).toHaveClass('text-[#9AA0A6]');
+    expect(option('Docker')).toHaveClass('text-muted-2');
     expect(screen.getByRole('status')).toHaveTextContent('Not quite. The answer is Web Crawler.');
     expect(mockAct).not.toHaveBeenCalled();
   });
@@ -451,5 +451,31 @@ describe('EmojiRiddles with a check per pick', () => {
     expect(mockAct).toHaveBeenCalledTimes(1);
     expect(mockAct).toHaveBeenCalledWith({ answers: ANSWERS });
     expect(screen.getByRole('heading', { name: 'Your answers' })).toBeInTheDocument();
+  });
+});
+
+describe('EmojiRiddles in French', () => {
+  beforeEach(() => localStorage.setItem('bauOpenDoorsLang', 'fr'));
+  afterEach(() => localStorage.clear());
+
+  it('shows the options and the review in French but sends and checks the English option', async () => {
+    const mockCheck = jest.fn().mockResolvedValue({ index: 0, correct: true, correctAnswer: 'Web Crawler' });
+    mockAct.mockResolvedValueOnce(
+      batch(ANSWERS.map((a) => ({ answered: true, correct: true, correctAnswer: a }))),
+    );
+    render(<EmojiRiddles questions={questions} act={mockAct} check={mockCheck} onDone={jest.fn()} />);
+
+    expect(screen.getByText('Question 1 sur 4')).toBeInTheDocument();
+    await tap(option('Robot d’indexation'));
+    expect(mockCheck).toHaveBeenCalledWith({ check: { index: 0, answer: 'Web Crawler' } });
+    await advance(1000);
+    for (const answer of ANSWERS.slice(1)) {
+      await tap(option(answer));
+      await advance(1000);
+    }
+    await advance(0);
+    expect(mockAct).toHaveBeenCalledWith({ answers: ANSWERS });
+    expect(screen.getByText(/^Bonne réponse\s:\sRobot d’indexation$/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continuer' })).toBeInTheDocument();
   });
 });

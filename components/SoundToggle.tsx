@@ -19,7 +19,7 @@ export default function SoundToggle() {
       type="button"
       onClick={toggle}
       aria-label={muted ? 'Turn sound on' : 'Turn sound off'}
-      className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-full border border-[#DADCE0] bg-white text-lg focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#1A73E8]/40"
+      className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-full border border-line bg-white text-lg focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sci/40"
     >
       <span aria-hidden="true" className="font-emoji">{muted ? '🔇' : '🔊'}</span>
     </button>

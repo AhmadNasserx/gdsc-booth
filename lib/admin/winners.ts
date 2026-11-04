@@ -2,12 +2,17 @@ import { adminDb } from '../firebaseAdmin';
 import type { LeaderboardEntry } from '../types';
 import { isLive } from '../runs/ranking';
 import { currentRound, readEventStart, roundWindow, topOfRound } from '../event';
+import { levelLabel } from '../profile';
 
 export interface Contact {
   name: string;
   phone: string;
   consentAt: number;
   expiresAt: number;
+  school?: string;
+  grade?: string;
+  track?: string | null;
+  lang?: string;
 }
 
 export interface WinnerRow {
@@ -16,6 +21,9 @@ export interface WinnerRow {
   normKey: string;
   score: number;
   phone: string | null;
+  /** School and class from the home page, or null for a contact saved before they were asked. */
+  school: string | null;
+  level: string | null;
   prizeGiven: boolean;
   prizeGivenAt: number | null;
 }
@@ -64,6 +72,9 @@ export function buildWinnerRounds(input: {
         contact && typeof contact.phone === 'string' && typeof contact.expiresAt === 'number' && contact.expiresAt > now
           ? contact.phone
           : null;
+      const current = phone !== null ? contact : undefined;
+      const school = current && typeof current.school === 'string' ? current.school : null;
+      const level = current && typeof current.grade === 'string' ? levelLabel(current.grade, current.track) : null;
       const prize: PrizeRecord | undefined = roundPrizes?.[normKey];
       winners.push({
         rank: winner.rank,
@@ -71,6 +82,8 @@ export function buildWinnerRounds(input: {
         normKey,
         score: winner.score,
         phone,
+        school,
+        level,
         prizeGiven: prize !== undefined,
         prizeGivenAt: prize ? prize.givenAt : null,
       });

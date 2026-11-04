@@ -34,7 +34,7 @@ describe('Burst', () => {
   it('falls back to the default colours when the colors prop is empty', () => {
     const { container } = render(<Burst count={1} colors={[]} />);
     const piece = container.querySelector<HTMLElement>('.burst-piece');
-    expect(piece?.style.getPropertyValue('--burst-color')).toBe('#1A73E8');
+    expect(piece?.style.getPropertyValue('--burst-color')).toBe('#F7B500');
   });
 
   it('renders identical markup on every render', () => {

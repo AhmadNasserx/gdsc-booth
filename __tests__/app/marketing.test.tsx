@@ -7,8 +7,8 @@ import { MARKETING_URL, getQrSvg } from '@/app/marketing/qr';
 // jsdom does not provide TextEncoder, which the qrcode encoder needs.
 Object.assign(globalThis, { TextEncoder });
 
-const SCENE_COUNT = 7;
-const LOOP_MS = 48500;
+const SCENE_COUNT = 8;
+const LOOP_MS = 51500;
 const STEP_MS = 250;
 const XML_DECLARATION = /^<\?xml[^>]*\?>\s*/;
 
@@ -31,7 +31,7 @@ describe('marketing page', () => {
 
   describe('metadata', () => {
     it('sets the booth title', () => {
-      expect(metadata.title).toBe('BAU Tripoli Open House: Play and Win');
+      expect(metadata.title).toBe('BAU Open Doors 2026 · Faculty of Science: Play and Win');
     });
 
     it('does not block search engines', () => {
@@ -64,17 +64,32 @@ describe('marketing page', () => {
     });
 
     it.each([
-      "Think you're the smartest in the room?",
-      'How it works',
+      'The door is open.',
+      'Four steps to play',
       'Emoji Riddles',
       'Memory Match',
       'Tech Trivia',
-      'A prize EVERY HOUR',
+      'A prize every hour',
+      'Check the leaderboard',
       'Scan now. Play in 3 minutes.',
     ])('shows the "%s" heading', async (title) => {
       await renderPage();
 
       expect(screen.getAllByText(title).length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('shows the BAU and Open Doors logos and the Faculty of Science', async () => {
+      await renderPage();
+
+      expect(screen.getByRole('img', { name: 'Beirut Arab University' })).toBeInTheDocument();
+      expect(screen.getByRole('img', { name: 'Open Doors 2026' })).toBeInTheDocument();
+      expect(screen.getAllByText(/Faculty of Science/).length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('offers sound behind a button', async () => {
+      await renderPage();
+
+      expect(screen.getByRole('button', { name: /tap for sound/i })).toBeInTheDocument();
     });
 
     it('prints the booth URL', async () => {
@@ -110,7 +125,7 @@ describe('marketing page', () => {
         for (const index of activeIndexes()) seen.add(index);
       }
 
-      expect(seen).toEqual(new Set([0, 1, 2, 3, 4, 5, 6]));
+      expect(seen).toEqual(new Set([0, 1, 2, 3, 4, 5, 6, 7]));
     });
 
     it('returns to the hook scene after one full loop', async () => {
@@ -124,7 +139,7 @@ describe('marketing page', () => {
           jest.advanceTimersByTime(STEP_MS);
         });
       }
-      expect(activeIndexes()).toEqual([6]);
+      expect(activeIndexes()).toEqual([7]);
 
       act(() => {
         jest.advanceTimersByTime(STEP_MS);

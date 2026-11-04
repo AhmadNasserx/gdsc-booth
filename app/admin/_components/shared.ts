@@ -37,6 +37,8 @@ export interface WinnerRow {
   normKey: string;
   score: number;
   phone: string | null;
+  school: string | null;
+  level: string | null;
   prizeGiven: boolean;
   prizeGivenAt: number | null;
 }
@@ -71,17 +73,17 @@ export interface PlayersResponse {
 }
 
 /** Shared class strings, so every admin control matches the public pages. */
-export const CARD = 'rounded-3xl border border-[#DADCE0] bg-white p-5 shadow-sm md:p-6';
+export const CARD = 'rounded-3xl border border-line bg-white p-5 shadow-sm md:p-6';
 export const BUTTON_BASE =
   'inline-flex min-h-[44px] items-center justify-center rounded-full px-5 text-base font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50';
-export const BUTTON_PRIMARY = `${BUTTON_BASE} bg-[#1A73E8] text-white hover:bg-[#1557B0]`;
-export const BUTTON_SECONDARY = `${BUTTON_BASE} border border-[#DADCE0] bg-white text-[#202124] hover:bg-[#F8F9FA]`;
+export const BUTTON_PRIMARY = `${BUTTON_BASE} bg-sci text-ink hover:bg-sci-deep`;
+export const BUTTON_SECONDARY = `${BUTTON_BASE} border border-line bg-white text-ink hover:bg-mist`;
 export const BUTTON_DANGER = `${BUTTON_BASE} bg-[#C5221F] text-white hover:bg-[#A50E0E]`;
 export const BUTTON_WARNING = `${BUTTON_BASE} bg-[#B06000] text-white hover:bg-[#8A4A00]`;
 export const INPUT =
-  'w-full min-h-[44px] rounded-2xl border border-[#DADCE0] bg-white p-3 text-base text-[#202124] focus:outline-none focus:ring-2 focus:ring-[#1A73E8]';
+  'w-full min-h-[44px] rounded-2xl border border-line bg-white p-3 text-base text-ink focus:outline-none focus:ring-2 focus:ring-sci';
 export const ERROR_TEXT = 'text-sm font-semibold text-[#EA4335]';
-export const SUBTLE_TEXT = 'text-sm text-[#5F6368]';
+export const SUBTLE_TEXT = 'text-sm text-muted';
 
 export const NETWORK_ERROR = 'Could not reach the server. Try again.';
 const DEFAULT_ERROR = 'Something went wrong. Try again.';

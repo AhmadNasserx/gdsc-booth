@@ -73,7 +73,7 @@ export default function WinnersPanel({ rounds, onChanged, onUnauthorized }: Prop
   return (
     <section aria-labelledby="winners-heading" className={CARD}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="winners-heading" className="text-lg font-extrabold text-[#202124]">
+        <h2 id="winners-heading" className="text-lg font-extrabold text-ink">
           Hourly winners
         </h2>
         <a href="/api/admin/export" download className={BUTTON_SECONDARY}>
@@ -89,10 +89,10 @@ export default function WinnersPanel({ rounds, onChanged, onUnauthorized }: Prop
             <article
               key={round.round}
               aria-label={`Hour ${round.round}`}
-              className="rounded-2xl border border-[#E8EAED] bg-[#F8F9FA] p-4"
+              className="rounded-2xl border border-line bg-mist p-4"
             >
               <div className="flex items-center justify-between gap-3">
-                <h3 className="text-base font-extrabold text-[#202124]">Hour {round.round}</h3>
+                <h3 className="text-base font-extrabold text-ink">Hour {round.round}</h3>
                 {round.current && (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E6F4EA] px-2.5 py-1 text-xs font-bold text-[#34A853]">
                     <span className="h-2 w-2 rounded-full bg-[#34A853]" />
@@ -117,16 +117,21 @@ export default function WinnersPanel({ rounds, onChanged, onUnauthorized }: Prop
                     return (
                       <li key={winner.normKey} className="rounded-2xl bg-white p-4 shadow-sm">
                         <div className="flex items-start gap-4">
-                          <span className="w-12 shrink-0 text-4xl font-black leading-none tabular-nums text-[#1A73E8]">
+                          <span className="w-12 shrink-0 text-4xl font-black leading-none tabular-nums text-ink">
                             {winner.rank}
                           </span>
                           <div className="min-w-0 flex-1">
-                            <p className="break-words text-lg font-bold text-[#202124]">{winner.name}</p>
+                            <p className="break-words text-lg font-bold text-ink">{winner.name}</p>
                             <p className={`${SUBTLE_TEXT} tabular-nums`}>{winner.score} points</p>
+                            {(winner.school || winner.level) && (
+                              <p className="mt-0.5 text-sm font-semibold text-indigo">
+                                {[winner.school, winner.level].filter(Boolean).join(' · ')}
+                              </p>
+                            )}
                             {phone ? (
                               <a
                                 href={`tel:${phone}`}
-                                className="mt-1 inline-flex min-h-[44px] items-center break-all text-base font-semibold text-[#1A73E8] underline"
+                                className="mt-1 inline-flex min-h-[44px] items-center break-all text-base font-semibold text-ink underline"
                               >
                                 {phone}
                               </a>
@@ -146,13 +151,13 @@ export default function WinnersPanel({ rounds, onChanged, onUnauthorized }: Prop
                               {copiedId === copyId ? 'Copied' : 'Copy'}
                             </button>
                           )}
-                          <label className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 text-base font-semibold text-[#202124]">
+                          <label className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 text-base font-semibold text-ink">
                             <input
                               type="checkbox"
                               checked={given}
                               disabled={saving}
                               onChange={(e) => setPrizeGiven(round.round, winner, e.target.checked)}
-                              className="h-5 w-5 accent-[#1A73E8]"
+                              className="h-5 w-5 accent-sci-deep"
                             />
                             Prize given
                           </label>

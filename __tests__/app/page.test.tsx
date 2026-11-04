@@ -10,6 +10,17 @@ const PLAYER_KEY = /^[0-9a-f]{64}$/;
 // What the player types after the country code (Lebanon is the default), and what the server receives.
 const NATIONAL = '70 123 456';
 const SENT = '+96170123456';
+// The school and class prefilled for most tests.
+const PROFILE = { school: 'Al Iman School', other: true, grade: '12', track: 'ls' };
+
+/**
+ * Most tests are about the name and phone, so the language, school and class come prefilled as if
+ * from an earlier visit. The tests for those fields clear them first.
+ */
+function prefillProfile() {
+  localStorage.setItem('bauOpenDoorsLang', 'en');
+  localStorage.setItem('bauPlayerProfile', JSON.stringify(PROFILE));
+}
 
 interface FetchReply {
   ok: boolean;
@@ -117,6 +128,7 @@ describe('Name Entry Page', () => {
     resetFetch();
     sessionStorage.clear();
     localStorage.clear();
+    prefillProfile();
   });
 
   it('renders name input and consent notice', () => {
@@ -132,13 +144,13 @@ describe('Name Entry Page', () => {
     expect(screen.getByText('The top 3 players win a prize every hour. Finish all three games to qualify.')).toBeInTheDocument();
   });
 
-  it('shows the BAU Tripoli Open House branding and no GDSC or Google branding', () => {
+  it('shows the BAU Open Doors and Faculty of Science branding, and no GDSC or Google branding', () => {
     render(<Page />);
-    expect(screen.getByRole('heading', { level: 1, name: 'Tech and Science Challenge' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: /^Tech and Science Challenge/ })).toBeInTheDocument();
     expect(screen.getByText('Beirut Arab University, Tripoli campus')).toBeInTheDocument();
-    expect(screen.getByText('BAU Tripoli')).toBeInTheDocument();
-    expect(screen.getByText('· Open House')).toBeInTheDocument();
-    expect(document.querySelector('img')).toBeNull();
+    expect(screen.getByRole('img', { name: 'Beirut Arab University' })).toHaveAttribute('src', '/brand/bau-logo.png');
+    expect(screen.getByRole('img', { name: 'Open Doors 2026' })).toHaveAttribute('src', '/brand/open-doors-2026.png');
+    expect(screen.getByText('Faculty of Science')).toBeInTheDocument();
     expect(document.body.textContent ?? '').not.toMatch(/gdsc|google/i);
   });
 
@@ -271,6 +283,10 @@ describe('Name Entry Page', () => {
       phone: SENT,
       consent: true,
       playerKey: expect.stringMatching(PLAYER_KEY),
+      school: 'Al Iman School',
+      grade: '12',
+      track: 'ls',
+      lang: 'en',
     });
     expect(localStorage.getItem('gdscPlayerKey')).toBe(body.playerKey);
     expect(localStorage.getItem('gdscPlayerName')).toBe('Ahmad');
@@ -366,6 +382,7 @@ describe('Phone number and consent', () => {
     answerEveryCallWith(availableResponse());
     sessionStorage.clear();
     localStorage.clear();
+    prefillProfile();
   });
 
   it('shows a tel input with the right attributes and a national placeholder, with the helper line under it', () => {
@@ -520,5 +537,85 @@ describe('Phone number and consent', () => {
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
     const urls = (global.fetch as jest.Mock).mock.calls.map(([url]) => String(url));
     expect(urls.every((url) => !url.includes('70123456') && !url.includes('961'))).toBe(true);
+  });
+
+  describe('language, school and class', () => {
+    function langRadio(name: RegExp) {
+      return screen.getByRole('radio', { name });
+    }
+
+    it('keeps Start disabled until a language is picked, then remembers it', async () => {
+      localStorage.removeItem('bauOpenDoorsLang');
+      answerEveryCallWith(availableResponse());
+      render(<Page />);
+      await fillForm();
+      await waitFor(() => expect(screen.getByRole('button', { name: /start/i })).toBeDisabled());
+      await userEvent.click(langRadio(/english/i));
+      expect(langRadio(/english/i)).toHaveAttribute('aria-checked', 'true');
+      expect(await startButtonEnabled()).toBeEnabled();
+      expect(localStorage.getItem('bauOpenDoorsLang')).toBe('en');
+    });
+
+    it('switches the form to French when Français is picked', async () => {
+      render(<Page />);
+      await userEvent.click(langRadio(/français/i));
+      expect(screen.getByRole('heading', { level: 1, name: /^Défi Sciences et Technologie/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /commencer/i })).toBeInTheDocument();
+      expect(screen.getByText('Faculté des Sciences')).toBeInTheDocument();
+    });
+
+    it('needs a school: a typed one when the school is not in the list', async () => {
+      localStorage.removeItem('bauPlayerProfile');
+      answerEveryCallWith(availableResponse());
+      render(<Page />);
+      await fillForm();
+      await userEvent.click(screen.getByRole('radio', { name: 'Grade 10' }));
+      await waitFor(() => expect(screen.getByRole('button', { name: /start/i })).toBeDisabled());
+      await userEvent.selectOptions(screen.getByLabelText('Your school'), 'My school is not in the list');
+      await userEvent.type(screen.getByPlaceholderText(/type the name of your school/i), 'Rawdat Al Fayhaa');
+      expect(await startButtonEnabled()).toBeEnabled();
+    });
+
+    it('asks for a section in Grade 11 and Grade 12 only', async () => {
+      localStorage.removeItem('bauPlayerProfile');
+      render(<Page />);
+      await userEvent.click(screen.getByRole('radio', { name: 'Grade 10' }));
+      expect(screen.queryByRole('radiogroup', { name: 'Your section' })).toBeNull();
+      await userEvent.click(screen.getByRole('radio', { name: 'Grade 11' }));
+      expect(screen.getByRole('radio', { name: 'Scientific' })).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: 'Literature' })).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('radio', { name: 'Grade 12' }));
+      expect(screen.getByRole('radio', { name: 'GS / SG' })).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: 'SE' })).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: 'LS / SV' })).toBeInTheDocument();
+    });
+
+    it('sends the school, class, section and language with the session', async () => {
+      localStorage.removeItem('bauPlayerProfile');
+      queueReplies(availableResponse(), tokenResponse());
+      render(<Page />);
+      await userEvent.click(langRadio(/français/i));
+      await userEvent.selectOptions(screen.getByLabelText('Ton école'), 'Mon école n’est pas dans la liste');
+      await userEvent.type(screen.getByPlaceholderText(/écris le nom de ton école/i), 'Lycée Al Fayhaa');
+      await userEvent.click(screen.getByRole('radio', { name: 'Première (11e)' }));
+      await userEvent.click(screen.getByRole('radio', { name: 'Scientifique' }));
+      await userEvent.type(screen.getByPlaceholderText(/ton pseudo/i), 'Ahmad');
+      await userEvent.type(screen.getByLabelText(/numéro de téléphone/i), NATIONAL);
+      await userEvent.click(screen.getByLabelText(/j’accepte d’être contacté/i));
+      fireEvent.click(await waitFor(() => {
+        const btn = screen.getByRole('button', { name: /commencer/i });
+        expect(btn).not.toBeDisabled();
+        return btn;
+      }));
+      await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/play'));
+      const body = JSON.parse(fetchCall('/api/session')[1].body as string);
+      expect(body).toMatchObject({ school: 'Lycée Al Fayhaa', grade: '11', track: 'scientific', lang: 'fr' });
+      expect(JSON.parse(localStorage.getItem('bauPlayerProfile') as string)).toEqual({
+        school: 'Lycée Al Fayhaa',
+        other: true,
+        grade: '11',
+        track: 'scientific',
+      });
+    });
   });
 });

@@ -5,6 +5,7 @@ import type { BatchResponse, ReviewItem, RiddleView, RunResult } from '@/lib/api
 import Burst from '@/components/Burst';
 import EmojiWarm from '@/components/EmojiWarm';
 import { feedback } from '@/lib/feedback';
+import { useT } from '@/lib/i18n';
 import { isVerdictReply, nextStreak, runInOrder, STREAK_MIN, VERDICT_WAIT_MS, type CheckFn, type Verdict } from './verdict';
 
 // Short neutral "locked in" pause before the next question when there is no check to wait for.
@@ -12,7 +13,7 @@ const PICK_MS = 250;
 // How long the right/wrong verdict stays on screen before the next question.
 const VERDICT_MS = 600;
 // Confetti colours for a right answer, from the palette the game already uses.
-const BURST_COLORS = ['#34A853', '#FBBC04', '#1A73E8'];
+const BURST_COLORS = ['#7DB83A', '#F7B500', '#00A6BA'];
 
 type Phase = 'play' | 'checking' | 'error' | 'review';
 
@@ -24,8 +25,8 @@ interface Props {
   onDone: (result: RunResult) => void;
 }
 
-function errorMessage(err: unknown): string {
-  return err instanceof Error && err.message ? err.message : 'Something went wrong. Please try again.';
+function errorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error && err.message ? err.message : fallback;
 }
 
 // Memoized so the emoji line keeps its identity; the question block's key still replays the slide-in.
@@ -35,6 +36,8 @@ const RiddleEmojis = memo(function RiddleEmojis({ emojis }: { emojis: string }) 
 
 interface OptionButtonProps {
   opt: string;
+  /** What the button shows: the option in the player's language. `opt` stays the English value. */
+  label: string;
   tone: string;
   disabled: boolean;
   onPick: (opt: string) => void;
@@ -43,7 +46,7 @@ interface OptionButtonProps {
 }
 
 // Memoized so an option is not redrawn when only the verdict of another option changes.
-const OptionButton = memo(function OptionButton({ opt, tone, disabled, onPick, burstKey }: OptionButtonProps) {
+const OptionButton = memo(function OptionButton({ opt, label, tone, disabled, onPick, burstKey }: OptionButtonProps) {
   return (
     <button
       type="button"
@@ -51,13 +54,14 @@ const OptionButton = memo(function OptionButton({ opt, tone, disabled, onPick, b
       disabled={disabled}
       className={`relative rounded-2xl border-2 p-4 text-sm font-semibold transition-all duration-150 ${tone}`}
     >
-      {opt}
+      {label}
       {burstKey !== null && <Burst key={burstKey} count={14} colors={BURST_COLORS} />}
     </button>
   );
 });
 
 export default function EmojiRiddles({ questions, act, check, onDone }: Props) {
+  const { t, tq } = useT();
   const [idx, setIdx] = useState(0);
   // Option locked in for the current question, shown neutrally until the transition ends.
   const [picked, setPicked] = useState<string | null>(null);
@@ -114,7 +118,7 @@ export default function EmojiRiddles({ questions, act, check, onDone }: Props) {
       res = await act({ answers: answersRef.current.slice() });
     } catch (err) {
       inFlightRef.current = false;
-      setError(errorMessage(err));
+      setError(errorMessage(err, t('common.error')));
       setPhase('error');
       return;
     }
@@ -205,8 +209,8 @@ export default function EmojiRiddles({ questions, act, check, onDone }: Props) {
   if (phase === 'review') {
     return (
       <section aria-labelledby="riddle-review-heading" className="flex w-full flex-col anim-slide-in">
-        <h2 id="riddle-review-heading" className="mb-4 text-center text-lg font-black text-[#202124]">
-          Your answers
+        <h2 id="riddle-review-heading" className="mb-4 text-center text-lg font-black text-ink">
+          {t('game.yourAnswers')}
         </h2>
         <ol className="flex flex-col gap-3">
           {questions.map((riddle, i) => {
@@ -215,12 +219,12 @@ export default function EmojiRiddles({ questions, act, check, onDone }: Props) {
             const correct = answered && item.correct;
             const yourPick = answers[i];
             const tone = !answered
-              ? 'border-[#DADCE0] bg-[#F8F9FA] text-[#5F6368]'
+              ? 'border-line bg-mist text-muted'
               : correct
                 ? 'border-[#34A853] bg-[#E6F4EA] text-[#137333]'
                 : 'border-[#EA4335] bg-[#FCE8E6] text-[#C5221F]';
             const mark = !answered ? '—' : correct ? '✓' : '✗';
-            const label = !answered ? 'Unanswered' : correct ? 'Correct' : 'Incorrect';
+            const label = t(!answered ? 'game.unanswered' : correct ? 'game.correct' : 'game.incorrect');
             return (
               <li key={i} className={`flex gap-3 rounded-2xl border-2 p-4 text-left ${tone}`}>
                 <span aria-hidden="true" className="shrink-0 text-xl font-black">
@@ -231,9 +235,9 @@ export default function EmojiRiddles({ questions, act, check, onDone }: Props) {
                   <p className="text-2xl tracking-widest" aria-hidden="true">
                     {riddle.emojis}
                   </p>
-                  <p className="text-sm text-[#202124]">Your pick: {yourPick ?? 'No answer'}</p>
-                  <p className="text-sm text-[#202124]">Correct answer: {item ? String(item.correctAnswer) : '—'}</p>
-                  {item?.explanation && <p className="mt-1 text-xs text-[#5F6368]">{item.explanation}</p>}
+                  <p className="text-sm text-ink">{t('riddles.yourPick', { pick: yourPick ? tq(yourPick) : t('game.noAnswer') })}</p>
+                  <p className="text-sm text-ink">{t('game.correctAnswer', { answer: item ? tq(String(item.correctAnswer)) : '—' })}</p>
+                  {item?.explanation && <p className="mt-1 text-xs text-muted">{item.explanation}</p>}
                 </div>
               </li>
             );
@@ -243,9 +247,9 @@ export default function EmojiRiddles({ questions, act, check, onDone }: Props) {
           type="button"
           onClick={finish}
           disabled={!finalResult}
-          className="mt-6 w-full rounded-full bg-[#1A73E8] py-3 font-bold text-white shadow-md transition-all hover:bg-[#1557B0] active:scale-95 disabled:opacity-60"
+          className="mt-6 w-full rounded-full bg-sci py-3 font-bold text-ink shadow-md transition-all hover:bg-sci-deep active:scale-95 disabled:opacity-60"
         >
-          Continue
+          {t('game.continue')}
         </button>
       </section>
     );
@@ -255,8 +259,8 @@ export default function EmojiRiddles({ questions, act, check, onDone }: Props) {
     return (
       <div className="flex w-full flex-col items-center gap-4 py-10 text-center anim-slide-in">
         {phase === 'checking' ? (
-          <p role="status" className="text-sm font-bold text-[#5F6368]">
-            Checking your answers…
+          <p role="status" className="text-sm font-bold text-muted">
+            {t('game.checking')}
           </p>
         ) : (
           <div
@@ -267,9 +271,9 @@ export default function EmojiRiddles({ questions, act, check, onDone }: Props) {
             <button
               type="button"
               onClick={() => void submit()}
-              className="rounded-full bg-[#1A73E8] px-5 py-2 text-xs font-bold text-white shadow-md transition-all hover:bg-[#1557B0] active:scale-95"
+              className="rounded-full bg-sci px-5 py-2 text-xs font-bold text-ink shadow-md transition-all hover:bg-sci-deep active:scale-95"
             >
-              Try again
+              {t('play.tryAgain')}
             </button>
           </div>
         )}
@@ -279,7 +283,7 @@ export default function EmojiRiddles({ questions, act, check, onDone }: Props) {
 
   const riddle = questions[idx];
   if (!riddle) {
-    return <p className="py-8 text-center text-sm text-[#5F6368]">No riddles this round.</p>;
+    return <p className="py-8 text-center text-sm text-muted">{t('riddles.none')}</p>;
   }
 
   // Look of one option. Before a verdict the picked option is neutral; after it, right and wrong show.
@@ -290,9 +294,9 @@ export default function EmojiRiddles({ questions, act, check, onDone }: Props) {
         : 'anim-shake anim-flash-red border-[#EA4335] bg-[#FCE8E6] text-[#C5221F]';
     }
     if (verdict && verdict.correctAnswer === opt) return 'border-[#34A853] bg-[#E6F4EA] text-[#137333]';
-    if (picked === opt) return 'anim-pop border-[#1A73E8] bg-[#E8F0FE] text-[#1A73E8]';
-    if (picked !== null) return 'border-[#DADCE0] bg-[#F8F9FA] text-[#9AA0A6]';
-    return 'border-[#DADCE0] bg-white hover:border-[#1A73E8] hover:bg-[#E8F0FE] active:scale-95';
+    if (picked === opt) return 'anim-pop border-sci bg-sci-soft text-ink';
+    if (picked !== null) return 'border-line bg-mist text-muted-2';
+    return 'border-line bg-white hover:border-sci hover:bg-sci-soft active:scale-95';
   }
 
   return (
@@ -300,14 +304,14 @@ export default function EmojiRiddles({ questions, act, check, onDone }: Props) {
       <EmojiWarm glyphs={glyphs} />
 
       <div className="mb-4 flex w-full items-center justify-center">
-        <span className="rounded-full bg-[#E8F0FE] px-3 py-1 text-xs font-bold uppercase tracking-wider text-[#1A73E8]">
-          Question {idx + 1} of {questions.length}
+        <span className="rounded-full bg-sci-soft px-3 py-1 text-xs font-bold uppercase tracking-wider text-ink">
+          {t('riddles.question', { n: idx + 1, total: questions.length })}
         </span>
       </div>
 
       <div
         role="progressbar"
-        aria-label="Question progress"
+        aria-label={t('riddles.progress')}
         aria-valuemin={0}
         aria-valuemax={questions.length}
         aria-valuenow={idx + 1}
@@ -318,16 +322,16 @@ export default function EmojiRiddles({ questions, act, check, onDone }: Props) {
 
       <div key={idx} className="flex w-full flex-col items-center anim-slide-in">
         <RiddleEmojis emojis={riddle.emojis} />
-        <p className="mb-6 text-sm italic text-[#5F6368]">Hint: {riddle.hint}</p>
+        <p className="mb-6 text-sm italic text-muted">{t('riddles.hint', { hint: tq(riddle.hint) })}</p>
 
         {streak >= STREAK_MIN && (
           <div className="mb-3 flex justify-center" aria-hidden="true">
             {/* Keyed by the count so the entrance plays again on each new streak. */}
             <span
               key={streak}
-              className="streak-pop rounded-full bg-[#FBBC04] px-3 py-1 text-xs font-black text-[#202124]"
+              className="streak-pop rounded-full bg-sci px-3 py-1 text-xs font-black text-ink"
             >
-              x{streak} streak
+              {t('game.streak', { n: streak })}
             </span>
           </div>
         )}
@@ -337,6 +341,7 @@ export default function EmojiRiddles({ questions, act, check, onDone }: Props) {
             <OptionButton
               key={opt}
               opt={opt}
+              label={tq(opt)}
               tone={toneOf(opt)}
               disabled={picked !== null}
               onPick={onPick}
@@ -346,7 +351,7 @@ export default function EmojiRiddles({ questions, act, check, onDone }: Props) {
         </div>
 
         <p role="status" className="sr-only">
-          {verdict ? (verdict.correct ? 'Correct' : `Not quite. The answer is ${verdict.correctAnswer}.`) : ''}
+          {verdict ? (verdict.correct ? t('game.correct') : t('riddles.notQuite', { answer: tq(verdict.correctAnswer) })) : ''}
         </p>
       </div>
     </div>

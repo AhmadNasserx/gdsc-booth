@@ -1,4 +1,4 @@
-# BAU Tripoli Open House: Tech and Science Challenge
+# BAU Open Doors 2026 · Faculty of Science: Tech and Science Challenge
 
 The booth app for the **Beirut Arab University (BAU), Tripoli campus Open House**. Visitors choose a display name, enter a phone number, play three short tech and science mini-games, once each, in order, and land on a live leaderboard. The top 3 players of every hour win a prize, and a player qualifies by finishing all three games. The booth's second screen shows the leaderboard, the prize countdown and the hourly winners.
 
@@ -24,6 +24,15 @@ The booth app for the **Beirut Arab University (BAU), Tripoli campus Open House*
 **Booth second screen:**
 
 <img src="docs/screenshots/leaderboard-screen.webp" alt="Live leaderboard on the booth's second screen with a podium for the top three">
+
+## Open Doors 2026 edition (Faculty of Science)
+
+- **Look.** The theme follows the Open Doors 2026 poster: BAU and Open Doors logos (`public/brand/`), the triangle mosaic (`components/Mosaic.tsx`), condensed Oswald headlines with Source Sans 3 text (self-hosted in `app/fonts/`, SIL Open Font License) and Faculty of Science yellow as the main colour. The colour tokens live in `app/globals.css` (`bg-sci`, `text-indigo`, …).
+- **School, class and language.** Before starting, a player picks English or French, their school and their class: Grade 10, Grade 11 (Scientific or Literature) or Grade 12 (GS, SE or LS). The server checks them (`lib/profile.ts`) and stores them with the private contact, never on the leaderboard. Staff see the school and class next to each winner in the admin panel and in the CSV export.
+- **School list.** Fill in `lib/schools.ts`, one school per line. Until it is filled in, players pick "My school is not in the list" and type the name.
+- **French.** The questions themselves are unchanged. `lib/questions.fr.ts` holds the French text for every hint, question and option, keyed by the English text. A French player sees the French text, while the option sent to and graded by the server stays the English one. The interface strings are in `lib/i18n.ts`.
+- **Booth loop** at `/marketing`: an animated how-to-play loop for the laptop or TV, with the QR code, the hourly prizes and a reminder to check the leaderboard. Tap once for music.
+- **Winners ceremony** at `/announce`: reveals the day's top 9 (players who finished all three games) or one hour's top 3, with drumrolls, a name reel, a podium and fireworks. Space or click reveals the next winner, ← goes back, F is fullscreen, M mutes and Esc returns to the choices.
 
 ## How a visit works
 

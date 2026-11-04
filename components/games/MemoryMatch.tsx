@@ -5,12 +5,13 @@ import Burst from '@/components/Burst';
 import EmojiWarm from '@/components/EmojiWarm';
 import type { FlipResponse, RunResult } from '@/lib/apiTypes';
 import { feedback } from '@/lib/feedback';
+import { text, useT, type Lang } from '@/lib/i18n';
 import { MEMORY_EMOJIS } from '@/lib/memoryEmojis';
 
 const MISMATCH_MS = 600;
 const WIN_DELAY_MS = 900;
 const CONFETTI_COUNT = 24;
-const CONFETTI_COLORS = ['#1A73E8', '#34A853', '#FBBC04', '#EA4335'];
+const CONFETTI_COLORS = ['#F7B500', '#965D94', '#00A6BA', '#7DB83A', '#E1484B'];
 
 interface Props {
   cards: number;
@@ -156,12 +157,12 @@ function Stat({ label, value }: { label: string; value: string | number }) {
     <div
       role="group"
       aria-label={`${label}: ${value}`}
-      className="flex-1 rounded-2xl bg-[#E8F0FE] px-2 py-2 text-center"
+      className="flex-1 rounded-2xl bg-sci-soft px-2 py-2 text-center"
     >
-      <div aria-hidden="true" className="text-[10px] font-bold uppercase tracking-wider text-[#5F6368]">
+      <div aria-hidden="true" className="text-[10px] font-bold uppercase tracking-wider text-muted">
         {label}
       </div>
-      <div aria-hidden="true" className="text-lg font-black tabular-nums text-[#1A73E8]">
+      <div aria-hidden="true" className="text-lg font-black tabular-nums text-ink">
         {value}
       </div>
     </div>
@@ -193,13 +194,14 @@ interface CardProps {
   isWaiting: boolean;
   isMismatch: boolean;
   onFlip: (index: number) => void;
+  lang: Lang;
 }
 
 /**
  * One card. Memoized on primitive props, so a flip re-renders only the cards that changed and
  * the other buttons keep their DOM nodes.
  */
-const MemoCard = memo(function MemoCard({ index, status, emoji, isWaiting, isMismatch, onFlip }: CardProps) {
+const MemoCard = memo(function MemoCard({ index, status, emoji, isWaiting, isMismatch, onFlip, lang }: CardProps) {
   const isMatched = status === 'matched';
   const isShimmer = status === 'pending';
   const isUp = isMatched || status === 'up';
@@ -208,22 +210,22 @@ const MemoCard = memo(function MemoCard({ index, status, emoji, isWaiting, isMis
     ? 'border-[#34A853] bg-[#E6F4EA] shadow-[0_0_0_3px_rgba(52,168,83,0.35),0_0_18px_rgba(52,168,83,0.6)]'
     : isMismatch
       ? 'border-[#EA4335] bg-white'
-      : 'border-[#DADCE0] bg-white';
+      : 'border-line bg-white';
 
   return (
     <button
       type="button"
       onClick={() => onFlip(index)}
-      aria-label={isUp ? `Card ${index + 1}, ${emoji}` : `Card ${index + 1}, face down`}
+      aria-label={isUp ? text(lang, 'memory.cardUp', { n: index + 1, emoji: emoji ?? '' }) : text(lang, 'memory.cardDown', { n: index + 1 })}
       aria-disabled={isFlipped || undefined}
       aria-busy={isWaiting || undefined}
-      className="relative aspect-square min-h-16 w-full touch-manipulation rounded-xl outline-none [perspective:600px] focus-visible:ring-4 focus-visible:ring-[#FBBC04]"
+      className="relative aspect-square min-h-16 w-full touch-manipulation rounded-xl outline-none [perspective:600px] focus-visible:ring-4 focus-visible:ring-sci"
     >
       <span
         aria-hidden="true"
         className={`memo-flip absolute inset-0 block rounded-xl [transform-style:preserve-3d] ${isFlipped ? '[transform:rotateY(180deg)]' : ''}`}
       >
-        <span className="absolute inset-0 flex items-center justify-center rounded-xl bg-[#1A73E8] text-2xl font-black text-white shadow-md [backface-visibility:hidden]">
+        <span className="memo-back font-display absolute inset-0 flex items-center justify-center rounded-xl bg-sci text-3xl font-bold text-indigo shadow-md [backface-visibility:hidden]">
           ?
         </span>
         <span
@@ -239,7 +241,7 @@ const MemoCard = memo(function MemoCard({ index, status, emoji, isWaiting, isMis
         </span>
       </span>
       {/* Mounted only while matched, so the burst plays once when the pair is found. */}
-      {isMatched && <Burst count={10} colors={['#34A853', '#FBBC04', '#1A73E8']} />}
+      {isMatched && <Burst count={10} colors={['#7DB83A', '#F7B500', '#00A6BA']} />}
     </button>
   );
 });
@@ -247,6 +249,7 @@ const MemoCard = memo(function MemoCard({ index, status, emoji, isWaiting, isMis
 export default function MemoryMatch({ cards, act, onDone }: Props) {
   const [state, dispatch] = useReducer(reducer, cards, initialState);
   const { moves, elapsed, started, done, result, mismatch, error } = state;
+  const { lang, t } = useT();
   const matchedCount = state.cards.filter((card) => card.status === 'matched').length;
 
   // Synchronous guard against double taps: set from the tap until the board is free again
@@ -256,6 +259,12 @@ export default function MemoryMatch({ cards, act, onDone }: Props) {
   const onDoneRef = useRef(onDone);
   const reportedRef = useRef(false);
   const aliveRef = useRef(true);
+
+  // Read by the stable flip() callback, so a failed flip is explained in the player's language.
+  const retryTextRef = useRef(t('memory.retry'));
+  useEffect(() => {
+    retryTextRef.current = t('memory.retry');
+  }, [t]);
 
   // flip() is a stable callback, so it reads the latest board and act prop through refs.
   const stateRef = useRef(state);
@@ -331,30 +340,30 @@ export default function MemoryMatch({ cards, act, onDone }: Props) {
         dispatch({
           type: 'unpend',
           index,
-          error: err instanceof Error ? err.message : 'Something went wrong. Try that card again.',
+          error: err instanceof Error ? err.message : retryTextRef.current,
         });
       },
     );
   }, []);
 
-  const status = mismatch ? 'No match, try again' : done ? '' : 'Find the matching pairs';
+  const status = mismatch ? t('memory.noMatch') : done ? '' : t('memory.find');
 
   return (
     <div className="flex w-full min-w-0 flex-col items-center anim-slide-in">
       <div className="mb-4 flex w-full max-w-sm gap-2">
-        <Stat label="Moves" value={moves} />
-        <Stat label="Time" value={`${elapsed}s`} />
-        <Stat label="Pairs" value={matchedCount / 2} />
+        <Stat label={t('memory.moves')} value={moves} />
+        <Stat label={t('memory.time')} value={`${elapsed}s`} />
+        <Stat label={t('memory.pairs')} value={matchedCount / 2} />
       </div>
 
-      <p aria-live="polite" className="mb-3 h-5 text-center text-xs font-semibold text-[#5F6368]">
+      <p aria-live="polite" className="mb-3 h-5 text-center text-xs font-semibold text-muted">
         {status}
       </p>
 
       <div className="relative w-full max-w-xs sm:max-w-sm">
         {/* Draws every face once so the emoji is rasterised before the first flip. */}
         <EmojiWarm glyphs={MEMORY_EMOJIS} />
-        <div role="group" aria-label="Memory cards" className="grid grid-cols-4 gap-2 sm:gap-3">
+        <div role="group" aria-label={t('memory.cards')} className="grid grid-cols-4 gap-2 sm:gap-3">
           {state.cards.map((card, i) => (
             <MemoCard
               key={i}
@@ -364,6 +373,7 @@ export default function MemoryMatch({ cards, act, onDone }: Props) {
               isWaiting={state.pending === i}
               isMismatch={mismatch?.includes(i) ?? false}
               onFlip={flip}
+              lang={lang}
             />
           ))}
         </div>
@@ -381,7 +391,7 @@ export default function MemoryMatch({ cards, act, onDone }: Props) {
           role="status"
           className="mt-5 rounded-2xl bg-[#E6F4EA] px-4 py-3 text-center text-sm font-bold text-[#137333] anim-slide-in"
         >
-          🎉 All pairs found in {moves} moves · {Math.max(1, elapsed)}s
+          {t('memory.done', { moves, secs: Math.max(1, elapsed) })}
         </div>
       )}
     </div>

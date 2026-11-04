@@ -14,12 +14,16 @@ import type { ActionBody, BatchResponse, CheckBody, CheckResponse, FlipResponse,
 import { clearSession, getSession, setSessionNotice, useIsBrowser, type PlayerSession } from '@/lib/clientSession';
 import { GameApiError, fetchMe, sendAction, startGame } from '@/lib/gameClient';
 import { GAMES } from '@/lib/games';
+import { GAME_TEXT, text, getSavedLang, useT } from '@/lib/i18n';
+import BrandMark from '@/components/BrandMark';
+import Mosaic from '@/components/Mosaic';
 import { MEMORY_EMOJIS } from '@/lib/memoryEmojis';
 import { TABS, type Tab } from '@/lib/types';
 
-const SESSION_EXPIRED = 'Your session has ended. Enter your name to keep playing.';
-const RUN_ENDED = 'That game had already finished, so we moved you on.';
-const FALLBACK_ERROR = 'Something went wrong. Please try again.';
+// Messages are read in the player's language at the moment they are shown.
+const SESSION_EXPIRED = () => text(getSavedLang() ?? 'en', 'play.expired');
+const RUN_ENDED = () => text(getSavedLang() ?? 'en', 'play.runEnded');
+const FALLBACK_ERROR = () => text(getSavedLang() ?? 'en', 'common.error');
 
 // The page is always in exactly one stage. A running game carries the functions that
 // talk to its run, so the render itself never reads a ref.
@@ -45,7 +49,7 @@ function isSessionExpired(error: unknown): boolean {
 }
 
 function messageOf(error: unknown): string {
-  return error instanceof Error && error.message ? error.message : FALLBACK_ERROR;
+  return error instanceof Error && error.message ? error.message : FALLBACK_ERROR();
 }
 
 /** The first game in play order that has no score yet, or null when all are played. */
@@ -61,11 +65,12 @@ export default function PlayPage() {
   // Storage is read only in the browser, so the server and the first client render match.
   // Until then the page shows the same skeleton the server sends, so the first paint is never blank.
   const isBrowser = useIsBrowser();
+  const { t } = useT();
   if (!isBrowser) {
     return (
       <Shell notice="" warm>
         <Card>
-          <GameSkeleton game={null} label="Getting your game ready…" />
+          <GameSkeleton game={null} label={t('play.ready')} />
         </Card>
       </Shell>
     );
@@ -75,6 +80,8 @@ export default function PlayPage() {
 
 function PlayFlow() {
   const router = useRouter();
+  const { lang, t } = useT();
+  const title = (tab: Tab) => (lang === 'fr' ? GAME_TEXT.fr[tab].title : GAMES[tab].title);
   const [session, setSession] = useState<PlayerSession | null>(() => getSession());
   const [stage, setStage] = useState<Stage>({ kind: 'boot' });
   const [notice, setNotice] = useState('');
@@ -89,7 +96,7 @@ function PlayFlow() {
   const expireSession = useCallback(() => {
     liveRunRef.current = null;
     clearSession();
-    setSessionNotice(SESSION_EXPIRED);
+    setSessionNotice(SESSION_EXPIRED());
     setSession(null);
   }, []);
 
@@ -115,7 +122,7 @@ function PlayFlow() {
       }
       if (!(error instanceof GameApiError) || (error.status !== 404 && error.status !== 409)) return;
       if (liveRunRef.current !== runId) return; // the run already finished, so this is a late duplicate
-      resumeRef.current(RUN_ENDED);
+      resumeRef.current(RUN_ENDED());
     },
     [expireSession],
   );
@@ -201,13 +208,13 @@ function PlayFlow() {
     <Shell notice={notice} warm={warm}>
       {stage.kind === 'boot' && (
         <Card>
-          <GameSkeleton game={null} label="Getting your game ready…" />
+          <GameSkeleton game={null} label={t('play.ready')} />
         </Card>
       )}
 
       {stage.kind === 'loading' && (
         <Card>
-          <GameSkeleton game={stage.game} label={`Starting ${GAMES[stage.game].title}…`} />
+          <GameSkeleton game={stage.game} label={t('play.starting', { game: title(stage.game) })} />
         </Card>
       )}
 
@@ -215,17 +222,17 @@ function PlayFlow() {
         <Card>
           <div className="flex flex-col items-center text-center py-6 gap-3">
             <p className="text-4xl font-emoji" aria-hidden="true">📡</p>
-            <h2 className="text-lg font-extrabold text-[#202124]">Couldn&apos;t start the next game</h2>
-            <p role="alert" className="text-sm text-[#5F6368] max-w-sm">
+            <h2 className="text-lg font-extrabold text-ink">{t('play.startFailed')}</h2>
+            <p role="alert" className="text-sm text-muted max-w-sm">
               {stage.message}
             </p>
-            <p className="text-xs text-[#5F6368]">Your scores so far are safe.</p>
+            <p className="text-xs text-muted">{t('play.safe')}</p>
             <button
               type="button"
               onClick={() => resume()}
-              className="min-h-12 w-full max-w-xs px-6 py-3 rounded-full bg-[#1A73E8] hover:bg-[#1557B0] text-white font-bold shadow focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#1A73E8]/40"
+              className="min-h-12 w-full max-w-xs px-6 py-3 rounded-full bg-sci hover:bg-sci-deep text-ink font-bold shadow focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sci/40"
             >
-              Try again
+              {t('play.tryAgain')}
             </button>
           </div>
         </Card>
@@ -233,9 +240,7 @@ function PlayFlow() {
 
       {stage.kind === 'playing' && (
         <Card>
-          <p className="text-xs font-bold text-[#5F6368] mb-4">
-            {`Game ${TABS.indexOf(stage.game) + 1} of ${TABS.length}`}
-          </p>
+          <GameStepper game={stage.game} label={t('play.gameOf', { n: TABS.indexOf(stage.game) + 1, total: TABS.length })} title={title(stage.game)} />
           <div key={stage.start.runId}>{renderGame(stage.start.view, stage.act, stage.check, stage.onDone)}</div>
         </Card>
       )}
@@ -271,13 +276,15 @@ function PlayFlow() {
  */
 function Shell({ notice, warm, children }: { notice: string; warm: boolean; children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#F8F9FA] flex flex-col items-center p-4 md:p-8">
-      <div className="mb-3 flex w-full max-w-2xl justify-end">
+    <div className="relative min-h-screen overflow-hidden bg-mist flex flex-col items-center p-4 md:p-8">
+      <Mosaic className="mosaic-fade pointer-events-none absolute right-0 top-0 h-32 w-3/4 md:h-48 md:w-1/2" cols={24} rows={8} />
+      <div className="relative mb-4 flex w-full max-w-2xl items-center justify-between gap-3">
+        <BrandMark size="sm" faculty={null} chip />
         <SoundToggle />
       </div>
 
       {notice && (
-        <p role="status" className="mb-4 text-xs text-[#B06000] bg-[#FEF7E0] border border-[#FBBC04] rounded-xl px-4 py-2">
+        <p role="status" className="relative mb-4 text-xs text-sci-ink bg-sci-soft border border-sci rounded-xl px-4 py-2">
           {notice}
         </p>
       )}
@@ -290,9 +297,27 @@ function Shell({ notice, warm, children }: { notice: string; warm: boolean; chil
 
 function Card({ children }: { children: React.ReactNode }) {
   return (
-    <main className="w-full max-w-2xl bg-white border border-[#DADCE0] rounded-3xl p-6 md:p-8 shadow-sm">
+    <main className="relative w-full max-w-2xl bg-white border border-line rounded-3xl p-6 md:p-8 shadow-[0_20px_50px_-28px_rgba(43,27,87,0.4)]">
       {children}
     </main>
+  );
+}
+
+/** "Game 2 of 3" with a three-step bar, so the player sees how far along the visit is. */
+function GameStepper({ game, label, title }: { game: Tab; label: string; title: string }) {
+  const at = TABS.indexOf(game);
+  return (
+    <div className="mb-5">
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="font-display text-sm font-semibold tracking-wider text-sci-ink">{label}</p>
+        <p className="font-display text-sm font-semibold tracking-wider text-indigo">{title}</p>
+      </div>
+      <div className="mt-2 grid grid-cols-3 gap-1.5" aria-hidden="true">
+        {TABS.map((tab, i) => (
+          <span key={tab} className={`h-1.5 rounded-full ${i < at ? 'bg-indigo' : i === at ? 'bg-sci' : 'bg-line'}`} />
+        ))}
+      </div>
+    </div>
   );
 }
 

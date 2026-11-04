@@ -35,12 +35,12 @@ export default function AdminLoginPage() {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-4 py-6">
-      <div className="w-full max-w-sm rounded-3xl border border-[#DADCE0] bg-white p-8 shadow-sm">
-        <h1 className="text-center text-2xl font-extrabold text-[#202124]">Admin sign in</h1>
+      <div className="w-full max-w-sm rounded-3xl border border-line bg-white p-8 shadow-sm">
+        <h1 className="text-center text-2xl font-extrabold text-ink">Admin sign in</h1>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div>
-            <label htmlFor="admin-password" className="mb-1.5 block text-sm font-semibold text-[#202124]">
+            <label htmlFor="admin-password" className="mb-1.5 block text-sm font-semibold text-ink">
               Password
             </label>
             <input

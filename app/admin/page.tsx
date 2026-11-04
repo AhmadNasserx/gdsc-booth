@@ -112,7 +112,7 @@ export default function AdminPage() {
   return (
     <main className="mx-auto w-full max-w-2xl space-y-5 px-4 py-6 pb-12">
       <header className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-extrabold text-[#202124]">Open House admin</h1>
+        <h1 className="text-2xl font-extrabold text-ink">Open Doors admin</h1>
         <button type="button" onClick={signOut} disabled={signingOut} className={BUTTON_SECONDARY}>
           {signingOut ? 'Signing out...' : 'Sign out'}
         </button>
@@ -124,7 +124,7 @@ export default function AdminPage() {
         </p>
       )}
       {readFailed && (
-        <p role="status" className="rounded-2xl border border-[#FBBC04] bg-[#FEF7E0] p-3 text-sm font-semibold text-[#B06000]">
+        <p role="status" className="rounded-2xl border border-sci bg-sci-soft p-3 text-sm font-semibold text-sci-ink">
           Could not refresh everything. The panels show the last update.
         </p>
       )}

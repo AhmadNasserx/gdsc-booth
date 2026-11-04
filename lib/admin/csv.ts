@@ -15,7 +15,7 @@ export function csvCell(value: string | number | boolean | null): string {
 
 /** The winners of every round as CSV, with a byte order mark so Excel reads accented names correctly. */
 export function winnersCsv(rounds: WinnerRound[]): string {
-  const header = ['name', 'hour', 'rank', 'score', 'phone', 'prize given'].map(csvCell).join(',');
+  const header = ['name', 'hour', 'rank', 'score', 'phone', 'school', 'class', 'prize given'].map(csvCell).join(',');
   const body: string[] = [];
   for (const round of rounds) {
     for (const winner of round.winners) {
@@ -25,6 +25,8 @@ export function winnersCsv(rounds: WinnerRound[]): string {
         winner.rank,
         winner.score,
         winner.phone ?? '',
+        winner.school ?? '',
+        winner.level ?? '',
         winner.prizeGiven ? 'yes' : 'no',
       ];
       body.push(cells.map(csvCell).join(','));
