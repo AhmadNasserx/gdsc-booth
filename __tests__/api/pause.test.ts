@@ -5,13 +5,12 @@ import { POST as sessionPOST } from '@/app/api/session/route';
 import { POST as startPOST } from '@/app/api/game/start/route';
 import { POST as actionPOST } from '@/app/api/game/action/route';
 import { GET as leaderboardGET } from '@/app/api/leaderboard/route';
+import { isPaused } from '@/lib/config';
+import { resetDb } from '@/test/support/rtdbMock';
 
 jest.mock('@/lib/firebaseAdmin', () => ({
-  adminDb: { ref: () => ({ get: async () => ({ val: () => null }) }) },
+  adminDb: jest.requireActual('@/test/support/rtdbMock').adminDbMock,
 }));
-
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const config = require('@/lib/config') as { GAME_PAUSED: boolean };
 
 function post(handler: (r: Request) => Promise<Response>, body: unknown) {
   return handler(
@@ -24,11 +23,12 @@ function post(handler: (r: Request) => Promise<Response>, body: unknown) {
 }
 
 beforeEach(() => {
-  config.GAME_PAUSED = true;
+  resetDb();
+  (isPaused as jest.Mock).mockResolvedValue(true);
 });
 
 afterAll(() => {
-  config.GAME_PAUSED = false;
+  (isPaused as jest.Mock).mockResolvedValue(false);
 });
 
 describe('paused game', () => {
@@ -45,6 +45,16 @@ describe('paused game', () => {
   it('keeps the leaderboard working', async () => {
     const res = await leaderboardGET();
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual([]);
+    expect(await res.json()).toEqual(expect.objectContaining({ entries: [], rounds: [] }));
+  });
+});
+
+describe('game not paused', () => {
+  it('lets the start route past the pause check', async () => {
+    (isPaused as jest.Mock).mockResolvedValue(false);
+    const res = await post(startPOST, { token: 'x', game: 'riddles' });
+    // The token is not a valid session, so the route stops at its own check and never answers 503.
+    expect(res.status).not.toBe(503);
+    expect(res.status).toBe(401);
   });
 });

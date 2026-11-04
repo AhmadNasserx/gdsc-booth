@@ -90,6 +90,39 @@ describe('LeaderboardTable', () => {
     expect(within(row).getByText('#4')).toBeInTheDocument();
   });
 
+  it('marks an entry without finishedAt as still playing, in the podium and in a row', () => {
+    const many: LeaderboardEntry[] = [
+      { name: 'A', score: 900, finishedAt: 1, timestamp: 1, expiresAt: FAR_FUTURE },
+      { name: 'B', score: 800, finishedAt: 2, timestamp: 2, expiresAt: FAR_FUTURE },
+      { name: 'C', score: 700, finishedAt: 3, timestamp: 3, expiresAt: FAR_FUTURE },
+      { name: 'Playing', score: 300, games: { riddles: 300 }, timestamp: 4, expiresAt: FAR_FUTURE },
+      { name: 'Done', score: 200, finishedAt: 5, timestamp: 5, expiresAt: FAR_FUTURE },
+    ];
+    render(<LeaderboardTable entries={many} />);
+    const row = screen.getByText('Playing').closest('div')!;
+    expect(within(row).getByText('Still playing')).toBeInTheDocument();
+    expect(screen.getAllByText('Still playing')).toHaveLength(1);
+  });
+
+  it('shows "Still playing" on a podium card when finishedAt is missing', () => {
+    render(
+      <LeaderboardTable
+        entries={[{ name: 'Top', score: 500, timestamp: 1, expiresAt: FAR_FUTURE }]}
+      />,
+    );
+    expect(screen.getByText('1st Place').closest('div')).toHaveTextContent('Still playing');
+  });
+
+  it('does not show "Still playing" for an entry with finishedAt', () => {
+    render(
+      <LeaderboardTable
+        entries={[{ name: 'Done', score: 500, finishedAt: 1000, timestamp: 1, expiresAt: FAR_FUTURE }]}
+      />,
+    );
+    expect(screen.getByText('Done')).toBeInTheDocument();
+    expect(screen.queryByText('Still playing')).not.toBeInTheDocument();
+  });
+
   it('never shows a bar, a maximum or "out of"', () => {
     const { container } = render(<LeaderboardTable entries={entries} />);
     const text = container.textContent ?? '';

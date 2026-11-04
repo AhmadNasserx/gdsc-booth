@@ -355,3 +355,37 @@ describe('POST /api/session: phone number', () => {
     expect(JSON.stringify(readPath('names'))).not.toMatch(PHONE_DIGITS);
   });
 });
+
+describe('POST /api/session: prize clock', () => {
+  const FIRST_AT = 1_700_000_000_000;
+  const LATER_AT = FIRST_AT + 3_600_000;
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('sets event/startedAt to the time of the first session', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(FIRST_AT);
+    expect((await claim('Ahmad', KEY_A, PHONE_A)).status).toBe(200);
+    expect(readPath('event/startedAt')).toBe(FIRST_AT);
+  });
+
+  it('keeps the same event/startedAt for a later session by another player', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(FIRST_AT);
+    await claim('Ahmad', KEY_A, PHONE_A);
+
+    jest.spyOn(Date, 'now').mockReturnValue(LATER_AT);
+    expect((await claim('Bilal', KEY_B, PHONE_B)).status).toBe(200);
+    expect(readPath('event/startedAt')).toBe(FIRST_AT);
+  });
+
+  it('does not set event/startedAt when the name is taken', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(FIRST_AT);
+    writePath('names/ahmad', { keyHash: hashPlayerKey(KEY_B), claimedAt: 1, expiresAt: FIRST_AT + DAY_MS });
+
+    const res = await claim('Ahmad', KEY_A, PHONE_A);
+    expect(res.status).toBe(409);
+    expect((await res.json()).field).toBe('name');
+    expect(readPath('event/startedAt')).toBeNull();
+  });
+});

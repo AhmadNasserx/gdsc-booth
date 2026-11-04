@@ -1,6 +1,33 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import ResultScreen from '@/components/ResultScreen';
 import type { RunResult } from '@/lib/apiTypes';
+import { feedback } from '@/lib/feedback';
+
+jest.mock('@/lib/feedback', () => ({ feedback: jest.fn() }));
+
+// Reports reduced motion so CountUp shows the final score at once and the assertions do not race a frame clock.
+const originalMatchMedia = window.matchMedia;
+function mockReducedMotion() {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: (query: string) => ({
+      matches: true,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+      onchange: null,
+    }),
+  });
+}
+
+beforeAll(() => mockReducedMotion());
+afterAll(() => {
+  Object.defineProperty(window, 'matchMedia', { writable: true, value: originalMatchMedia });
+});
+beforeEach(() => jest.clearAllMocks());
 
 function result(overrides: Partial<RunResult> = {}): RunResult {
   return {
@@ -26,6 +53,23 @@ describe('ResultScreen', () => {
     renderScreen();
     expect(screen.getByText('+350 pts')).toBeInTheDocument();
     expect(screen.getByText('Emoji Riddles')).toBeInTheDocument();
+  });
+
+  it('shows the score for this run as +N pts once the count-up settles', () => {
+    renderScreen({ score: 120, improved: false, best: 700 });
+    expect(screen.getByText('+120 pts')).toBeInTheDocument();
+  });
+
+  it('plays the win sound when the game set a new best', () => {
+    renderScreen({ improved: true });
+    expect(feedback).toHaveBeenCalledTimes(1);
+    expect(feedback).toHaveBeenCalledWith('win');
+  });
+
+  it('plays the finish sound when the score did not beat the best', () => {
+    renderScreen({ improved: false, best: 700 });
+    expect(feedback).toHaveBeenCalledTimes(1);
+    expect(feedback).toHaveBeenCalledWith('finish');
   });
 
   it('shows the total and rank', () => {

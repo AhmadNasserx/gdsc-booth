@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { signSession } from '@/lib/session';
 import { adminDb } from '@/lib/firebaseAdmin';
-import { GAME_PAUSED, PAUSED_MESSAGE } from '@/lib/config';
+import { isPaused, PAUSED_MESSAGE } from '@/lib/config';
 import { NAME_PATTERN, normalizeName, hashPlayerKey, isValidPlayerKey } from '@/lib/names';
 import { normalizePhone } from '@/lib/phone';
+import { ensureEventStarted } from '@/lib/event';
 
 const NAME_TTL_MS = 172800000;
 
@@ -21,7 +22,7 @@ interface PhoneEntry {
 }
 
 export async function POST(request: Request) {
-  if (GAME_PAUSED) return NextResponse.json({ error: PAUSED_MESSAGE }, { status: 503 });
+  if (await isPaused()) return NextResponse.json({ error: PAUSED_MESSAGE }, { status: 503 });
   let body: unknown;
   try {
     body = await request.json();
@@ -103,6 +104,9 @@ export async function POST(request: Request) {
       { status: 409 },
     );
   }
+
+  // The prize clock starts with the first player. It is set once and never moved.
+  await ensureEventStarted(now);
 
   // The organisers' copy of the contact. It is never returned to a client or written to the leaderboard.
   await adminDb.ref(`contacts/${normKey}`).set({

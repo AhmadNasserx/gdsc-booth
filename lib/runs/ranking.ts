@@ -35,6 +35,7 @@ export interface RunOutcome {
  * - A game that already has a score is left as it is. The total is the sum of the game scores.
  * - `timestamp` moves to `now` only when the total goes up, so earlier totals win ties.
  * - `expiresAt` never moves back: the later of the old value and issuedAt + 48h.
+ * - `finishedAt` is set to `now` when the run completes the player's third game, and never changes after that.
  */
 export function applyRunToEntry(
   current: LeaderboardEntry | null | undefined,
@@ -55,8 +56,20 @@ export function applyRunToEntry(
   const boardExpiresAt = input.issuedAt + LEADERBOARD_TTL_MS;
   const expiresAt = Math.max(base?.expiresAt ?? 0, boardExpiresAt);
 
+  // The moment the player finished all three games. It is kept once set.
+  const finishedAt =
+    typeof base?.finishedAt === 'number'
+      ? base.finishedAt
+      : TABS.every((tab) => typeof games[tab] === 'number')
+        ? input.now
+        : undefined;
+
+  const entry: LeaderboardEntry = { name: input.name, score: total, games, timestamp, expiresAt };
+  // The database rejects undefined values, so the key is added only when there is a time.
+  if (finishedAt !== undefined) entry.finishedAt = finishedAt;
+
   return {
-    entry: { name: input.name, score: total, games, timestamp, expiresAt },
+    entry,
     best,
     improved: input.score > 0,
   };

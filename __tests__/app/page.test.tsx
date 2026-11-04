@@ -6,15 +6,65 @@ import { COUNTRIES } from '@/lib/countries';
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
 
-global.fetch = jest.fn();
-
 const PLAYER_KEY = /^[0-9a-f]{64}$/;
 // What the player types after the country code (Lebanon is the default), and what the server receives.
 const NATIONAL = '70 123 456';
 const SENT = '+96170123456';
 
-function availableResponse(extra: Record<string, unknown> = {}) {
+interface FetchReply {
+  ok: boolean;
+  status?: number;
+  json: () => Promise<unknown>;
+}
+
+const STATUS_OPEN: FetchReply = { ok: true, json: async () => ({ paused: false }) };
+
+// Replies for every call except /api/status, taken in the order the page makes them.
+let queuedReplies: FetchReply[] = [];
+// Answers any other call once the queue is empty. Unset, an unexpected call rejects.
+let fallbackReply: FetchReply | null = null;
+// Answer to /api/status. A test can swap in a promise that it resolves later.
+let statusReply: Promise<FetchReply> = Promise.resolve(STATUS_OPEN);
+
+/** Routes global.fetch by URL: /api/status always uses statusReply, other calls use the queue, then the fallback. */
+function routeFetch() {
+  global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.startsWith('/api/status')) return statusReply;
+    const reply = queuedReplies.shift() ?? fallbackReply;
+    if (!reply) throw new Error(`Unexpected fetch to ${url}`);
+    return reply;
+  }) as unknown as typeof fetch;
+}
+
+function resetFetch() {
+  queuedReplies = [];
+  fallbackReply = null;
+  statusReply = Promise.resolve(STATUS_OPEN);
+  routeFetch();
+}
+
+function queueReplies(...replies: FetchReply[]) {
+  queuedReplies.push(...replies);
+}
+
+function answerEveryCallWith(reply: FetchReply) {
+  fallbackReply = reply;
+}
+
+/** The first request whose URL starts with the given text, as [url, init]. Throws until it is made, so waitFor can retry. */
+function fetchCall(prefix: string): [string, RequestInit] {
+  const call = (global.fetch as jest.Mock).mock.calls.find(([url]) => String(url).startsWith(prefix));
+  if (!call) throw new Error(`No request was sent to ${prefix}`);
+  return call as [string, RequestInit];
+}
+
+function availableResponse(extra: Record<string, unknown> = {}): FetchReply {
   return { ok: true, json: async () => ({ available: true, ...extra }) };
+}
+
+function tokenResponse(token = 't'): FetchReply {
+  return { ok: true, json: async () => ({ token }) };
 }
 
 async function startButtonEnabled() {
@@ -41,7 +91,7 @@ function consentBox() {
   return screen.getByLabelText(/I agree to be contacted on this number/i);
 }
 
-/** Types a name and national number and ticks consent. The name check is answered by the next fetch. */
+/** Types a name and national number and ticks consent. The name check is answered by the next queued reply. */
 async function fillForm(name = 'Ahmad', national = NATIONAL) {
   await userEvent.type(nameInput(), name);
   await userEvent.type(phoneInput(), national);
@@ -50,9 +100,7 @@ async function fillForm(name = 'Ahmad', national = NATIONAL) {
 
 /** Fills the form for the given country and number, starts the session and returns the sent request body. */
 async function startWith(national: string, country?: string) {
-  (global.fetch as jest.Mock)
-    .mockResolvedValueOnce(availableResponse())
-    .mockResolvedValueOnce({ ok: true, json: async () => ({ token: 't' }) });
+  queueReplies(availableResponse(), tokenResponse());
   render(<Page />);
   if (country) await userEvent.selectOptions(countrySelect(), country);
   await userEvent.type(nameInput(), 'Ahmad');
@@ -60,13 +108,13 @@ async function startWith(national: string, country?: string) {
   await userEvent.click(consentBox());
   fireEvent.click(await startButtonEnabled());
   await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/play'));
-  return JSON.parse((global.fetch as jest.Mock).mock.calls[1][1].body);
+  return JSON.parse(fetchCall('/api/session')[1].body as string);
 }
 
 describe('Name Entry Page', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    (global.fetch as jest.Mock).mockReset();
+    resetFetch();
     sessionStorage.clear();
     localStorage.clear();
   });
@@ -78,10 +126,20 @@ describe('Name Entry Page', () => {
     expect(screen.getByText(/both are deleted after 48 hours/i)).toBeInTheDocument();
   });
 
-  it('invites players to play three games and win the end-of-day prize', () => {
+  it('invites players to play three quick games and win an hourly prize', () => {
     render(<Page />);
-    expect(screen.getByText(/play three games, once each, in order — your scores add up/i)).toBeInTheDocument();
-    expect(screen.getByText(/top the leaderboard by the end of the day to win a prize/i)).toBeInTheDocument();
+    expect(screen.getByText('Play three quick games, once each, in order. Your scores add up.')).toBeInTheDocument();
+    expect(screen.getByText('The top 3 players win a prize every hour. Finish all three games to qualify.')).toBeInTheDocument();
+  });
+
+  it('shows the BAU Tripoli Open House branding and no GDSC or Google branding', () => {
+    render(<Page />);
+    expect(screen.getByRole('heading', { level: 1, name: 'Tech and Science Challenge' })).toBeInTheDocument();
+    expect(screen.getByText('Beirut Arab University, Tripoli campus')).toBeInTheDocument();
+    expect(screen.getByText('BAU Tripoli')).toBeInTheDocument();
+    expect(screen.getByText('· Open House')).toBeInTheDocument();
+    expect(document.querySelector('img')).toBeNull();
+    expect(document.body.textContent ?? '').not.toMatch(/gdsc|google/i);
   });
 
   it('tells players they can play again and that their best score in each game counts', () => {
@@ -100,16 +158,41 @@ describe('Name Entry Page', () => {
     expect(screen.getByRole('button', { name: /start/i })).toBeDisabled();
   });
 
+  it('keeps Start disabled until /api/status has answered, even with a complete form', async () => {
+    let releaseStatus!: (reply: FetchReply) => void;
+    statusReply = new Promise<FetchReply>((resolve) => {
+      releaseStatus = resolve;
+    });
+    answerEveryCallWith(availableResponse());
+    render(<Page />);
+
+    await fillForm();
+    expect(await screen.findByText('This name is available!')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /start/i })).toBeDisabled();
+
+    releaseStatus(STATUS_OPEN);
+    expect(await startButtonEnabled()).toBeEnabled();
+  });
+
+  it('enables Start once the form is valid when /api/status reports the game is open', async () => {
+    answerEveryCallWith(availableResponse());
+    render(<Page />);
+
+    await fillForm();
+    expect(await startButtonEnabled()).toBeEnabled();
+    expect(global.fetch).toHaveBeenCalledWith('/api/status', expect.anything());
+  });
+
   it('prefills the input with the name saved last time', async () => {
     localStorage.setItem('gdscPlayerName', 'Ahmad');
-    (global.fetch as jest.Mock).mockResolvedValue(availableResponse());
+    answerEveryCallWith(availableResponse());
     render(<Page />);
     expect(await screen.findByDisplayValue('Ahmad')).toBeInTheDocument();
   });
 
   it('shows the welcome-back message for a name this browser already holds', async () => {
     localStorage.setItem('gdscPlayerName', 'Ahmad');
-    (global.fetch as jest.Mock).mockResolvedValue(availableResponse({ mine: true }));
+    answerEveryCallWith(availableResponse({ mine: true }));
     render(<Page />);
     await userEvent.type(phoneInput(), NATIONAL);
     await userEvent.click(consentBox());
@@ -119,12 +202,12 @@ describe('Name Entry Page', () => {
   });
 
   it('sends the player key with the availability check', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce(availableResponse());
+    queueReplies(availableResponse());
     render(<Page />);
     await userEvent.type(nameInput(), 'Ahmad');
 
-    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
-    const [url, init] = (global.fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
+    await waitFor(() => fetchCall('/api/names/check?'));
+    const [url, init] = fetchCall('/api/names/check?');
     const params = new URL(url, 'http://localhost').searchParams;
     expect(url.startsWith('/api/names/check?')).toBe(true);
     expect(params.get('name')).toBe('Ahmad');
@@ -135,7 +218,7 @@ describe('Name Entry Page', () => {
   });
 
   it('shows the taken message when the name belongs to someone else', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ available: false }) });
+    queueReplies({ ok: true, json: async () => ({ available: false }) });
     render(<Page />);
     await userEvent.type(nameInput(), 'Ahmad');
 
@@ -157,12 +240,7 @@ describe('Name Entry Page', () => {
   });
 
   it('navigates to /play on successful session creation', async () => {
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce(availableResponse())
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ token: 'test-token' }),
-      });
+    queueReplies(availableResponse(), tokenResponse('test-token'));
 
     render(<Page />);
     await fillForm();
@@ -177,19 +255,17 @@ describe('Name Entry Page', () => {
   });
 
   it('posts the name, the full number, consent and a 64-character hex player key, and remembers the country and number', async () => {
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce(availableResponse())
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ token: 't' }) });
+    queueReplies(availableResponse(), tokenResponse());
 
     render(<Page />);
     await fillForm();
     fireEvent.click(await startButtonEnabled());
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/play'));
 
-    const [url, init] = (global.fetch as jest.Mock).mock.calls[1];
+    const [url, init] = fetchCall('/api/session');
     expect(url).toBe('/api/session');
     expect(init.method).toBe('POST');
-    const body = JSON.parse(init.body);
+    const body = JSON.parse(init.body as string);
     expect(body).toEqual({
       name: 'Ahmad',
       phone: SENT,
@@ -207,23 +283,19 @@ describe('Name Entry Page', () => {
   it('starts a returning player with their saved country, number and the welcome-back status', async () => {
     localStorage.setItem('gdscPlayerName', 'Ahmad');
     localStorage.setItem('gdscPlayerCountryPhone', JSON.stringify({ country: 'LB', national: NATIONAL }));
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce(availableResponse({ mine: true }))
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ token: 't' }) });
+    queueReplies(availableResponse({ mine: true }), tokenResponse());
 
     render(<Page />);
     await userEvent.click(consentBox());
     fireEvent.click(await startButtonEnabled());
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/play'));
-    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[1][1].body);
+    const body = JSON.parse(fetchCall('/api/session')[1].body as string);
     expect(body).toMatchObject({ name: 'Ahmad', phone: SENT, consent: true });
   });
 
   it('shows error message when session creation fails', async () => {
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce(availableResponse())
-      .mockResolvedValueOnce({ ok: false, json: async () => ({ error: 'Server error' }) });
+    queueReplies(availableResponse(), { ok: false, json: async () => ({ error: 'Server error' }) });
 
     render(<Page />);
     await fillForm();
@@ -234,13 +306,11 @@ describe('Name Entry Page', () => {
   });
 
   it('marks the name taken when the server rejects it with 409 and field name', async () => {
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce(availableResponse())
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 409,
-        json: async () => ({ error: 'Display name already taken. Choose another.', field: 'name' }),
-      });
+    queueReplies(availableResponse(), {
+      ok: false,
+      status: 409,
+      json: async () => ({ error: 'Display name already taken. Choose another.', field: 'name' }),
+    });
 
     render(<Page />);
     await fillForm();
@@ -253,13 +323,11 @@ describe('Name Entry Page', () => {
   });
 
   it('shows the phone error under the phone field, and not the name, when the server refuses the phone', async () => {
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce(availableResponse())
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 409,
-        json: async () => ({ error: 'This phone number is already registered.', field: 'phone' }),
-      });
+    queueReplies(availableResponse(), {
+      ok: false,
+      status: 409,
+      json: async () => ({ error: 'This phone number is already registered.', field: 'phone' }),
+    });
 
     render(<Page />);
     await fillForm();
@@ -272,13 +340,11 @@ describe('Name Entry Page', () => {
   });
 
   it('enables Start again once the refused phone number is changed', async () => {
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce(availableResponse())
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 409,
-        json: async () => ({ error: 'This phone number is already registered.', field: 'phone' }),
-      });
+    queueReplies(availableResponse(), {
+      ok: false,
+      status: 409,
+      json: async () => ({ error: 'This phone number is already registered.', field: 'phone' }),
+    });
 
     render(<Page />);
     await fillForm();
@@ -296,8 +362,8 @@ describe('Name Entry Page', () => {
 describe('Phone number and consent', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    (global.fetch as jest.Mock).mockReset();
-    (global.fetch as jest.Mock).mockResolvedValue(availableResponse());
+    resetFetch();
+    answerEveryCallWith(availableResponse());
     sessionStorage.clear();
     localStorage.clear();
   });
@@ -433,9 +499,7 @@ describe('Phone number and consent', () => {
   });
 
   it('sends the number and consent with the session request, trimmed', async () => {
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce(availableResponse())
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ token: 't' }) });
+    queueReplies(availableResponse(), tokenResponse());
 
     render(<Page />);
     await userEvent.type(nameInput(), 'Ahmad');
@@ -444,7 +508,7 @@ describe('Phone number and consent', () => {
     fireEvent.click(await startButtonEnabled());
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/play'));
-    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[1][1].body);
+    const body = JSON.parse(fetchCall('/api/session')[1].body as string);
     expect(body.phone).toBe(SENT);
     expect(body.consent).toBe(true);
   });

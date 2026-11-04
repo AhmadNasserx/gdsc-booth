@@ -72,6 +72,53 @@ describe('applyRunToEntry', () => {
     const out = applyRunToEntry(current, { name: 'X', game: 'memory', score: 200, now: NOW, issuedAt: NOW });
     expect(out.entry.expiresAt).toBe(NOW + LEADERBOARD_TTL_MS);
   });
+
+  it('sets finishedAt to now when the run completes the third game', () => {
+    const current = entry({ score: 1100, games: { riddles: 700, memory: 400 }, timestamp: 5 });
+    const out = applyRunToEntry(current, { name: 'X', game: 'trivia', score: 300, now: NOW, issuedAt: ISSUED });
+    expect(out.entry.finishedAt).toBe(NOW);
+  });
+
+  it('sets finishedAt when the third game scores 0', () => {
+    const current = entry({ score: 1100, games: { riddles: 700, memory: 400 }, timestamp: 5 });
+    const out = applyRunToEntry(current, { name: 'X', game: 'trivia', score: 0, now: NOW, issuedAt: ISSUED });
+    expect(out.entry.games).toEqual({ riddles: 700, memory: 400, trivia: 0 });
+    expect(out.entry.finishedAt).toBe(NOW);
+  });
+
+  it('has no finishedAt key after one or two games', () => {
+    const first = applyRunToEntry(null, { name: 'X', game: 'riddles', score: 700, now: NOW, issuedAt: ISSUED });
+    expect('finishedAt' in first.entry).toBe(false);
+
+    const second = applyRunToEntry(first.entry, { name: 'X', game: 'memory', score: 300, now: NOW, issuedAt: ISSUED });
+    expect('finishedAt' in second.entry).toBe(false);
+  });
+
+  it('keeps an existing finishedAt when a played game is replayed', () => {
+    const current = entry({ score: 1500, games: { riddles: 700, memory: 400, trivia: 400 }, timestamp: 5, finishedAt: 500 });
+    const out = applyRunToEntry(current, { name: 'X', game: 'memory', score: 900, now: NOW, issuedAt: ISSUED });
+    expect(out.entry.finishedAt).toBe(500);
+    expect(out.entry).toEqual(current);
+  });
+
+  it('keeps an existing finishedAt when a live entry moves on to a new game', () => {
+    const current = entry({ score: 100, games: { riddles: 100 }, timestamp: 5, finishedAt: 500 });
+    const out = applyRunToEntry(current, { name: 'X', game: 'memory', score: 200, now: NOW, issuedAt: ISSUED });
+    expect(out.entry.finishedAt).toBe(500);
+  });
+
+  it('treats an expired entry with games as absent, so one new game does not set finishedAt', () => {
+    const stale = entry({
+      score: 1500,
+      games: { riddles: 700, memory: 400, trivia: 400 },
+      timestamp: 2,
+      finishedAt: 500,
+      expiresAt: NOW - 1,
+    });
+    const out = applyRunToEntry(stale, { name: 'X', game: 'riddles', score: 300, now: NOW, issuedAt: ISSUED });
+    expect(out.entry.games).toEqual({ riddles: 300 });
+    expect('finishedAt' in out.entry).toBe(false);
+  });
 });
 
 describe('computeRank', () => {

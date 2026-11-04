@@ -33,11 +33,13 @@ export function isVerdictReply(reply: unknown): reply is CheckResponse {
   return typeof correct === 'boolean' && typeof correctAnswer === 'string';
 }
 
-/** A short vibration on a verdict. Quietly does nothing where vibration is missing or blocked. */
-export function buzz(ms: number): void {
-  try {
-    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') navigator.vibrate(ms);
-  } catch {
-    // The colour change already tells the player, so a failed buzz is fine.
-  }
+/** A run of this many right answers in a row earns the streak cue and the pill. */
+export const STREAK_MIN = 3;
+
+/**
+ * The streak after one verdict. It only moves on a verdict, so a question with no verdict (a slow
+ * or failed check) leaves the streak alone.
+ */
+export function nextStreak(streak: number, correct: boolean): number {
+  return correct ? streak + 1 : 0;
 }

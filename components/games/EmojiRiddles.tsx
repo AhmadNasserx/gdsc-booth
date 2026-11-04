@@ -1,13 +1,18 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { BatchResponse, ReviewItem, RiddleView, RunResult } from '@/lib/apiTypes';
-import { buzz, isVerdictReply, runInOrder, VERDICT_WAIT_MS, type CheckFn, type Verdict } from './verdict';
+import Burst from '@/components/Burst';
+import EmojiWarm from '@/components/EmojiWarm';
+import { feedback } from '@/lib/feedback';
+import { isVerdictReply, nextStreak, runInOrder, STREAK_MIN, VERDICT_WAIT_MS, type CheckFn, type Verdict } from './verdict';
 
 // Short neutral "locked in" pause before the next question when there is no check to wait for.
 const PICK_MS = 250;
 // How long the right/wrong verdict stays on screen before the next question.
 const VERDICT_MS = 600;
+// Confetti colours for a right answer, from the palette the game already uses.
+const BURST_COLORS = ['#34A853', '#FBBC04', '#1A73E8'];
 
 type Phase = 'play' | 'checking' | 'error' | 'review';
 
@@ -23,12 +28,43 @@ function errorMessage(err: unknown): string {
   return err instanceof Error && err.message ? err.message : 'Something went wrong. Please try again.';
 }
 
+// Memoized so the emoji line keeps its identity; the question block's key still replays the slide-in.
+const RiddleEmojis = memo(function RiddleEmojis({ emojis }: { emojis: string }) {
+  return <div className="my-4 text-6xl tracking-widest font-emoji">{emojis}</div>;
+});
+
+interface OptionButtonProps {
+  opt: string;
+  tone: string;
+  disabled: boolean;
+  onPick: (opt: string) => void;
+  /** Question index when the correct burst plays on this option, otherwise null. */
+  burstKey: number | null;
+}
+
+// Memoized so an option is not redrawn when only the verdict of another option changes.
+const OptionButton = memo(function OptionButton({ opt, tone, disabled, onPick, burstKey }: OptionButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={() => onPick(opt)}
+      disabled={disabled}
+      className={`relative rounded-2xl border-2 p-4 text-sm font-semibold transition-all duration-150 ${tone}`}
+    >
+      {opt}
+      {burstKey !== null && <Burst key={burstKey} count={14} colors={BURST_COLORS} />}
+    </button>
+  );
+});
+
 export default function EmojiRiddles({ questions, act, check, onDone }: Props) {
   const [idx, setIdx] = useState(0);
   // Option locked in for the current question, shown neutrally until the transition ends.
   const [picked, setPicked] = useState<string | null>(null);
   // Right or wrong for the locked-in option, once the server has replied.
   const [verdict, setVerdict] = useState<Verdict | null>(null);
+  // Right answers in a row. Only a verdict moves it.
+  const [streak, setStreak] = useState(0);
   const [answers, setAnswers] = useState<(string | null)[]>(() => questions.map(() => null));
   const [phase, setPhase] = useState<Phase>('play');
   const [error, setError] = useState<string | null>(null);
@@ -41,9 +77,17 @@ export default function EmojiRiddles({ questions, act, check, onDone }: Props) {
   const inFlightRef = useRef(false);
   const doneRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The verdict callback reads the streak from here, so it never works from a stale render.
+  const streakRef = useRef(0);
   // Counts the picks. A timer or reply from an earlier pick checks it and does nothing if it moved on.
   const pickSeqRef = useRef(0);
   const checkQueueRef = useRef<Promise<unknown>>(Promise.resolve());
+
+  // Every emoji glyph in the round, drawn once up front. The whole round arrives in one start response.
+  const glyphs = useMemo(
+    () => questions.flatMap((riddle) => riddle.emojis.split(/\s+/).filter(Boolean)),
+    [questions],
+  );
 
   useEffect(() => {
     return () => {
@@ -84,6 +128,7 @@ export default function EmojiRiddles({ questions, act, check, onDone }: Props) {
   function pick(opt: string) {
     if (lockedRef.current) return;
     lockedRef.current = true;
+    feedback('tap');
 
     const next = answersRef.current.slice();
     next[idx] = opt;
@@ -125,8 +170,13 @@ export default function EmojiRiddles({ questions, act, check, onDone }: Props) {
           timerRef.current = setTimeout(leave, PICK_MS);
           return;
         }
+        const nextRun = nextStreak(streakRef.current, reply.correct);
+        streakRef.current = nextRun;
+        setStreak(nextRun);
         setVerdict({ option: opt, correct: reply.correct, correctAnswer: reply.correctAnswer });
-        buzz(reply.correct ? 30 : 80);
+        if (!reply.correct) feedback('wrong');
+        else if (nextRun >= STREAK_MIN) feedback('streak');
+        else feedback('correct');
         timerRef.current = setTimeout(leave, VERDICT_MS);
       },
       () => {
@@ -137,6 +187,14 @@ export default function EmojiRiddles({ questions, act, check, onDone }: Props) {
       },
     );
   }
+
+  // The memoized options get one handler that never changes. It runs the latest pick, which is
+  // the one from the last committed render, so a tap always sees the current question.
+  const pickRef = useRef(pick);
+  useEffect(() => {
+    pickRef.current = pick;
+  });
+  const onPick = useCallback((opt: string) => pickRef.current(opt), []);
 
   function finish() {
     if (!finalResult || doneRef.current) return;
@@ -239,27 +297,51 @@ export default function EmojiRiddles({ questions, act, check, onDone }: Props) {
 
   return (
     <div className="flex flex-col items-center text-center">
+      <EmojiWarm glyphs={glyphs} />
+
       <div className="mb-4 flex w-full items-center justify-center">
         <span className="rounded-full bg-[#E8F0FE] px-3 py-1 text-xs font-bold uppercase tracking-wider text-[#1A73E8]">
           Question {idx + 1} of {questions.length}
         </span>
       </div>
 
+      <div
+        role="progressbar"
+        aria-label="Question progress"
+        aria-valuemin={0}
+        aria-valuemax={questions.length}
+        aria-valuenow={idx + 1}
+        className="progress-track h-1.5 w-full mb-4"
+      >
+        <div className="progress-fill" style={{ transform: `scaleX(${(idx + 1) / questions.length})` }} />
+      </div>
+
       <div key={idx} className="flex w-full flex-col items-center anim-slide-in">
-        <div className="my-4 text-6xl tracking-widest">{riddle.emojis}</div>
+        <RiddleEmojis emojis={riddle.emojis} />
         <p className="mb-6 text-sm italic text-[#5F6368]">Hint: {riddle.hint}</p>
+
+        {streak >= STREAK_MIN && (
+          <div className="mb-3 flex justify-center" aria-hidden="true">
+            {/* Keyed by the count so the entrance plays again on each new streak. */}
+            <span
+              key={streak}
+              className="streak-pop rounded-full bg-[#FBBC04] px-3 py-1 text-xs font-black text-[#202124]"
+            >
+              x{streak} streak
+            </span>
+          </div>
+        )}
 
         <div className="mb-2 grid w-full grid-cols-2 gap-3">
           {riddle.options.map((opt) => (
-            <button
+            <OptionButton
               key={opt}
-              type="button"
-              onClick={() => pick(opt)}
+              opt={opt}
+              tone={toneOf(opt)}
               disabled={picked !== null}
-              className={`relative rounded-2xl border-2 p-4 text-sm font-semibold transition-all duration-150 ${toneOf(opt)}`}
-            >
-              {opt}
-            </button>
+              onPick={onPick}
+              burstKey={verdict && verdict.correct && picked === opt ? idx : null}
+            />
           ))}
         </div>
 

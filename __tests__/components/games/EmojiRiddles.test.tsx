@@ -1,6 +1,9 @@
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import EmojiRiddles from '@/components/games/EmojiRiddles';
 import type { BatchResponse, ReviewItem, RiddleView, RunResult } from '@/lib/apiTypes';
+import { feedback } from '@/lib/feedback';
+
+jest.mock('@/lib/feedback', () => ({ feedback: jest.fn() }));
 
 const questions: RiddleView[] = [
   { emojis: '🕷️ 🌐', hint: 'Scrapes and indexes the web', options: ['Web Crawler', 'Bug Bounty', 'Docker', 'Firewall'] },
@@ -25,6 +28,7 @@ jest.useFakeTimers();
 
 beforeEach(() => {
   mockAct.mockReset();
+  jest.mocked(feedback).mockClear();
 });
 
 function deferred<T>() {
@@ -196,6 +200,25 @@ describe('EmojiRiddles', () => {
     }
     expect(mockAct).not.toHaveBeenCalled();
   });
+
+  it('plays the tap sound when an option is picked', async () => {
+    render(<EmojiRiddles questions={questions} act={mockAct} onDone={jest.fn()} />);
+
+    await tap(option('Bug Bounty'));
+
+    expect(feedback).toHaveBeenCalledWith('tap');
+  });
+
+  it('shows the question number on a progress bar', async () => {
+    render(<EmojiRiddles questions={questions} act={mockAct} onDone={jest.fn()} />);
+    const bar = () => screen.getByRole('progressbar', { name: 'Question progress' });
+
+    expect(bar()).toHaveAttribute('aria-valuemax', '4');
+    expect(bar()).toHaveAttribute('aria-valuenow', '1');
+
+    await pickAndAdvance('Web Crawler');
+    expect(bar()).toHaveAttribute('aria-valuenow', '2');
+  });
 });
 
 describe('EmojiRiddles with a check per pick', () => {
@@ -359,22 +382,41 @@ describe('EmojiRiddles with a check per pick', () => {
     expect(mockCheck).toHaveBeenLastCalledWith({ check: { index: 1, answer: 'Docker' } });
   });
 
-  it('gives a buzz on a verdict where vibration is available, and not where it is not', async () => {
-    const vibrate = jest.fn();
-    Object.defineProperty(navigator, 'vibrate', { value: vibrate, configurable: true });
-    try {
-      mockCheck.mockResolvedValueOnce({ index: 0, correct: true, correctAnswer: 'Web Crawler' });
-      mockCheck.mockResolvedValueOnce({ index: 1, correct: false, correctAnswer: 'Docker' });
-      render(<EmojiRiddles questions={questions} act={mockAct} check={mockCheck} onDone={jest.fn()} />);
+  it('plays the correct cue for a right pick and the wrong cue for a wrong one', async () => {
+    mockCheck.mockResolvedValueOnce({ index: 0, correct: true, correctAnswer: 'Web Crawler' });
+    mockCheck.mockResolvedValueOnce({ index: 1, correct: false, correctAnswer: 'Docker' });
+    render(<EmojiRiddles questions={questions} act={mockAct} check={mockCheck} onDone={jest.fn()} />);
 
-      await tapAndSettle('Web Crawler');
-      expect(vibrate).toHaveBeenLastCalledWith(30);
-      await advance(600);
-      await tapAndSettle('GitLab');
-      expect(vibrate).toHaveBeenLastCalledWith(80);
-    } finally {
-      delete (navigator as unknown as { vibrate?: unknown }).vibrate;
-    }
+    await tapAndSettle('Web Crawler');
+    expect(feedback).toHaveBeenLastCalledWith('correct');
+    await advance(600);
+    await tapAndSettle('GitLab');
+    expect(feedback).toHaveBeenLastCalledWith('wrong');
+  });
+
+  it('plays the streak cue and shows the pill after three right answers in a row, and a wrong one clears it', async () => {
+    mockCheck.mockImplementation(async ({ check: { index, answer } }: { check: { index: number; answer: string } }) => ({
+      index,
+      correct: answer === ANSWERS[index],
+      correctAnswer: ANSWERS[index],
+    }));
+    render(<EmojiRiddles questions={questions} act={mockAct} check={mockCheck} onDone={jest.fn()} />);
+
+    await tapAndSettle(ANSWERS[0]);
+    await advance(600);
+    await tapAndSettle(ANSWERS[1]);
+    await advance(600);
+    await tapAndSettle(ANSWERS[2]);
+    expect(feedback).toHaveBeenLastCalledWith('streak');
+    expect(screen.getByText('x3 streak')).toBeInTheDocument();
+
+    await advance(600);
+    expect(isQuestion(4)).toBeInTheDocument();
+    expect(screen.getByText('x3 streak')).toBeInTheDocument();
+
+    await tapAndSettle('Rust');
+    expect(feedback).toHaveBeenLastCalledWith('wrong');
+    expect(screen.queryByText('x3 streak')).not.toBeInTheDocument();
   });
 
   it('a verdict that arrives after the component has gone is ignored', async () => {

@@ -1,7 +1,10 @@
 'use client';
 
-import { useEffect, useReducer, useRef } from 'react';
+import { memo, useCallback, useEffect, useReducer, useRef } from 'react';
+import Burst from '@/components/Burst';
+import EmojiWarm from '@/components/EmojiWarm';
 import type { FlipResponse, RunResult } from '@/lib/apiTypes';
+import { feedback } from '@/lib/feedback';
 import { MEMORY_EMOJIS } from '@/lib/memoryEmojis';
 
 const MISMATCH_MS = 600;
@@ -183,6 +186,64 @@ function Confetti() {
   );
 }
 
+interface CardProps {
+  index: number;
+  status: CardStatus;
+  emoji: string | null;
+  isWaiting: boolean;
+  isMismatch: boolean;
+  onFlip: (index: number) => void;
+}
+
+/**
+ * One card. Memoized on primitive props, so a flip re-renders only the cards that changed and
+ * the other buttons keep their DOM nodes.
+ */
+const MemoCard = memo(function MemoCard({ index, status, emoji, isWaiting, isMismatch, onFlip }: CardProps) {
+  const isMatched = status === 'matched';
+  const isShimmer = status === 'pending';
+  const isUp = isMatched || status === 'up';
+  const isFlipped = isUp || isShimmer;
+  const faceClass = isMatched
+    ? 'border-[#34A853] bg-[#E6F4EA] shadow-[0_0_0_3px_rgba(52,168,83,0.35),0_0_18px_rgba(52,168,83,0.6)]'
+    : isMismatch
+      ? 'border-[#EA4335] bg-white'
+      : 'border-[#DADCE0] bg-white';
+
+  return (
+    <button
+      type="button"
+      onClick={() => onFlip(index)}
+      aria-label={isUp ? `Card ${index + 1}, ${emoji}` : `Card ${index + 1}, face down`}
+      aria-disabled={isFlipped || undefined}
+      aria-busy={isWaiting || undefined}
+      className="relative aspect-square min-h-16 w-full touch-manipulation rounded-xl outline-none [perspective:600px] focus-visible:ring-4 focus-visible:ring-[#FBBC04]"
+    >
+      <span
+        aria-hidden="true"
+        className={`memo-flip absolute inset-0 block rounded-xl [transform-style:preserve-3d] ${isFlipped ? '[transform:rotateY(180deg)]' : ''}`}
+      >
+        <span className="absolute inset-0 flex items-center justify-center rounded-xl bg-[#1A73E8] text-2xl font-black text-white shadow-md [backface-visibility:hidden]">
+          ?
+        </span>
+        <span
+          className={`absolute inset-0 flex items-center justify-center rounded-xl border-2 text-3xl shadow-md [backface-visibility:hidden] [transform:rotateY(180deg)] sm:text-4xl ${faceClass}`}
+        >
+          {isShimmer ? (
+            <span aria-hidden="true" className="memo-shimmer block h-3/5 w-3/5 rounded-lg" />
+          ) : (
+            <span className={isMatched ? 'font-emoji memo-match-pop inline-block' : 'font-emoji inline-block'}>
+              {emoji}
+            </span>
+          )}
+        </span>
+      </span>
+      {/* Mounted only while matched, so the burst plays once when the pair is found. */}
+      {isMatched && <Burst count={10} colors={['#34A853', '#FBBC04', '#1A73E8']} />}
+    </button>
+  );
+});
+
 export default function MemoryMatch({ cards, act, onDone }: Props) {
   const [state, dispatch] = useReducer(reducer, cards, initialState);
   const { moves, elapsed, started, done, result, mismatch, error } = state;
@@ -195,6 +256,15 @@ export default function MemoryMatch({ cards, act, onDone }: Props) {
   const onDoneRef = useRef(onDone);
   const reportedRef = useRef(false);
   const aliveRef = useRef(true);
+
+  // flip() is a stable callback, so it reads the latest board and act prop through refs.
+  const stateRef = useRef(state);
+  const actRef = useRef(act);
+
+  useEffect(() => {
+    stateRef.current = state;
+    actRef.current = act;
+  }, [state, act]);
 
   useEffect(() => {
     onDoneRef.current = onDone;
@@ -235,17 +305,22 @@ export default function MemoryMatch({ cards, act, onDone }: Props) {
     return () => window.clearTimeout(id);
   }, [result]);
 
-  function flip(index: number) {
+  // Stable across renders, so memoized cards do not re-render when the board changes.
+  const flip = useCallback((index: number) => {
     if (busyRef.current) return;
-    const card = state.cards[index];
+    const card = stateRef.current.cards[index];
     if (!card || card.status !== 'down') return;
 
     busyRef.current = true;
     dispatch(card.emoji === null ? { type: 'pend', index } : { type: 'peek', index });
+    feedback('flip');
 
-    act({ flip: index }).then(
+    actRef.current({ flip: index }).then(
       (response) => {
         if (!aliveRef.current) return;
+        // Sound is played here, not in the reducer, which must stay pure.
+        if (response.pair === 'match') feedback('match');
+        else if (response.pair === 'mismatch') feedback('thud');
         dispatch({ type: 'reveal', index, response });
         // Keep the board locked for a mismatch (cleared by the hide timer) or after the win.
         busyRef.current = response.pair === 'mismatch' || Boolean(response.done);
@@ -260,7 +335,7 @@ export default function MemoryMatch({ cards, act, onDone }: Props) {
         });
       },
     );
-  }
+  }, []);
 
   const status = mismatch ? 'No match, try again' : done ? '' : 'Find the matching pairs';
 
@@ -277,64 +352,20 @@ export default function MemoryMatch({ cards, act, onDone }: Props) {
       </p>
 
       <div className="relative w-full max-w-xs sm:max-w-sm">
-        {/* Draws every possible face once, so the emoji font is loaded and rasterised before the
-            first flip. Invisible, and not part of the board: it says nothing about the layout. */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute left-0 top-0 flex whitespace-nowrap text-3xl opacity-0 sm:text-4xl"
-        >
-          {MEMORY_EMOJIS.map((emoji) => (
-            <span key={emoji} className="inline-block">
-              {emoji}
-            </span>
-          ))}
-        </div>
+        {/* Draws every face once so the emoji is rasterised before the first flip. */}
+        <EmojiWarm glyphs={MEMORY_EMOJIS} />
         <div role="group" aria-label="Memory cards" className="grid grid-cols-4 gap-2 sm:gap-3">
-          {state.cards.map((card, i) => {
-            const isMatched = card.status === 'matched';
-            const isShimmer = card.status === 'pending';
-            const isUp = isMatched || card.status === 'up';
-            const isFlipped = isUp || isShimmer;
-            const isWaiting = state.pending === i;
-            const isMismatch = mismatch?.includes(i) ?? false;
-            const faceClass = isMatched
-              ? 'border-[#34A853] bg-[#E6F4EA] shadow-[0_0_0_3px_rgba(52,168,83,0.35),0_0_18px_rgba(52,168,83,0.6)]'
-              : isMismatch
-                ? 'border-[#EA4335] bg-white'
-                : 'border-[#DADCE0] bg-white';
-
-            return (
-              <button
-                key={i}
-                type="button"
-                onClick={() => flip(i)}
-                aria-label={isUp ? `Card ${i + 1}, ${card.emoji}` : `Card ${i + 1}, face down`}
-                aria-disabled={isFlipped || undefined}
-                aria-busy={isWaiting || undefined}
-                className="relative aspect-square min-h-16 w-full touch-manipulation rounded-xl outline-none [perspective:600px] focus-visible:ring-4 focus-visible:ring-[#FBBC04]"
-              >
-                <span
-                  aria-hidden="true"
-                  className={`absolute inset-0 block rounded-xl transition-transform duration-300 ease-out motion-reduce:transition-none [transform-style:preserve-3d] ${isFlipped ? '[transform:rotateY(180deg)]' : ''}`}
-                >
-                  <span className="absolute inset-0 flex items-center justify-center rounded-xl bg-[#1A73E8] text-2xl font-black text-white shadow-md [backface-visibility:hidden]">
-                    ?
-                  </span>
-                  <span
-                    className={`absolute inset-0 flex items-center justify-center rounded-xl border-2 text-3xl shadow-md [backface-visibility:hidden] [transform:rotateY(180deg)] sm:text-4xl ${faceClass}`}
-                  >
-                    {isShimmer ? (
-                      <span aria-hidden="true" className="memo-shimmer block h-3/5 w-3/5 rounded-lg" />
-                    ) : (
-                      <span className={isMatched ? 'memo-match-pop inline-block' : 'inline-block'}>
-                        {card.emoji}
-                      </span>
-                    )}
-                  </span>
-                </span>
-              </button>
-            );
-          })}
+          {state.cards.map((card, i) => (
+            <MemoCard
+              key={i}
+              index={i}
+              status={card.status}
+              emoji={card.emoji}
+              isWaiting={state.pending === i}
+              isMismatch={mismatch?.includes(i) ?? false}
+              onFlip={flip}
+            />
+          ))}
         </div>
         {done && <Confetti />}
       </div>

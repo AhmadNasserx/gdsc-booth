@@ -1,7 +1,11 @@
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import MemoryMatch from '@/components/games/MemoryMatch';
 import type { FlipResponse, RunResult } from '@/lib/apiTypes';
+import { feedback } from '@/lib/feedback';
 import { MEMORY_EMOJIS } from '@/lib/memoryEmojis';
+
+jest.mock('@/lib/feedback', () => ({ feedback: jest.fn() }));
+const feedbackMock = jest.mocked(feedback);
 
 // The layout lives on the server. The fake server below uses this one so the
 // expectations are readable: cards 1-2 🐍, 3-4 ⚛️, 5-6 🔥, 7-8 🐳, 9-10 🦀,
@@ -98,6 +102,7 @@ const stat = (label: string) => screen.getByRole('group', { name: new RegExp(`^$
 
 beforeEach(() => {
   jest.useFakeTimers();
+  feedbackMock.mockClear();
 });
 
 afterEach(() => {
@@ -127,7 +132,7 @@ describe('MemoryMatch', () => {
     }
   });
 
-  it('draws all eight faces once in a hidden warm-up row outside the board', () => {
+  it('draws all eight faces once in a hidden warm-up strip outside the board', () => {
     const { container } = setup();
     expect(MEMORY_EMOJIS).toHaveLength(8);
 
@@ -135,8 +140,52 @@ describe('MemoryMatch', () => {
       (el) => el.textContent === MEMORY_EMOJIS.join(''),
     );
     expect(warmUp).toBeInTheDocument();
-    expect(warmUp).toHaveClass('absolute', 'opacity-0', 'pointer-events-none');
+    expect(warmUp).toHaveClass('fixed', 'opacity-0', 'pointer-events-none', 'font-emoji');
     expect(board()).not.toContainElement(warmUp as HTMLElement);
+  });
+
+  it('plays the flip sound when a tap is accepted', async () => {
+    setup();
+    await tap(1);
+    expect(feedbackMock.mock.calls).toEqual([['flip']]);
+  });
+
+  it('plays match when a pair is found', async () => {
+    setup();
+    await tap(1);
+    await tap(2);
+    expect(feedbackMock.mock.calls).toEqual([['flip'], ['flip'], ['match']]);
+  });
+
+  it('plays thud when a pair does not match', async () => {
+    setup();
+    await tap(1);
+    await tap(3);
+    expect(feedbackMock.mock.calls).toEqual([['flip'], ['flip'], ['thud']]);
+  });
+
+  it('plays no match or thud sound when a flip is rejected', async () => {
+    const flipAct: Act = jest
+      .fn<Promise<FlipResponse>, [{ flip: number }]>()
+      .mockRejectedValueOnce(new Error('Too fast'));
+    setup(flipAct);
+    await tap(1);
+    expect(screen.getByRole('alert')).toHaveTextContent('Too fast');
+    expect(feedbackMock.mock.calls).toEqual([['flip']]);
+  });
+
+  it('bursts only on a matched card', async () => {
+    setup();
+    await tap(1);
+    expect(faceUp(1, '🐍').querySelector('.burst')).toBeNull();
+
+    await tap(2);
+    for (const n of [1, 2]) {
+      const burst = faceUp(n, '🐍').querySelector('.burst');
+      expect(burst).not.toBeNull();
+      expect(burst).toHaveAttribute('aria-hidden', 'true');
+    }
+    expect(faceDown(3).querySelector('.burst')).toBeNull();
   });
 
   it('tapping a card calls act with its index and reveals the emoji from the response', async () => {

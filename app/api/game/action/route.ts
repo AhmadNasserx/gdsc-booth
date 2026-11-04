@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { GAME_PAUSED, PAUSED_MESSAGE } from '@/lib/config';
+import { isPaused, PAUSED_MESSAGE } from '@/lib/config';
 import { verifySession } from '@/lib/session';
 import { performAction } from '@/lib/runs/service';
 import { errorResponse, jsonError, readJsonObject } from '@/lib/runs/http';
@@ -7,7 +7,7 @@ import { errorResponse, jsonError, readJsonObject } from '@/lib/runs/http';
 const RUN_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export async function POST(request: Request) {
-  if (GAME_PAUSED) return jsonError(503, PAUSED_MESSAGE);
+  if (await isPaused()) return jsonError(503, PAUSED_MESSAGE);
   const body = await readJsonObject(request);
   if (!body) return jsonError(400, 'Invalid JSON');
 

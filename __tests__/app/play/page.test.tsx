@@ -1,5 +1,6 @@
 import { render, screen, waitFor, act, fireEvent } from '@testing-library/react';
 import PlayPage from '@/app/play/page';
+import { MEMORY_EMOJIS } from '@/lib/memoryEmojis';
 
 const mockPush = jest.fn();
 // Stable router object, as Next.js provides; a fresh object each render would re-run effects.
@@ -150,6 +151,36 @@ describe('Play page: session checks', () => {
   });
 });
 
+describe('Play page: the page shell', () => {
+  it('shows the sound toggle on the play page', async () => {
+    startSession();
+    render(<PlayPage />);
+
+    expect(screen.getByRole('button', { name: /turn sound (on|off)/i })).toBeInTheDocument();
+    await waitForGame('riddles');
+  });
+
+  it('shows the boot skeleton, and warms the memory faces hidden from assistive tech', async () => {
+    startSession();
+    render(<PlayPage />);
+
+    // Read before the scores arrive, so the page is still on the boot skeleton.
+    expect(screen.getByRole('status')).toHaveTextContent('Getting your game ready…');
+    const face = screen.getByText(MEMORY_EMOJIS[0]);
+    expect(face.closest('[aria-hidden="true"]')).not.toBeNull();
+    await waitForGame('riddles');
+  });
+
+  it('does not warm the faces again while Memory Match is on screen', async () => {
+    startSession();
+    handler = (url, body) => (url === '/api/me' ? { body: meWith({ riddles: 500 }) } : defaultHandler(url, body));
+    render(<PlayPage />);
+    await waitForGame('memory');
+
+    expect(screen.queryByText(MEMORY_EMOJIS[0])).not.toBeInTheDocument();
+  });
+});
+
 describe('Play page: the order of play', () => {
   it('starts Emoji Riddles straight away for a player with no scores, with no games menu', async () => {
     startSession();
@@ -184,9 +215,10 @@ describe('Play page: the order of play', () => {
     render(<PlayPage />);
 
     expect(await screen.findByText(/that's all three games, ahmad/i)).toBeInTheDocument();
-    expect(screen.getByText('1200 pts')).toBeInTheDocument();
+    // The total counts up over about 900ms, so wait for its final value.
+    expect(await screen.findByText('1200 pts', {}, { timeout: 2000 })).toBeInTheDocument();
     expect(screen.getByText("You're #3 on the leaderboard")).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /join gdsc/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /view leaderboard/i })).toHaveAttribute('href', '/leaderboard');
     expect(fetchCalls('/api/game/start')).toHaveLength(0);
     expect(screen.queryByRole('button', { name: /play again/i })).not.toBeInTheDocument();
   });
@@ -360,7 +392,7 @@ describe('Play page: result screen', () => {
     fireEvent.click(await screen.findByRole('button', { name: /see my results/i }));
 
     expect(await screen.findByText(/that's all three games/i)).toBeInTheDocument();
-    expect(screen.getByText('1500 pts')).toBeInTheDocument();
+    expect(await screen.findByText('1500 pts', {}, { timeout: 2000 })).toBeInTheDocument();
     expect(screen.getByText("You're #1 on the leaderboard")).toBeInTheDocument();
     expect(fetchCalls('/api/game/start')).toHaveLength(1);
   });

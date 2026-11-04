@@ -1,6 +1,10 @@
 'use client';
 
+import { useEffect } from 'react';
+import Burst from '@/components/Burst';
+import CountUp from '@/components/CountUp';
 import type { RunResult } from '@/lib/apiTypes';
+import { feedback } from '@/lib/feedback';
 import { GAMES } from '@/lib/games';
 import type { Tab } from '@/lib/types';
 
@@ -28,6 +32,13 @@ const buttonBase =
 export default function ResultScreen({ game, result, nextGame, onNextGame }: Props) {
   const meta = GAMES[game];
 
+  // Sound plays once, when the screen appears. The screen mounts once per result, so the
+  // result is read only on mount and later prop changes do not replay the sound.
+  useEffect(() => {
+    feedback(result.improved ? 'win' : 'finish');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="relative overflow-hidden flex flex-col items-center text-center py-6 space-y-4">
       {result.improved && (
@@ -47,13 +58,23 @@ export default function ResultScreen({ game, result, nextGame, onNextGame }: Pro
         </div>
       )}
 
+      {result.improved && (
+        <Burst count={16} colors={CONFETTI_COLORS} className="pointer-events-none" />
+      )}
+
       <div className="relative text-5xl" aria-hidden="true">{result.improved ? '🏆' : '✅'}</div>
       <h2 className="relative text-2xl font-extrabold text-[#202124]">Game done!</h2>
       <p className="relative text-sm font-semibold text-[#5F6368]">
-        <span aria-hidden="true">{meta.emoji}</span> {meta.title}
+        <span aria-hidden="true" className="font-emoji">{meta.emoji}</span> {meta.title}
       </p>
 
-      <p className="relative text-4xl font-black text-[#1A73E8]">{`+${result.score} pts`}</p>
+      <p className="relative text-4xl font-black text-[#1A73E8]">
+        <CountUp
+          value={result.score}
+          format={(n) => `+${n} pts`}
+          className="relative text-4xl font-black text-[#1A73E8]"
+        />
+      </p>
 
       <p className="relative text-sm font-bold text-[#137333]">
         {`Your total: ${result.total} pts · You're #${result.rank}`}

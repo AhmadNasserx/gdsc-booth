@@ -18,5 +18,7 @@ export interface LeaderboardEntry {
   games?: Partial<Record<Tab, number>>;
   /** When the current total was last reached. Earlier timestamps win ties. */
   timestamp: number;
+  /** When the player completed their third game. Only players with this set take part in the hourly prizes. */
+  finishedAt?: number;
   expiresAt: number;
 }

@@ -59,6 +59,17 @@ function GameChips({ games }: { games?: LeaderboardEntry['games'] }) {
   );
 }
 
+// Shown beside players who have not finished all three games yet. They are not in any hourly top 3.
+function StillPlaying({ className = '' }: { className?: string }) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full bg-[#FEF7E0] px-2 py-0.5 text-[10px] sm:text-xs font-semibold text-[#B06000] whitespace-nowrap shrink-0 ${className}`}
+    >
+      Still playing
+    </span>
+  );
+}
+
 interface Props { entries: LeaderboardEntry[]; }
 
 export default function LeaderboardTable({ entries }: Props) {
@@ -98,6 +109,7 @@ export default function LeaderboardTable({ entries }: Props) {
               <span className={`${p.nameSize} font-extrabold text-[#202124] mb-1 w-full truncate min-w-0`}>
                 {entry.name}
               </span>
+              {typeof entry.finishedAt !== 'number' && <StillPlaying className="mb-1.5" />}
               <span className="mb-2">
                 <GameChips games={entry.games} />
               </span>
@@ -124,6 +136,7 @@ export default function LeaderboardTable({ entries }: Props) {
                 </span>
                 <span className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
                   <span className="truncate min-w-0 text-sm md:text-lg font-semibold text-[#202124]">{entry.name}</span>
+                  {typeof entry.finishedAt !== 'number' && <StillPlaying />}
                   <GameChips games={entry.games} />
                 </span>
                 <span className={`text-sm md:text-lg font-black text-right shrink-0 whitespace-nowrap ${SCORE_TEXT}`}>

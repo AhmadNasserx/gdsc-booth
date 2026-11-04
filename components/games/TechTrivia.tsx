@@ -2,13 +2,19 @@
 
 import { useState, useEffect, useRef } from 'react';
 import type { BatchResponse, ReviewItem, RunResult, TriviaView } from '@/lib/apiTypes';
-import { buzz, isVerdictReply, runInOrder, VERDICT_WAIT_MS, type CheckFn, type Verdict } from './verdict';
+import Burst from '@/components/Burst';
+import { feedback } from '@/lib/feedback';
+import { isVerdictReply, nextStreak, runInOrder, STREAK_MIN, VERDICT_WAIT_MS, type CheckFn, type Verdict } from './verdict';
 
 const GAME_SECS = 35;
 // Brief flash after a pick when there is no check to wait for.
 const ANSWER_FLASH_MS = 200;
 // How long the right/wrong verdict stays on screen. The clock keeps running, so it is kept short.
 const VERDICT_MS = 450;
+// The last seconds of the clock each give a tick, so the end of the round is heard.
+const TICK_SECS = 10;
+// Confetti colours for a right answer, from the palette the game already uses.
+const BURST_COLORS = ['#34A853', '#FBBC04', '#1A73E8'];
 
 type Phase = 'start' | 'play' | 'checking' | 'review';
 
@@ -34,6 +40,8 @@ export default function TechTrivia({ questions, act, check, onDone }: Props) {
   const [chosen, setChosen] = useState<string | null>(null);
   // Right or wrong for the locked-in option, once the server has replied.
   const [verdict, setVerdict] = useState<Verdict | null>(null);
+  // Right answers in a row. Only a verdict moves it.
+  const [streak, setStreak] = useState(0);
   const [timeLeft, setTimeLeft] = useState(GAME_SECS);
   const [picks, setPicks] = useState<(string | null)[]>([]);
   const [review, setReview] = useState<ReviewItem[] | null>(null);
@@ -45,6 +53,8 @@ export default function TechTrivia({ questions, act, check, onDone }: Props) {
   const frozenRef = useRef(false);
   const busyRef = useRef(false);
   const timeLeftRef = useRef(GAME_SECS);
+  // The verdict callback reads the streak from here, so it never works from a stale render.
+  const streakRef = useRef(0);
   const resultRef = useRef<RunResult | null>(null);
   const doneRef = useRef(false);
   const advanceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -96,6 +106,7 @@ export default function TechTrivia({ questions, act, check, onDone }: Props) {
 
   function pickOption(opt: string) {
     if (frozenRef.current || chosenRef.current !== null) return;
+    feedback('tap');
     const q = idx;
     answersRef.current[q] = opt;
     chosenRef.current = opt;
@@ -133,8 +144,13 @@ export default function TechTrivia({ questions, act, check, onDone }: Props) {
           advanceRef.current = setTimeout(leave, ANSWER_FLASH_MS);
           return;
         }
+        const nextRun = nextStreak(streakRef.current, reply.correct);
+        streakRef.current = nextRun;
+        setStreak(nextRun);
         setVerdict({ option: opt, correct: reply.correct, correctAnswer: reply.correctAnswer });
-        buzz(reply.correct ? 30 : 80);
+        if (!reply.correct) feedback('wrong');
+        else if (nextRun >= STREAK_MIN) feedback('streak');
+        else feedback('correct');
         advanceRef.current = setTimeout(leave, VERDICT_MS);
       },
       () => {
@@ -159,6 +175,7 @@ export default function TechTrivia({ questions, act, check, onDone }: Props) {
       const next = timeLeftRef.current - 1;
       timeLeftRef.current = next;
       setTimeLeft(next);
+      if (next > 0 && next <= TICK_SECS) feedback('tick');
       if (next <= 0) expire();
     }, 1000);
     return () => clearTimeout(id);
@@ -310,11 +327,15 @@ export default function TechTrivia({ questions, act, check, onDone }: Props) {
         </span>
       </div>
 
-      <div className="w-full bg-[#DADCE0] h-1.5 rounded-full mb-5 overflow-hidden">
-        <div
-          className="h-full bg-[#1A73E8] transition-all duration-1000"
-          style={{ width: `${timerPct}%` }}
-        />
+      <div
+        role="progressbar"
+        aria-label="Time left"
+        aria-valuemin={0}
+        aria-valuemax={GAME_SECS}
+        aria-valuenow={timeLeft}
+        className="progress-track h-1.5 w-full mb-5"
+      >
+        <div className="progress-fill" style={{ transform: `scaleX(${timerPct / 100})` }} />
       </div>
 
       <div className="w-full h-9 mb-3 flex items-center justify-center" role="status">
@@ -329,6 +350,18 @@ export default function TechTrivia({ questions, act, check, onDone }: Props) {
         <>
           <h3 className="text-base font-bold mb-5 text-[#202124] text-center">{q.question}</h3>
 
+          {streak >= STREAK_MIN && (
+            <div className="mb-3 flex justify-center" aria-hidden="true">
+              {/* Keyed by the count so the entrance plays again on each new streak. */}
+              <span
+                key={streak}
+                className="streak-pop rounded-full bg-[#FBBC04] px-3 py-1 text-xs font-black text-[#202124]"
+              >
+                x{streak} streak
+              </span>
+            </div>
+          )}
+
           <div className="w-full flex flex-col gap-2.5">
             {q.options.map((opt) => (
               <button
@@ -339,6 +372,9 @@ export default function TechTrivia({ questions, act, check, onDone }: Props) {
                 className={`relative w-full p-3.5 text-left text-sm font-semibold border-2 rounded-2xl transition-all active:scale-[0.98] disabled:cursor-default ${toneOf(opt)}`}
               >
                 {opt}
+                {verdict && verdict.correct && chosen === opt && (
+                  <Burst key={idx} count={14} colors={BURST_COLORS} />
+                )}
               </button>
             ))}
           </div>

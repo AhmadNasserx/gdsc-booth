@@ -7,10 +7,14 @@ import ResultScreen from '@/components/ResultScreen';
 import EmojiRiddles from '@/components/games/EmojiRiddles';
 import TechTrivia from '@/components/games/TechTrivia';
 import MemoryMatch from '@/components/games/MemoryMatch';
+import EmojiWarm from '@/components/EmojiWarm';
+import GameSkeleton from '@/components/GameSkeleton';
+import SoundToggle from '@/components/SoundToggle';
 import type { ActionBody, BatchResponse, CheckBody, CheckResponse, FlipResponse, GameView, MeResponse, RunResult, StartResponse } from '@/lib/apiTypes';
 import { clearSession, getSession, setSessionNotice, useIsBrowser, type PlayerSession } from '@/lib/clientSession';
 import { GameApiError, fetchMe, sendAction, startGame } from '@/lib/gameClient';
 import { GAMES } from '@/lib/games';
+import { MEMORY_EMOJIS } from '@/lib/memoryEmojis';
 import { TABS, type Tab } from '@/lib/types';
 
 const SESSION_EXPIRED = 'Your session has ended. Enter your name to keep playing.';
@@ -55,8 +59,17 @@ function playedOf(me: MeResponse): Tab[] {
 
 export default function PlayPage() {
   // Storage is read only in the browser, so the server and the first client render match.
+  // Until then the page shows the same skeleton the server sends, so the first paint is never blank.
   const isBrowser = useIsBrowser();
-  if (!isBrowser) return null;
+  if (!isBrowser) {
+    return (
+      <Shell notice="" warm>
+        <Card>
+          <GameSkeleton game={null} label="Getting your game ready…" />
+        </Card>
+      </Shell>
+    );
+  }
   return <PlayFlow />;
 }
 
@@ -181,34 +194,27 @@ function PlayFlow() {
 
   if (!session) return null;
 
-  return (
-    <div className="min-h-screen bg-[#F8F9FA] flex flex-col items-center p-4 md:p-8">
-      {notice && (
-        <p role="status" className="mb-4 text-xs text-[#B06000] bg-[#FEF7E0] border border-[#FBBC04] rounded-xl px-4 py-2">
-          {notice}
-        </p>
-      )}
+  // MemoryMatch warms its own faces, so the page skips them only while that board is on screen.
+  const warm = !(stage.kind === 'playing' && stage.game === 'memory');
 
+  return (
+    <Shell notice={notice} warm={warm}>
       {stage.kind === 'boot' && (
         <Card>
-          <p role="status" className="py-10 text-center text-sm font-semibold text-[#5F6368]">
-            Getting your game ready…
-          </p>
+          <GameSkeleton game={null} label="Getting your game ready…" />
         </Card>
       )}
 
       {stage.kind === 'loading' && (
         <Card>
-          <p role="status" className="py-10 text-center text-sm font-semibold text-[#5F6368]">
-            <span aria-hidden="true">{GAMES[stage.game].emoji}</span> Starting {GAMES[stage.game].title}…
-          </p>
+          <GameSkeleton game={stage.game} label={`Starting ${GAMES[stage.game].title}…`} />
         </Card>
       )}
 
       {stage.kind === 'start-failed' && (
         <Card>
           <div className="flex flex-col items-center text-center py-6 gap-3">
-            <p className="text-4xl" aria-hidden="true">📡</p>
+            <p className="text-4xl font-emoji" aria-hidden="true">📡</p>
             <h2 className="text-lg font-extrabold text-[#202124]">Couldn&apos;t start the next game</h2>
             <p role="alert" className="text-sm text-[#5F6368] max-w-sm">
               {stage.message}
@@ -254,6 +260,30 @@ function PlayFlow() {
           <FinishScreen name={session.name} total={stage.total} rank={stage.rank} />
         </Card>
       )}
+    </Shell>
+  );
+}
+
+/**
+ * The page frame, shared by the server render and the browser render so the first paint matches.
+ * The sound toggle sits in a top bar on every stage. The emoji strip is fixed and transparent,
+ * so it takes no room in the layout.
+ */
+function Shell({ notice, warm, children }: { notice: string; warm: boolean; children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen bg-[#F8F9FA] flex flex-col items-center p-4 md:p-8">
+      <div className="mb-3 flex w-full max-w-2xl justify-end">
+        <SoundToggle />
+      </div>
+
+      {notice && (
+        <p role="status" className="mb-4 text-xs text-[#B06000] bg-[#FEF7E0] border border-[#FBBC04] rounded-xl px-4 py-2">
+          {notice}
+        </p>
+      )}
+
+      {children}
+      {warm && <EmojiWarm glyphs={MEMORY_EMOJIS} />}
     </div>
   );
 }

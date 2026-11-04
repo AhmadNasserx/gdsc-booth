@@ -97,4 +97,15 @@ describe('GET /api/cron/cleanup', () => {
     await GET(makeRequest('test-cron-secret'));
     expect(readPath('submissions/abc')).not.toBeNull();
   });
+
+  it('removes expired leaderboard entries and leaves event/startedAt in place', async () => {
+    const startedAt = clock.now - 3_600_000;
+    writePath('event/startedAt', startedAt);
+    writePath('leaderboard/old', { name: 'Old', score: 100, games: { riddles: 100 }, timestamp: 1, expiresAt: clock.now - 1 });
+
+    const res = await GET(makeRequest('test-cron-secret'));
+    expect(res.status).toBe(200);
+    expect(readPath('leaderboard/old')).toBeNull();
+    expect(readPath('event/startedAt')).toBe(startedAt);
+  });
 });

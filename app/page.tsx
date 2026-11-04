@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { GAME_PAUSED, PAUSED_MESSAGE } from '@/lib/config';
 import { useRouter } from 'next/navigation';
 import {
   clearSessionNotice,
@@ -15,6 +14,7 @@ import {
 } from '@/lib/clientSession';
 import { COUNTRIES, DEFAULT_COUNTRY, countryLabel, findCountry } from '@/lib/countries';
 import { combinePhone, normalizePhone, startsWithCountryCode } from '@/lib/phone';
+import BrandMark from '@/components/BrandMark';
 
 const NAME_PATTERN = /^[A-Za-z0-9À-ɏ ]{2,30}$/;
 
@@ -45,6 +45,32 @@ export default function NameEntry() {
   const [takenPhone, setTakenPhone] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // Pause state from GET /api/status. Null until it loads (or if it fails), which keeps Start disabled.
+  const [pauseState, setPauseState] = useState<{ paused: boolean; message?: string } | null>(null);
+  const paused = pauseState?.paused === true;
+  const statusKnown = pauseState !== null;
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/status', { cache: 'no-store' })
+      .then((res) => {
+        if (!res.ok) throw new Error(`Status request failed: ${res.status}`);
+        return res.json();
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setPauseState({
+          paused: data.paused === true,
+          message: typeof data.message === 'string' ? data.message : undefined,
+        });
+      })
+      .catch(() => {
+        // Leave the state null on any error.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const trimmedName = name.trim();
   // A result only applies to the name it was checked for; a stale one shows as "checking".
@@ -96,7 +122,7 @@ export default function NameEntry() {
   }, [name]);
 
   const canStart =
-    !GAME_PAUSED &&
+    statusKnown && !paused &&
     (nameStatus === 'available' || nameStatus === 'mine') &&
     phoneStatus === 'valid' &&
     consent;
@@ -160,11 +186,14 @@ export default function NameEntry() {
     <div className="min-h-screen flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-md bg-white border border-[#DADCE0] rounded-3xl p-8 shadow-sm">
         <div className="text-center mb-8">
-          <img src="/gdsc-logo.svg" alt="Google Developer Student Clubs" className="w-72 mx-auto mb-3" />
-          <h1 className="text-2xl font-extrabold mt-2">Interactive Tech Station</h1>
-          <p className="text-sm text-[#5F6368] mt-1">Test your skills and join GDSC!</p>
+          <BrandMark className="text-lg font-bold mb-3" />
+          <h1 className="text-2xl font-extrabold mt-2">Tech and Science Challenge</h1>
+          <p className="text-sm text-[#5F6368] mt-1">Beirut Arab University, Tripoli campus</p>
           <p className="text-sm font-semibold text-[#202124] mt-3">
-            Play three games, once each, in order — your scores add up. Top the leaderboard by the end of the day to win a prize.
+            Play three quick games, once each, in order. Your scores add up.
+          </p>
+          <p className="text-sm font-semibold text-[#202124] mt-2">
+            The top 3 players win a prize every hour. Finish all three games to qualify.
           </p>
         </div>
 
@@ -257,9 +286,9 @@ export default function NameEntry() {
           Each game can be played once.
         </p>
 
-        {GAME_PAUSED && (
+        {paused && (
           <p role="status" className="text-sm font-semibold text-[#B06000] bg-[#FEF7E0] border border-[#FBBC04] rounded-xl p-3 mb-3 text-center">
-            {PAUSED_MESSAGE}
+            {pauseState?.message ?? 'The game is paused right now. The leaderboard is still live.'}
           </p>
         )}
 

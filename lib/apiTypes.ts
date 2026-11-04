@@ -1,4 +1,4 @@
-import type { Tab } from './types';
+import type { LeaderboardEntry, Tab } from './types';
 export type LetterState = 'correct' | 'present' | 'absent';
 
 export interface RunResult {
@@ -65,3 +65,18 @@ export interface MeResponse {       // POST /api/me { token }
   bests: Partial<Record<Tab, number>>;
 }
 export interface ApiError { error: string }
+
+/** One finished hour's top 3 as the leaderboard API reports it. Phone numbers are never included. */
+export interface RoundTop { name: string; score: number; rank: number }
+/** One prize hour, with its window and its top 3. */
+export interface RoundResult { round: number; start: number; end: number; top: RoundTop[] }
+/** The event clock as the server sees it. */
+export interface EventInfo {
+  startedAt: number | null;
+  now: number;                  // server time when the response was built
+  roundMs: number;
+  currentRound: number | null;  // null until the first player starts
+  roundEndsAt: number | null;   // end of the current hour
+}
+/** GET /api/leaderboard. */
+export interface LeaderboardResponse { entries: LeaderboardEntry[]; event: EventInfo; rounds: RoundResult[] }

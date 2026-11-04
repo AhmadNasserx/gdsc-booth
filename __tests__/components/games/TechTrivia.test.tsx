@@ -1,6 +1,9 @@
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import TechTrivia from '@/components/games/TechTrivia';
 import type { BatchResponse, ReviewItem, RunResult, TriviaView } from '@/lib/apiTypes';
+import { feedback } from '@/lib/feedback';
+
+jest.mock('@/lib/feedback', () => ({ feedback: jest.fn() }));
 
 const questions: TriviaView[] = [
   { question: "What does 'GDSC' stand for?", options: ['Google Developer Student Clubs', 'Global Data Science Center', 'General Developer Software Council', 'Google Design & Code'] },
@@ -29,6 +32,7 @@ jest.useFakeTimers();
 
 beforeEach(() => {
   mockAct.mockReset();
+  jest.mocked(feedback).mockClear();
 });
 
 function deferred<T>() {
@@ -243,6 +247,44 @@ describe('TechTrivia', () => {
     expect(mockAct).toHaveBeenCalledWith({ answers: [GDSC, null, null] });
   });
 
+  it('plays the tap sound when an option is picked', async () => {
+    render(<TechTrivia questions={questions} act={mockAct} onDone={jest.fn()} />);
+    startGame();
+
+    await tap(option(GDSC));
+
+    expect(feedback).toHaveBeenCalledWith('tap');
+  });
+
+  it('ticks once a second over the last ten seconds, and not before', async () => {
+    mockAct.mockReturnValueOnce(new Promise(() => {}));
+    render(<TechTrivia questions={questions} act={mockAct} onDone={jest.fn()} />);
+    startGame();
+    const ticks = () => jest.mocked(feedback).mock.calls.filter(([kind]) => kind === 'tick').length;
+
+    // 35 s down to 11 s: no tick yet.
+    for (let i = 0; i < 24; i++) {
+      await advance(1000);
+    }
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '11');
+    expect(ticks()).toBe(0);
+
+    // 10 s left is the first tick, then one tick each second down to 1 s.
+    await advance(1000);
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '10');
+    expect(ticks()).toBe(1);
+    for (let i = 0; i < 9; i++) {
+      await advance(1000);
+    }
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '1');
+    expect(ticks()).toBe(10);
+
+    // Time runs out: no tick for zero, and the round is sent once.
+    await advance(1000);
+    expect(ticks()).toBe(10);
+    expect(mockAct).toHaveBeenCalledTimes(1);
+  });
+
   it('waits for the batch to come back before showing the review', async () => {
     const pending = deferred<BatchResponse>();
     mockAct.mockReturnValueOnce(pending.promise);
@@ -445,6 +487,40 @@ describe('TechTrivia with a check per pick', () => {
     await advance(5000);
     expect(mockAct).toHaveBeenCalledTimes(1);
     expect(screen.getByText('Checking your answers…')).toBeInTheDocument();
+  });
+
+  it('plays the correct cue for a right pick and the wrong cue for a wrong one', async () => {
+    mockCheck.mockResolvedValueOnce({ index: 0, correct: true, correctAnswer: GDSC });
+    mockCheck.mockResolvedValueOnce({ index: 1, correct: false, correctAnswer: FLUTTER });
+    render(<TechTrivia questions={questions} act={mockAct} check={mockCheck} onDone={jest.fn()} />);
+    startGame();
+
+    await tapAndSettle(GDSC);
+    expect(feedback).toHaveBeenLastCalledWith('correct');
+    await advance(450);
+    await tapAndSettle(ANGULAR);
+    expect(feedback).toHaveBeenLastCalledWith('wrong');
+  });
+
+  it('plays the streak cue and shows the pill after three right answers in a row', async () => {
+    const correct = [GDSC, FLUTTER, GEMINI];
+    mockCheck.mockImplementation(async ({ check: { index, answer } }: { check: { index: number; answer: string } }) => ({
+      index,
+      correct: answer === correct[index],
+      correctAnswer: correct[index],
+    }));
+    mockAct.mockReturnValueOnce(new Promise(() => {}));
+    render(<TechTrivia questions={questions} act={mockAct} check={mockCheck} onDone={jest.fn()} />);
+    startGame();
+
+    await tapAndSettle(GDSC);
+    await advance(450);
+    await tapAndSettle(FLUTTER);
+    await advance(450);
+    await tapAndSettle(GEMINI);
+
+    expect(feedback).toHaveBeenLastCalledWith('streak');
+    expect(screen.getByText('x3 streak')).toBeInTheDocument();
   });
 
   it('plays a whole round with checks and sends the final batch once', async () => {

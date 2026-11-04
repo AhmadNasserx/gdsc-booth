@@ -7,6 +7,7 @@
  * - transaction() passes the value it believes is current. If that value is stale (for example
  *   a cache miss shows null), the write is rejected and the callback runs again with the server
  *   value. Returning undefined aborts. With simulateCacheMisses() the first pass sees null.
+ * - push() adds a child under a key that sorts in insertion order, as the Admin SDK's push keys do.
  *
  * Test files reach this through jest.mock('@/lib/firebaseAdmin', ...). It lives outside
  * __tests__ so Jest does not treat it as a suite.
@@ -40,6 +41,14 @@ function segments(path: string): string[] {
 
 function clone<T>(value: T): T {
   return value === undefined ? value : (JSON.parse(JSON.stringify(value)) as T);
+}
+
+let pushCount = 0;
+
+/** Ten base36 digits of the time, then six of a counter, so keys sort in insertion order and never collide. */
+function nextPushKey(): string {
+  pushCount += 1;
+  return Date.now().toString(36).padStart(10, '0') + pushCount.toString(36).padStart(6, '0');
 }
 
 function assertNoUndefined(value: unknown, where: string): void {
@@ -137,6 +146,12 @@ function refFor(path: string) {
     async set(value: unknown) {
       assertNoUndefined(value, path);
       writePath(path, value);
+    },
+    async push(value: unknown) {
+      assertNoUndefined(value, path);
+      const key = nextPushKey();
+      writePath(`${path}/${key}`, value);
+      return { key };
     },
     child(key: string) {
       return refFor(`${path}/${key}`);
