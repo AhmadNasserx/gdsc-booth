@@ -10,7 +10,7 @@ import { MARKETING_URL, getQrSvg } from './qr';
 export const metadata: Metadata = {
   title: 'BAU Open Doors 2026 · Faculty of Science: Play and Win',
   description:
-    'Three quick science and tech games, one leaderboard and a prize every round at the Faculty of Science booth, BAU Open Doors 2026. Scan the code and play.',
+    'Three quick science and tech games, one leaderboard and a prize every 20 minutes at the Faculty of Science booth, BAU Open Doors 2026. Scan the code and play.',
 };
 
 /** Seconds into the Memory scene at which each pair is found, in board order. */
@@ -18,7 +18,7 @@ const MEMORY_BOARD = [0, 3, 5, 1, 2, 6, 0, 4, 7, 1, 3, 2, 4, 5, 6, 7];
 const PAIR_AT = [0.5, 1.1, 1.7, 2.3, 2.9, 3.5, 4.1, 4.7];
 
 const TICKER = [
-  'A prize every round for the top 3',
+  'A prize every 20 minutes for the top 3',
   'Check the leaderboard, ranks change all the time',
   'Questions in English or French',
   '3 games · 1 try each',
@@ -39,7 +39,7 @@ function HookScene() {
           Are you ready<b className={styles.q}>?</b>
         </span>
       </h1>
-      <p className={styles.lead}>Play 3 quick science games. The top 3 win a prize every round.</p>
+      <p className={styles.lead}>Play 3 quick science games. The top 3 win a prize every 20 minutes.</p>
       <div className={styles.tiles}>
         {[
           ['🧩', 'Emoji Riddles'],
@@ -162,8 +162,8 @@ function PrizeScene() {
     <div className={styles.split}>
       <div className={styles.copy}>
         <Tag>Prizes</Tag>
-        <h2 className={styles.title}>A prize every round</h2>
-        <p className={styles.lead}>The top 3 players of each round win. Finish all 3 games to qualify.</p>
+        <h2 className={styles.title}>A prize every 20 minutes</h2>
+        <p className={styles.lead}>The top 3 players win every 20 minutes. Finish all 3 games to qualify.</p>
       </div>
       <div className={styles.podium} aria-hidden="true">
         {[
@@ -193,7 +193,7 @@ function LeaderboardScene() {
       <div className={styles.copy}>
         <Tag>Live</Tag>
         <h2 className={styles.title}>Check the leaderboard</h2>
-        <p className={styles.lead}>Ranks change all the time. Watch the big screen to see if you are in this round’s top 3.</p>
+        <p className={styles.lead}>Ranks change all the time. Watch the big screen to see if you are in the current top 3.</p>
       </div>
       <div className={styles.board2} aria-hidden="true">
         <p className={styles.boardHead}>
@@ -219,7 +219,7 @@ function QrScene({ qrSvg }: { qrSvg: string }) {
         <Tag>Your turn</Tag>
         <h2 className={styles.title}>Scan now. Play in 3 minutes.</h2>
         <p className={styles.url}>{MARKETING_URL}</p>
-        <p className={styles.lead}>Finish all 3 games to qualify for the round prize.</p>
+        <p className={styles.lead}>Finish all 3 games to qualify for the prizes.</p>
       </div>
       <div className={styles.qrCard}>
         <div className={styles.qr} dangerouslySetInnerHTML={{ __html: qrSvg }} />
@@ -263,8 +263,8 @@ export default async function MarketingPage() {
           </div>
           <div className={styles.railPrize}>
             <span>🏆</span>
-            <b>A prize every round</b>
-            <small>Top 3 of each round</small>
+            <b>A prize every 20 minutes</b>
+            <small>Top 3 every 20 minutes</small>
           </div>
           <div className={styles.railLive}>
             <span className={styles.liveTag}>

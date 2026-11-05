@@ -69,7 +69,7 @@ describe('marketing page', () => {
       'Emoji Riddles',
       'Memory Match',
       'Tech Trivia',
-      'A prize every round',
+      'A prize every 20 minutes',
       'Check the leaderboard',
       'Scan now. Play in 3 minutes.',
     ])('shows the "%s" heading', async (title) => {
