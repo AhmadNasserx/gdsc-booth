@@ -5,7 +5,7 @@ import { adminDb } from './firebaseAdmin';
 // ---- Pure helpers (no Firebase here) ----
 
 /** One prize hour. */
-export const ROUND_MS = 60 * 60 * 1000;
+export const ROUND_MS = 20 * 60 * 1000;
 
 export interface EventState { startedAt: number | null }
 
