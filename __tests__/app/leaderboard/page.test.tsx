@@ -45,7 +45,7 @@ describe('LeaderboardPage countdown', () => {
   it('shows "Loading…" until the first response arrives', () => {
     global.fetch = jest.fn(() => new Promise(() => {})) as unknown as typeof fetch;
     render(<LeaderboardPage />);
-    const subline = screen.getByText('Top 3 each hour win a prize. Finish all three games to qualify.');
+    const subline = screen.getByText('Top 3 each round win a prize. Finish all three games to qualify.');
     expect(subline.previousElementSibling).toHaveTextContent('Loading…');
   });
 
@@ -60,7 +60,7 @@ describe('LeaderboardPage countdown', () => {
     jest.spyOn(Date, 'now').mockReturnValue(NOW);
     mockFetch(payload());
     render(<LeaderboardPage />);
-    expect(await screen.findByText('Hour 2 prize in')).toBeInTheDocument();
+    expect(await screen.findByText('Round 2 prize in')).toBeInTheDocument();
     expect(screen.getByText('10:00')).toBeInTheDocument();
   });
 
@@ -101,7 +101,7 @@ describe('LeaderboardPage while masked', () => {
     mockFetch({ ...payload(), masked: true });
     render(<LeaderboardPage />);
     expect(await screen.findByRole('heading', { name: /winners coming up/i })).toBeInTheDocument();
-    expect(screen.queryByText('Hour 2 prize in')).toBeNull();
-    expect(screen.queryByText(/this hour.s top 3/i)).toBeNull();
+    expect(screen.queryByText('Round 2 prize in')).toBeNull();
+    expect(screen.queryByText(/this round.s top 3/i)).toBeNull();
   });
 });

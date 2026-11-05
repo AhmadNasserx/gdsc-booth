@@ -40,9 +40,9 @@ function optionsFor(choice: Choice, data: LeaderboardResponse): CeremonyOptions 
     return {
       winners: hourWinners(round),
       pool,
-      eyebrow: `Hour ${round.round} · ${clock(round.start)}–${clock(round.end)}`,
-      title: `Hour ${round.round} winners`,
-      subtitle: 'The top 3 players of this hour win a prize. Let’s find out who they are.',
+      eyebrow: `Round ${round.round} · ${clock(round.start)}–${clock(round.end)}`,
+      title: `Round ${round.round} winners`,
+      subtitle: 'The top 3 players of this round win a prize. Let’s find out who they are.',
     };
   }
   const since = choice.kind === 'since' ? choice.since : undefined;
@@ -281,13 +281,13 @@ export default function AnnouncePage() {
                   ? 'Choose a time.'
                   : sinceWinners.length === 0
                     ? `No one has finished all three games since ${sinceText}.`
-                    : `${sinceWinners.length} player${sinceWinners.length === 1 ? '' : 's'} to reveal. Use it to announce early, before the hour is up, or for any part of the day.`}
+                    : `${sinceWinners.length} player${sinceWinners.length === 1 ? '' : 's'} to reveal. Use it to announce early, before the round is over, or for any part of the day.`}
               </p>
             </div>
 
-            <h2 className="font-display mt-10 text-2xl font-bold">Hourly prize winners</h2>
+            <h2 className="font-display mt-10 text-2xl font-bold">Round prize winners</h2>
             {hours.length === 0 ? (
-              <p className="mt-3 text-[#a9a0cf]">No hour has winners yet.</p>
+              <p className="mt-3 text-[#a9a0cf]">No round has winners yet.</p>
             ) : (
               <ul className="mt-3 grid gap-3 sm:grid-cols-2">
                 {hours.map((round) => (
@@ -298,7 +298,7 @@ export default function AnnouncePage() {
                       className="w-full rounded-2xl border-2 border-[#3a2d7a] bg-[#251a5c] p-4 text-left transition-colors hover:border-sci"
                     >
                       <span className="font-display block text-xl font-bold">
-                        Hour {round.round}
+                        Round {round.round}
                         {round.round === data.event.currentRound ? ' · so far' : ''}
                       </span>
                       <span className="block text-sm text-[#a9a0cf] tabular-nums">

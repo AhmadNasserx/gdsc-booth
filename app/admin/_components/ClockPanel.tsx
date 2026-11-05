@@ -112,11 +112,11 @@ export default function ClockPanel({ event, serverNow, onChanged, onUnauthorized
         <div className="mt-3 space-y-3">
           <p className={SUBTLE_TEXT}>Event started {formatTime(event.startedAt)}</p>
           {event.currentRound !== null && (
-            <p className="text-2xl font-extrabold text-ink">Hour {event.currentRound}</p>
+            <p className="text-2xl font-extrabold text-ink">Round {event.currentRound}</p>
           )}
           {event.currentRound !== null && endsIn !== null && (
             <p className="text-base text-ink">
-              Hour {event.currentRound} ends in{' '}
+              Round {event.currentRound} ends in{' '}
               <span className="font-black tabular-nums text-ink">{endsIn}</span>
             </p>
           )}
@@ -133,7 +133,7 @@ export default function ClockPanel({ event, serverNow, onChanged, onUnauthorized
       {resetOpen && (
         <Dialog titleId={titleId} title="Reset the event clock?" onClose={closeReset}>
           <p className="mt-3 text-base text-muted">
-            This clears the event start time. Hour numbers and prize clocks start again from the
+            This clears the event start time. Round numbers and prize clocks start again from the
             next player. Leaderboard scores are kept.
           </p>
           <label htmlFor={inputId} className="mt-5 block text-sm font-semibold text-ink">

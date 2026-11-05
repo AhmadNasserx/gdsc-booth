@@ -21,7 +21,7 @@ describe('RoundBoard', () => {
       ]),
     ];
     render(<RoundBoard rounds={rounds} currentRound={2} />);
-    expect(screen.getByText("This hour's top 3")).toBeInTheDocument();
+    expect(screen.getByText("This round's top 3")).toBeInTheDocument();
     expect(screen.getByText('🥇')).toBeInTheDocument();
     expect(screen.getByText('🥈')).toBeInTheDocument();
     expect(screen.getByText('🥉')).toBeInTheDocument();
@@ -37,7 +37,7 @@ describe('RoundBoard', () => {
   it('shows the hour window in local time as HH:MM–HH:MM', () => {
     const rounds = [round(2, [{ name: 'Sara', score: 10, rank: 1 }])];
     render(<RoundBoard rounds={rounds} currentRound={2} />);
-    expect(screen.getByText('Hour 2 · 13:00–14:00')).toBeInTheDocument();
+    expect(screen.getByText('Round 2 · 13:00–14:00')).toBeInTheDocument();
   });
 
   it('shows a waiting line for each rank with no finisher yet', () => {
@@ -48,14 +48,14 @@ describe('RoundBoard', () => {
 
   it('says no one has finished yet when the current hour has no top at all', () => {
     render(<RoundBoard rounds={[]} currentRound={3} />);
-    expect(screen.getByText('No one has finished all three games this hour yet')).toBeInTheDocument();
+    expect(screen.getByText('No one has finished all three games this round yet')).toBeInTheDocument();
     expect(screen.queryByText('Waiting for a finisher')).not.toBeInTheDocument();
   });
 
   it('asks for the first player when there is no current hour', () => {
     render(<RoundBoard rounds={[]} currentRound={null} />);
     expect(screen.getByText('The first player starts the prize clock')).toBeInTheDocument();
-    expect(screen.getByText('No earlier hours yet')).toBeInTheDocument();
+    expect(screen.getByText('No earlier rounds yet')).toBeInTheDocument();
   });
 
   it('lists completed hours latest first, and leaves out the current hour', () => {
@@ -66,33 +66,33 @@ describe('RoundBoard', () => {
     ];
     render(<RoundBoard rounds={rounds} currentRound={3} />);
     const headings = screen
-      .getAllByText(/^Hour \d · /)
+      .getAllByText(/^Round \d · /)
       .map((el) => el.textContent);
     expect(headings).toEqual([
-      'Hour 3 · 14:00–15:00',
-      'Hour 2 · 13:00–14:00',
-      'Hour 1 · 12:00–13:00',
+      'Round 3 · 14:00–15:00',
+      'Round 2 · 13:00–14:00',
+      'Round 1 · 12:00–13:00',
     ]);
-    const earlier = screen.getByText('Earlier hours').closest('section')!;
+    const earlier = screen.getByText('Earlier rounds').closest('section')!;
     expect(within(earlier).getByText('Second')).toBeInTheDocument();
     expect(within(earlier).getByText('First')).toBeInTheDocument();
     expect(within(earlier).queryByText('Current')).not.toBeInTheDocument();
   });
 
-  it('shows "No finishers this hour" for a completed hour with no finishers', () => {
+  it('shows "No finishers this round" for a completed hour with no finishers', () => {
     const rounds = [
       round(1, []),
       round(2, [{ name: 'Sara', score: 50, rank: 1 }]),
     ];
     render(<RoundBoard rounds={rounds} currentRound={2} />);
-    expect(screen.getByText('No finishers this hour')).toBeInTheDocument();
-    expect(screen.getByText('Hour 1 · 12:00–13:00')).toBeInTheDocument();
+    expect(screen.getByText('No finishers this round')).toBeInTheDocument();
+    expect(screen.getByText('Round 1 · 12:00–13:00')).toBeInTheDocument();
   });
 
-  it('shows "No earlier hours yet" while only the current hour exists', () => {
+  it('shows "No earlier rounds yet" while only the current hour exists', () => {
     const rounds = [round(1, [{ name: 'Sara', score: 50, rank: 1 }])];
     render(<RoundBoard rounds={rounds} currentRound={1} />);
-    expect(screen.getByText('No earlier hours yet')).toBeInTheDocument();
+    expect(screen.getByText('No earlier rounds yet')).toBeInTheDocument();
   });
 
   it('never shows a phone number', () => {

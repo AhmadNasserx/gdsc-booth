@@ -74,7 +74,7 @@ export default function WinnersPanel({ rounds, onChanged, onUnauthorized }: Prop
     <section aria-labelledby="winners-heading" className={CARD}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 id="winners-heading" className="text-lg font-extrabold text-ink">
-          Hourly winners
+          Round winners
         </h2>
         <a href="/api/admin/export" download className={BUTTON_SECONDARY}>
           Download winners CSV
@@ -88,11 +88,11 @@ export default function WinnersPanel({ rounds, onChanged, onUnauthorized }: Prop
           {newestFirst.map((round) => (
             <article
               key={round.round}
-              aria-label={`Hour ${round.round}`}
+              aria-label={`Round ${round.round}`}
               className="rounded-2xl border border-line bg-mist p-4"
             >
               <div className="flex items-center justify-between gap-3">
-                <h3 className="text-base font-extrabold text-ink">Hour {round.round}</h3>
+                <h3 className="text-base font-extrabold text-ink">Round {round.round}</h3>
                 {round.current && (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E6F4EA] px-2.5 py-1 text-xs font-bold text-[#34A853]">
                     <span className="h-2 w-2 rounded-full bg-[#34A853]" />

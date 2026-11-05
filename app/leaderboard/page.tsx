@@ -25,7 +25,7 @@ function countdownFor(data: LeaderboardResponse | null, nowMs: number): { label:
     return { label: null, value: 'Prize clock starts with the first player' };
   }
   return {
-    label: `Hour ${event.currentRound} prize in`,
+    label: `Round ${event.currentRound} prize in`,
     value: formatCountdown(event.roundEndsAt - nowMs),
   };
 }
@@ -37,7 +37,7 @@ export default function LeaderboardPage() {
   // Client time, refreshed every second. Used for the countdown and the "Updated" label.
   const [clock, setClock] = useState(0);
   const [receivedAt, setReceivedAt] = useState<number | null>(null);
-  // The hour end (ms) we last refetched at, so the refetch fires once per hour boundary.
+  // The hour end (ms) we last refetched at, so the refetch fires once per round boundary.
   const refetchedFor = useRef<number | null>(null);
 
   const load = useCallback(() => {
@@ -65,7 +65,7 @@ export default function LeaderboardPage() {
     return () => clearInterval(tickId);
   }, []);
 
-  // When the countdown reaches zero, fetch once so the next hour appears.
+  // When the countdown reaches zero, fetch once so the next round appears.
   useEffect(() => {
     const endsAt = data?.event.roundEndsAt ?? null;
     if (endsAt === null) return;
@@ -139,7 +139,7 @@ export default function LeaderboardPage() {
               {countdown.value}
             </p>
             <p className="relative mt-4 text-sm md:text-lg font-semibold text-white/85">
-              Top 3 each hour win a prize. Finish all three games to qualify.
+              Top 3 each round win a prize. Finish all three games to qualify.
             </p>
           </section>
 
@@ -152,7 +152,7 @@ export default function LeaderboardPage() {
               <div className="min-w-0 md:col-span-2 md:order-1">
                 <LeaderboardTable entries={data.entries} />
                 <p className="mt-8 md:mt-10 text-center text-xs md:text-sm text-muted-2 leading-relaxed">
-                  Top 3 each hour win a prize · Ties go to whoever reached their total first · Scores reset automatically after 48 hours
+                  Top 3 each round win a prize · Ties go to whoever reached their total first · Scores reset automatically after 48 hours
                 </p>
               </div>
             </div>

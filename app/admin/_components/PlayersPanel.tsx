@@ -62,7 +62,7 @@ function readDrafts(drafts: Drafts): { games: GameScores; errors: EditErrors } {
 
 function statusText(player: AdminPlayer): string {
   if (!player.finished) return 'Still playing';
-  return player.finishedRound === null ? 'Finished' : `Finished in hour ${player.finishedRound}`;
+  return player.finishedRound === null ? 'Finished' : `Finished in round ${player.finishedRound}`;
 }
 
 export default function PlayersPanel({ players, onChanged, onUnauthorized }: Props) {

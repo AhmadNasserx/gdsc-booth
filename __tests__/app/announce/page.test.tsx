@@ -50,7 +50,7 @@ it('reads the full board from the staff route and offers the day, a start time a
   expect(await screen.findByRole('button', { name: /top 9 so far today/i })).toBeEnabled();
   expect(fetchMock).toHaveBeenCalledWith('/api/admin/leaderboard', expect.anything());
   expect(screen.getByLabelText(/since/i)).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /hour 1/i })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /round 1/i })).toBeInTheDocument();
 });
 
 it('asks staff to sign in when the admin cookie is missing', async () => {

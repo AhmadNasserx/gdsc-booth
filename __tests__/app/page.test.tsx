@@ -141,7 +141,7 @@ describe('Name Entry Page', () => {
   it('invites players to play three quick games and win an hourly prize', () => {
     render(<Page />);
     expect(screen.getByText('Play three quick games, once each, in order. Your scores add up.')).toBeInTheDocument();
-    expect(screen.getByText('The top 3 players win a prize every hour. Finish all three games to qualify.')).toBeInTheDocument();
+    expect(screen.getByText('The top 3 players win a prize every round. Finish all three games to qualify.')).toBeInTheDocument();
   });
 
   it('shows the BAU Open Doors and Faculty of Science branding, and no GDSC or Google branding', () => {

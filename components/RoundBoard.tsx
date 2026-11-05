@@ -18,9 +18,9 @@ function clock(ms: number): string {
   return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-/** The hour's window, e.g. "Hour 3 · 14:00–15:00". */
-function hourLabel(round: RoundResult): string {
-  return `Hour ${round.round} · ${clock(round.start)}–${clock(round.end)}`;
+/** The round window, e.g. "Round 3 · 14:00–15:00". */
+function roundLabel(round: RoundResult): string {
+  return `Round ${round.round} · ${clock(round.start)}–${clock(round.end)}`;
 }
 
 /** The top three finishers of a round, best rank first. */
@@ -85,7 +85,7 @@ export default function RoundBoard({ rounds, currentRound }: Props) {
     <div className="space-y-5 md:space-y-6">
       <section className="rounded-3xl border-2 border-sci bg-white p-5 md:p-7 shadow-sm">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="font-display text-xl md:text-3xl font-bold text-indigo">This hour&apos;s top 3</h2>
+          <h2 className="font-display text-xl md:text-3xl font-bold text-indigo">This round&apos;s top 3</h2>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FDE8E8] px-2.5 py-1 text-xs font-bold text-coral">
             <span className="h-2 w-2 rounded-full bg-coral" />
             LIVE
@@ -97,16 +97,16 @@ export default function RoundBoard({ rounds, currentRound }: Props) {
         ) : currentTop.length === 0 ? (
           <>
             <p className="mt-1 text-sm md:text-base text-muted tabular-nums">
-              {current ? hourLabel(current) : `Hour ${currentRound}`}
+              {current ? roundLabel(current) : `Round ${currentRound}`}
             </p>
             <p className="mt-5 text-base md:text-xl text-muted">
-              No one has finished all three games this hour yet
+              No one has finished all three games this round yet
             </p>
           </>
         ) : (
           <>
             <p className="mt-1 text-sm md:text-base text-muted tabular-nums">
-              {current ? hourLabel(current) : `Hour ${currentRound}`}
+              {current ? roundLabel(current) : `Round ${currentRound}`}
             </p>
             <ol className="mt-5 space-y-4 md:space-y-5">
               {[1, 2, 3].map((rank) => {
@@ -123,10 +123,10 @@ export default function RoundBoard({ rounds, currentRound }: Props) {
       </section>
 
       <section>
-        <h2 className="font-display px-1 text-lg md:text-2xl font-bold text-indigo">Earlier hours</h2>
+        <h2 className="font-display px-1 text-lg md:text-2xl font-bold text-indigo">Earlier rounds</h2>
         {earlier.length === 0 ? (
           <p className="mt-3 rounded-3xl border border-line bg-white p-5 text-base text-muted-2 shadow-sm">
-            No earlier hours yet
+            No earlier rounds yet
           </p>
         ) : (
           <ul className="mt-3 space-y-3">
@@ -137,9 +137,9 @@ export default function RoundBoard({ rounds, currentRound }: Props) {
                   key={round.round}
                   className="rounded-2xl border border-line bg-white p-4 md:p-5 shadow-sm"
                 >
-                  <p className="text-sm md:text-base font-bold text-muted tabular-nums">{hourLabel(round)}</p>
+                  <p className="text-sm md:text-base font-bold text-muted tabular-nums">{roundLabel(round)}</p>
                   {top.length === 0 ? (
-                    <p className="mt-2 text-sm md:text-base text-muted-2">No finishers this hour</p>
+                    <p className="mt-2 text-sm md:text-base text-muted-2">No finishers this round</p>
                   ) : (
                     <ol className="mt-2 space-y-2">
                       {top.map((entry) => (

@@ -142,14 +142,14 @@ describe('Admin dashboard', () => {
 
   it('lists the hour 1 winner and links the phone number with a tel: link', async () => {
     render(<AdminPage />);
-    const hour1 = await screen.findByRole('article', { name: 'Hour 1' });
+    const hour1 = await screen.findByRole('article', { name: 'Round 1' });
     expect(within(hour1).getByText('Ahmad')).toBeInTheDocument();
     expect(within(hour1).getByRole('link', { name: '+96170123456' })).toHaveAttribute('href', 'tel:+96170123456');
   });
 
   it('shows No number on file for a winner without a phone number', async () => {
     render(<AdminPage />);
-    const hour1 = await screen.findByRole('article', { name: 'Hour 1' });
+    const hour1 = await screen.findByRole('article', { name: 'Round 1' });
     expect(within(hour1).getByText('Omar')).toBeInTheDocument();
     expect(within(hour1).getByText('No number on file')).toBeInTheDocument();
   });

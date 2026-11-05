@@ -63,7 +63,7 @@ describe('FinishScreen', () => {
   it('describes the event and the hourly prizes', () => {
     render(<FinishScreen name="Layla" total={1200} rank={3} />);
     expect(screen.getByText(/Beirut Arab University, Tripoli campus/)).toBeInTheDocument();
-    expect(screen.getByText(/Prizes are given every hour/)).toBeInTheDocument();
+    expect(screen.getByText(/Prizes are given every round/)).toBeInTheDocument();
     expect(screen.getByText(/top 3/)).toBeInTheDocument();
   });
 

@@ -26,7 +26,7 @@ export async function POST(request: Request) {
       return adminJson({ ok: true });
     }
     if (result === 'not-started') return adminError(409, 'The event has not started.');
-    if (result === 'round-not-reached') return adminError(409, 'That hour has not started yet.');
+    if (result === 'round-not-reached') return adminError(409, 'That round has not started yet.');
     return adminError(404, 'Player not found.');
   } catch (err) {
     console.error('Admin API error', (err as Error).name);

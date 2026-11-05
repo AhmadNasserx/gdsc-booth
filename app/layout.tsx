@@ -20,7 +20,7 @@ const source = localFont({
 export const metadata: Metadata = {
   title: 'BAU Open Doors 2026 · Faculty of Science Challenge',
   description:
-    'Play three quick science and tech games at the Faculty of Science booth, BAU Open Doors 2026, Tripoli campus. The top 3 players win a prize every hour.',
+    'Play three quick science and tech games at the Faculty of Science booth, BAU Open Doors 2026, Tripoli campus. The top 3 players win a prize every round.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

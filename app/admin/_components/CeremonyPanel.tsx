@@ -64,7 +64,7 @@ export default function CeremonyPanel({ masked, onChanged, onUnauthorized }: Pro
         Open the ceremony (/announce)
       </a>
       <p className={`${SUBTLE_TEXT} mt-2`}>
-        Reveal the top 3, 5, 9 or 10 at any time, for the whole day, for one hour, or for players who finished since a
+        Reveal the top 3, 5, 9 or 10 at any time, for the whole day, for one round, or for players who finished since a
         time you choose.
       </p>
       {error && (
